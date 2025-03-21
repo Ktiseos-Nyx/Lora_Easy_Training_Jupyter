@@ -1,6 +1,6 @@
 # Lora_Easy_Training_Colab
 
-> A Jupyter notebook powered by [Lora_Easy_Training_Scripts_Backend](https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend) created by [Derrian Distro](https://github.com/derrian-distro) - Warning this is still in heavy development, as it's porting the GOOGLE COLAB version to Jupyter.  This readme will largely change immensely as time goes on, and may or may not reflect how the notebook works.  Much adoration to AndroidXL, Holostrawberry, Derrian-Distro & Jelosus2 for their hard work and dedication.
+> A Jupyter notebook powered by [Lora_Easy_Training_Scripts_Backend](https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend) created by [Derrian Distro](https://github.com/derrian-distro) - Warning this is still in heavy development, as it's porting the GOOGLE COLAB version to Jupyter.  This readme will largely change immensely as time goes on, and may or may not reflect how the notebook works.  Much adoration to AndroidXL, Holostrawberry, Derrian-Distro & Jelosus2 for their hard work and dedication. The current notebook is not in working stages but is a start if you're into Jupyter coding.  Right now the widgets are NOT working. THe code is only partially refactored, and we need to get widgets in. 
 
 ## Guide
 
