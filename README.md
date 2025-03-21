@@ -1,6 +1,6 @@
 # Lora_Easy_Training_Colab
 
-> A [colab](https://colab.research.google.com/github/Jelosus2/Lora_Easy_Training_Colab/blob/main/Lora_Easy_Training_Colab.ipynb) powered by [Lora_Easy_Training_Scripts_Backend](https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend) created by [Derrian Distro](https://github.com/derrian-distro)
+> A Jupyter notebook powered by [Lora_Easy_Training_Scripts_Backend](https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend) created by [Derrian Distro](https://github.com/derrian-distro) - Warning this is still in heavy development, as it's porting the GOOGLE COLAB version to Jupyter.  This readme will largely change immensely as time goes on, and may or may not reflect how the notebook works.  Much adoration to AndroidXL, Holostrawberry, Derrian-Distro & Jelosus2 for their hard work and dedication.
 
 ## Guide
 
