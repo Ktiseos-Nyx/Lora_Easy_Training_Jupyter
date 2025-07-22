@@ -137,23 +137,78 @@ Lower learning rates for longer training
 
 ## 🌐 VastAI Deployment
 
-The system automatically detects VastAI containers and applies optimizations:
+The system automatically detects VastAI containers and applies optimizations for cloud GPU training.
 
-- **Popular models** prioritized in dropdown
-- **Container-specific** environment detection
-- **GPU validation** and VRAM optimization
-- **Network connectivity** checking
+### 🎯 **GPU Recommendations by Training Type**
 
-### VastAI Template
+#### **SDXL LoRA Training** (Most Common)
 ```bash
-# Recommended VastAI instance:
-# GPU: RTX 4090 / A40 / A100 (16GB+ VRAM)
+# Minimum Specs (Budget-Friendly):
+# GPU: RTX 3090 (24GB) or RTX 4090 (24GB)
+# RAM: 16GB+
+# Storage: 50GB+
+# Cost: ~$0.20-0.40/hour
+
+# Optimal Specs (Faster Training):  
+# GPU: RTX 4090 (24GB) or A6000 (48GB)
 # RAM: 32GB+
 # Storage: 100GB+
-
-# Clone and run:
-git clone https://github.com/your-username/Lora_Easy_Training_Jupyter.git && cd Lora_Easy_Training_Jupyter && ./jupyter.sh
+# Cost: ~$0.40-0.70/hour
 ```
+
+#### **SD 1.5 LoRA Training** (Lightweight)
+```bash
+# Budget Option:
+# GPU: RTX 3070 (8GB) or RTX 3080 (10GB)
+# RAM: 16GB+
+# Storage: 30GB+
+# Cost: ~$0.15-0.25/hour
+
+# Recommended:
+# GPU: RTX 3090 (24GB)
+# RAM: 16GB+
+# Storage: 50GB+
+# Cost: ~$0.20-0.30/hour
+```
+
+#### **Advanced Features** (DoRA, Large Datasets)
+```bash
+# High Memory Required:
+# GPU: A40 (48GB) or A100 (40GB/80GB)
+# RAM: 32GB+
+# Storage: 100GB+
+# Cost: ~$0.70-1.50/hour
+
+# Alternative Multi-GPU:
+# GPU: 2x RTX 4090 (48GB total)
+# RAM: 64GB+
+# Storage: 100GB+
+```
+
+#### **Flux LoRA Training** (Cutting Edge)
+```bash
+# Minimum for Flux:
+# GPU: A100 (80GB) or H100 (80GB)
+# RAM: 64GB+
+# Storage: 200GB+
+# Cost: ~$1.50-3.00/hour
+
+# Note: Flux requires significant VRAM
+# Consider this experimental/research tier
+```
+
+### 🚀 **VastAI Quick Deploy**
+```bash
+# Choose your GPU tier, then:
+git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git && cd Lora_Easy_Training_Jupyter && ./installer.py && ./start_jupyter.sh
+```
+
+### 💡 **VastAI Tips**
+- **Start small**: Try SDXL on RTX 3090 first
+- **Scale up**: Move to A40/A100 for advanced features
+- **Check pricing**: GPU costs fluctuate throughout the day
+- **Use spot instances**: Save 50-70% on costs
+- **Monitor VRAM**: Our widgets show real-time usage warnings
 
 ## 🔧 Architecture
 
