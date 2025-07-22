@@ -35,10 +35,6 @@
 - Documentation images and examples
 - Civitai/HuggingFace URL reference images
 
-### 📓 **Sample Notebooks** (`sample_notebooks/`)
-- Historical notebook versions and references
-- Kept for educational/reference purposes
-
 ---
 
 ## 🏗️ **Architecture Highlights**
