@@ -158,11 +158,12 @@ The system automatically detects VastAI containers and applies optimizations for
 
 #### **SD 1.5 LoRA Training** (Lightweight)
 ```bash
-# Budget Option:
-# GPU: RTX 3070 (8GB) or RTX 3080 (10GB)
-# RAM: 16GB+
+# Ultra Budget (8GB VRAM possible!):
+# GPU: RTX 2070/3060/3070 (8GB)
+# RAM: 16GB+ (important for VRAM overflow)
 # Storage: 30GB+
-# Cost: ~$0.15-0.25/hour
+# Cost: ~$0.10-0.20/hour
+# Settings: Max 1024 resolution, careful batch sizes, system RAM overflow
 
 # Recommended:
 # GPU: RTX 3090 (24GB)
@@ -202,12 +203,18 @@ git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git && cd Lo
 ```
 
 ### 💡 **VastAI Budget Tips** 💰
+- **Ultra budget**: RTX 2070/3060 8GB can work for SD 1.5 (~$0.10/hr!)
 - **Start cheap**: RTX 3070 for SD 1.5 (~$0.15/hr)
 - **Sweet spot**: RTX 3090 handles everything including DoRA (~$0.25/hr)
 - **Spot instances**: Save 50-70% - perfect for overnight training
 - **Off-peak hours**: Prices drop significantly during US nighttime
-- **Monitor costs**: Set spending limits in VastAI dashboard
-- **Our widgets**: Show VRAM warnings so you don't over-pay for unused memory
+
+### 🔧 **8GB VRAM Training Tips**
+- **Resolution limit**: Stay at 1024x1024 max (our widgets enforce this)
+- **Batch size**: Start with 1, increase carefully
+- **System RAM**: 16GB+ crucial for VRAM overflow
+- **Patience**: Training takes longer but works!
+- **Experiment**: "Just try stuff" and take notes on what works
 
 ## 🔧 Architecture
 
