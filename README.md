@@ -173,16 +173,18 @@ The system automatically detects VastAI containers and applies optimizations for
 
 #### **Advanced Features** (DoRA, Large Datasets)
 ```bash
-# High Memory Required:
-# GPU: A40 (48GB) or A100 (40GB/80GB)
+# DoRA Training (Works on 24GB!):
+# GPU: RTX 3090 (24GB) or RTX 4090 (24GB)
+# RAM: 32GB+
+# Storage: 50GB+
+# Cost: ~$0.20-0.40/hour
+# Note: DoRA is 2-3x slower but same VRAM as regular LoRA
+
+# Large Datasets (1000+ images):
+# GPU: RTX 4090 (24GB) or A6000 (48GB)
 # RAM: 32GB+
 # Storage: 100GB+
-# Cost: ~$0.70-1.50/hour
-
-# Alternative Multi-GPU:
-# GPU: 2x RTX 4090 (48GB total)
-# RAM: 64GB+
-# Storage: 100GB+
+# Cost: ~$0.40-0.70/hour
 ```
 
 #### **Flux LoRA Training** (Research/Future)
@@ -199,12 +201,13 @@ The system automatically detects VastAI containers and applies optimizations for
 git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git && cd Lora_Easy_Training_Jupyter && ./installer.py && ./start_jupyter.sh
 ```
 
-### 💡 **VastAI Tips**
-- **Start small**: Try SDXL on RTX 3090 first
-- **Scale up**: Move to A40/A100 for advanced features
-- **Check pricing**: GPU costs fluctuate throughout the day
-- **Use spot instances**: Save 50-70% on costs
-- **Monitor VRAM**: Our widgets show real-time usage warnings
+### 💡 **VastAI Budget Tips** 💰
+- **Start cheap**: RTX 3070 for SD 1.5 (~$0.15/hr)
+- **Sweet spot**: RTX 3090 handles everything including DoRA (~$0.25/hr)
+- **Spot instances**: Save 50-70% - perfect for overnight training
+- **Off-peak hours**: Prices drop significantly during US nighttime
+- **Monitor costs**: Set spending limits in VastAI dashboard
+- **Our widgets**: Show VRAM warnings so you don't over-pay for unused memory
 
 ## 🔧 Architecture
 
