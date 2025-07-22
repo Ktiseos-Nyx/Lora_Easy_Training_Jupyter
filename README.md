@@ -56,6 +56,20 @@ chmod +x ./jupyter.sh
 python ./installer.py
 ```
 
+### 🧮 Quick Training Calculator
+
+Not sure about your dataset size or settings? Use our personal calculator:
+
+```bash
+python3 personal_lora_calculator.py
+```
+
+This tool helps you:
+- Calculate optimal repeats and epochs for your dataset size
+- Get personalized learning rate recommendations
+- Estimate total training steps
+- Build confidence for small datasets (stop being a chicken!) 🐔➡️🦅
+
 ### Launch Jupyter
 
 ```bash
