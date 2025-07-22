@@ -143,17 +143,18 @@ The system automatically detects VastAI containers and applies optimizations for
 
 #### **SDXL LoRA Training** (Most Common)
 ```bash
-# Minimum Specs (Budget-Friendly):
-# GPU: RTX 3090 (24GB) or RTX 4090 (24GB)
+# Minimum Specs (8GB can work with optimizations):
+# GPU: RTX 3070 (8GB) - batch size 1-2, 1024 max resolution
+# RAM: 16GB+
+# Storage: 50GB+
+# Cost: ~$0.15-0.25/hour
+# Note: Results won't be as good as higher VRAM cards
+
+# Recommended (Comfortable Training):
+# GPU: RTX 4060 Ti 16GB or RTX 3090 (24GB)
 # RAM: 16GB+
 # Storage: 50GB+
 # Cost: ~$0.20-0.40/hour
-
-# Optimal Specs (Faster Training):  
-# GPU: RTX 4090 (24GB) or A6000 (48GB)
-# RAM: 32GB+
-# Storage: 100GB+
-# Cost: ~$0.40-0.70/hour
 ```
 
 #### **SD 1.5 LoRA Training** (Lightweight)
@@ -188,12 +189,18 @@ The system automatically detects VastAI containers and applies optimizations for
 # Cost: ~$0.40-0.70/hour
 ```
 
-#### **Flux LoRA Training** (Research/Future)
+#### **Flux LoRA Training** (Cutting Edge)
 ```bash
-# Status: Experimental - requirements TBD
-# GPU: Requirements under research
-# Note: Flux support is planned but not yet implemented
-# Check community guides for current Flux training methods
+# Minimum for Flux:
+# GPU: RTX 4060 Ti 16GB (confirmed working)
+# RAM: 32GB+
+# Storage: 100GB+
+# Cost: ~$0.30-0.50/hour
+# Note: Uses "split mode" to fit in 16GB (doubles training time)
+
+# Recommended:
+# GPU: RTX 4090 (24GB) or better
+# Note: Flux support coming - check community guides for current methods
 ```
 
 ### 🚀 **VastAI Quick Deploy**
@@ -209,12 +216,13 @@ git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git && cd Lo
 - **Spot instances**: Save 50-70% - perfect for overnight training
 - **Off-peak hours**: Prices drop significantly during US nighttime
 
-### 🔧 **8GB VRAM Training Tips**
-- **Resolution limit**: Stay at 1024x1024 max (our widgets enforce this)
-- **Batch size**: Start with 1, increase carefully
-- **System RAM**: 16GB+ crucial for VRAM overflow
-- **Patience**: Training takes longer but works!
-- **Experiment**: "Just try stuff" and take notes on what works
+### 🔧 **8GB VRAM Training Tips** (Based on Community Success)
+- **SDXL on 8GB**: Confirmed working with RTX 3070 (batch size 1-2, results limited)
+- **SD 1.5 on 8GB**: Works well, good results possible
+- **Resolution**: 1024x1024 max for SDXL, can go higher for SD 1.5
+- **Batch size**: Start with 1, max 2 for SDXL
+- **Optimizations**: fp16, xformers, no Half VAE, enable buckets
+- **Reality check**: "Results won't be as good as higher VRAM cards" but still usable!
 
 ## 🔧 Architecture
 
