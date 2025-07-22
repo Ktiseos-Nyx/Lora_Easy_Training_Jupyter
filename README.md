@@ -185,16 +185,12 @@ The system automatically detects VastAI containers and applies optimizations for
 # Storage: 100GB+
 ```
 
-#### **Flux LoRA Training** (Cutting Edge)
+#### **Flux LoRA Training** (Research/Future)
 ```bash
-# Minimum for Flux:
-# GPU: A100 (80GB) or H100 (80GB)
-# RAM: 64GB+
-# Storage: 200GB+
-# Cost: ~$1.50-3.00/hour
-
-# Note: Flux requires significant VRAM
-# Consider this experimental/research tier
+# Status: Experimental - requirements TBD
+# GPU: Requirements under research
+# Note: Flux support is planned but not yet implemented
+# Check community guides for current Flux training methods
 ```
 
 ### 🚀 **VastAI Quick Deploy**
