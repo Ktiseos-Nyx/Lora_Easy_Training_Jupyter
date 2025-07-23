@@ -45,7 +45,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/Lora_Easy_Training_Jupyter.git
+git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/
 cd Lora_Easy_Training_Jupyter
 
 # Make installer executable and run
