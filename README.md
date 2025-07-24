@@ -164,9 +164,10 @@ This project builds upon the incredible work of many contributors in the AI trai
 - **[Kohaku-BlueLeaf](https://github.com/KohakuBlueleaf)** - LyCORIS advanced adaptation methods and HakuLatent research
 
 ### 🚀 **Technical Foundations**
-- **[OneTrainer](https://github.com/Nerogar/OneTrainer)** - Fused Back Pass implementation and modern architecture
-- **[bmaltais/kohya_ss](https://github.com/bmaltais/kohya_ss)** - GUI design patterns and user experience
-- **[Jelosus2](https://github.com/Jelosus2)** - Colab notebook adaptations and community feedback
+- **[OneTrainer](https://github.com/Nerogar/OneTrainer)** - Fused Back Pass implementation and modern architecture studies (coming soon)
+- **[kohya_ss](https://github.com/kohya-ss/sd-scripts/)** - Back end scripts for Derrian & others.
+- **[Jelosus2](https://github.com/Jelosus2)** - Colab notebook adaptations
+- **[AndroidXXL](https://github.com/AndroidXXL)** - Colab notebook adaptations.
 
 ### 🧪 **Research & Innovation**
 - **LyCORIS Team** - DoRA, LoKr, LoHa, and advanced adaptation research
