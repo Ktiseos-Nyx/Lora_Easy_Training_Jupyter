@@ -1,15 +1,17 @@
 # LoRA Easy Training - Jupyter Widget Edition 🚀
 
-> **A comprehensive, educational LoRA training system with advanced features**
-> Widget-based interface designed for both beginners and advanced users
-> Please note this is STILL a work in progress.
-> Testing was only done on a singular RTX 4090 on a Vast AI Docker Container with pre installed SD WEB UI FORGE.
-> Results MAY vary, please feel free to report issues as you see fit.
-> Also the training guide is a little wonky, and the steps calculator isn't perfect.
+**A comprehensive, educational LoRA training system with advanced features**
+
+- Widget-based interface designed for both beginners and advanced users
+- Please note this is STILL a work in progress.
+- Testing was only done on a singular RTX 4090 on a Vast AI Docker Container with pre installed SD WEB UI FORGE.
+- Results MAY vary, please feel free to report issues as you see fit.
+- Also the training guide is a little wonky, and the steps calculator isn't perfect.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20VastAI-lightgrey.svg)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20VastAI-lightgrey.svg)[![Discord](https://img.shields.io/discord/1024442483750490222?logo=discord&style=for-the-badge&color=5865F2)](https://discord.gg/HhBSvM9gBY) [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a>
+
 
 ## ✨ Features
 
@@ -22,7 +24,7 @@
 ### 🧪 **Advanced Training Options**
 - **Hybrid optimizer support**: CAME, Prodigy Plus, StableAdamW, ADOPT
 - **LyCORIS methods**: DoRA, LoKr, LoHa, (IA)³, BOFT, GLoRA
-- **Memory optimizations**: Fused Back Pass, gradient checkpointing
+- **Memory optimizations**: gradient checkpointing
 - **Advanced schedulers**: REX Annealing, Schedule-Free optimization
 
 ### 🛠️ **Professional Tools**
@@ -132,116 +134,6 @@ Enable advanced features by checking **"🧪 Enable Advanced Training Options"**
 - **🦄 LyCORIS Methods**: DoRA for higher quality, LoKr for efficiency
 - **🔬 Experimental Lab**: Future features and research-grade techniques
 
-## 🎯 Training Examples
-
-### Character LoRA (Recommended Settings)
-```
-Dataset Size: 20 images
-Repeats: 10, Epochs: 10, Batch Size: 4
-Total Steps: 500 ✅
-
-Network: 8 dim / 4 alpha
-Optimizer: AdamW8bit or CAME (advanced)
-Learning Rate: 5e-4 UNet, 1e-4 Text Encoder
-Scheduler: Cosine with 3 restarts
-```
-
-### Style LoRA (Advanced Settings)
-```
-LoRA Type: LoCon
-LyCORIS Method: (IA)³ - Implicit Attention
-Lower learning rates for longer training
-```
-
-## 🌐 VastAI Deployment
-
-The system automatically detects VastAI containers and applies optimizations for cloud GPU training.
-
-### 🎯 **GPU Recommendations by Training Type**
-
-#### **SDXL LoRA Training** (Most Common)
-```bash
-# Minimum Specs (8GB can work with optimizations):
-# GPU: RTX 3070 (8GB) - batch size 1-2, 1024 max resolution
-# RAM: 16GB+
-# Storage: 50GB+
-# Cost: ~$0.15-0.25/hour
-# Note: Results won't be as good as higher VRAM cards
-
-# Recommended (Comfortable Training):
-# GPU: RTX 4060 Ti 16GB or RTX 3090 (24GB)
-# RAM: 16GB+
-# Storage: 50GB+
-# Cost: ~$0.20-0.40/hour
-```
-
-#### **SD 1.5 LoRA Training** (Lightweight)
-```bash
-# Ultra Budget (8GB VRAM possible!):
-# GPU: RTX 2070/3060/3070 (8GB)
-# RAM: 16GB+ (important for VRAM overflow)
-# Storage: 30GB+
-# Cost: ~$0.10-0.20/hour
-# Settings: Max 1024 resolution, careful batch sizes, system RAM overflow
-
-# Recommended:
-# GPU: RTX 3090 (24GB)
-# RAM: 16GB+
-# Storage: 50GB+
-# Cost: ~$0.20-0.30/hour
-```
-
-#### **Advanced Features** (DoRA, Large Datasets)
-```bash
-# DoRA Training (Works on 24GB!):
-# GPU: RTX 3090 (24GB) or RTX 4090 (24GB)
-# RAM: 32GB+
-# Storage: 50GB+
-# Cost: ~$0.20-0.40/hour
-# Note: DoRA is 2-3x slower but same VRAM as regular LoRA
-
-# Large Datasets (1000+ images):
-# GPU: RTX 4090 (24GB) or A6000 (48GB)
-# RAM: 32GB+
-# Storage: 100GB+
-# Cost: ~$0.40-0.70/hour
-```
-
-#### **Flux LoRA Training** (Cutting Edge)
-```bash
-# Minimum for Flux:
-# GPU: RTX 4060 Ti 16GB (confirmed working)
-# RAM: 32GB+
-# Storage: 100GB+
-# Cost: ~$0.30-0.50/hour
-# Note: Uses "split mode" to fit in 16GB (doubles training time)
-
-# Recommended:
-# GPU: RTX 4090 (24GB) or better
-# Note: Flux support coming - check community guides for current methods
-```
-
-### 🚀 **VastAI Quick Deploy**
-```bash
-# Choose your GPU tier, then:
-git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git && cd Lora_Easy_Training_Jupyter && ./installer.py && ./start_jupyter.sh
-```
-
-### 💡 **VastAI Budget Tips** 💰
-- **Ultra budget**: RTX 2070/3060 8GB can work for SD 1.5 (~$0.10/hr!)
-- **Start cheap**: RTX 3070 for SD 1.5 (~$0.15/hr)
-- **Sweet spot**: RTX 3090 handles everything including DoRA (~$0.25/hr)
-- **Spot instances**: Save 50-70% - perfect for overnight training
-- **Off-peak hours**: Prices drop significantly during US nighttime
-
-### 🔧 **8GB VRAM Training Tips** (Based on Community Success)
-- **SDXL on 8GB**: Confirmed working with RTX 3070 (batch size 1-2, results limited)
-- **SD 1.5 on 8GB**: Works well, good results possible
-- **Resolution**: 1024x1024 max for SDXL, can go higher for SD 1.5
-- **Batch size**: Start with 1, max 2 for SDXL
-- **Optimizations**: fp16, xformers, no Half VAE, enable buckets
-- **Reality check**: "Results won't be as good as higher VRAM cards" but still usable!
-
 ## 🔧 Architecture
 
 ### Core Components
@@ -256,40 +148,7 @@ git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git && cd Lo
 - **`widgets/training_widget.py`**: Training configuration with advanced mode
 - **`widgets/utilities_widget.py`**: Post-training tools
 
-### Advanced Features
-- **Modular optimizer system**: Easy to add new optimizers
-- **Smart validation**: Prevents incompatible configurations
-- **Educational tooltips**: Real-time explanations
-- **Future-proofed**: Ready for new techniques (HakuLatent, etc.)
-
-## 📚 Learning Resources
-
-This project is designed to be educational. Each setting includes explanations:
-
-- **📊 Step Calculator**: Visual feedback on training length
-- **🎯 Smart Recommendations**: Automatic optimal pairings
-- **⚠️ Compatibility Warnings**: Prevents common mistakes
-- **📖 Detailed Tooltips**: Learn what each parameter does
-
 ## 🐛 Troubleshooting
-
-### Common Issues
-
-**"Environment not ready"**
-```bash
-# Run validation first
-python -c "from widgets.setup_widget import SetupWidget; w=SetupWidget(); w.run_validate_environment(None)"
-```
-
-**"Training fails immediately"**
-- Check total steps (should be 250-1000)
-- Verify model and dataset paths
-- Ensure sufficient VRAM/storage
-
-**"Advanced features not working"**
-- Some features require specific optimizers
-- Fused Back Pass needs batch size = 1
-- Check compatibility warnings in advanced mode
 
 ### Support
 - **GitHub Issues**: Report bugs and feature requests
@@ -311,30 +170,11 @@ This project builds upon the incredible work of many contributors in the AI trai
 - **[bmaltais/kohya_ss](https://github.com/bmaltais/kohya_ss)** - GUI design patterns and user experience
 - **[Jelosus2](https://github.com/Jelosus2)** - Colab notebook adaptations and community feedback
 
-### 📚 **Educational Resources**
-- **Holostrawberry's Training Guides** - Parameter selection and best practices
-- **Arc en Ciel Community** - Training techniques and community wisdom
-- **Civitai Training Articles** - Real-world applications and results
-
 ### 🧪 **Research & Innovation**
 - **LyCORIS Team** - DoRA, LoKr, LoHa, and advanced adaptation research
 - **OneTrainer Contributors** - Memory optimization and training efficiency
 - **HakuLatent Project** - Future-focused latent space research
 - **Stable Diffusion Community** - Continuous innovation and knowledge sharing
-
-### 🎨 **Design Philosophy**
-This project embodies the principle that **AI training should be accessible, educational, and empowering**. We believe in:
-- **Learning through doing** with real-time explanations
-- **Progressive disclosure** (basic → advanced features)
-- **Community knowledge sharing**
-- **Neurodivergent-friendly** interfaces and clear documentation
-
-### 💝 **Special Thanks**
-- **The broader Stable Diffusion community** for open research and collaboration
-- **VastAI users** who test and provide feedback on container deployments
-- **GitHub contributors** who report issues and suggest improvements
-- **Educational content creators** who make AI training accessible to everyone
-
 ---
 
 **"Either gonna work or blow up!" - Built with curiosity, tested with courage! 😄**
