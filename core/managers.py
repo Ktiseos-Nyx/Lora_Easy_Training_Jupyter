@@ -247,13 +247,13 @@ class SetupManager:
                 print(f"⚠️ Python installer failed: {e}")
                 print("🔧 Continuing with manual requirements installation...")
         
-        # Install bitsandbytes and triton specifically
-        print("📦 Installing bitsandbytes and triton...")
+        # Install critical missing packages
+        print("📦 Installing critical packages (bitsandbytes, triton, onnx)...")
         # Determine the correct venv python path
         venv_python = os.path.join(self.trainer_dir, "sd_scripts", "venv", "bin", "python")
         if not os.path.exists(venv_python):
             # Fallback if venv not found (e.g., if Derrian's installer didn't create it as expected)
-            print("⚠️ Virtual environment Python not found. Falling back to system Python for bitsandbytes install.")
+            print("⚠️ Virtual environment Python not found. Falling back to system Python for package install.")
             venv_python = "python"
 
         bnb_wheel_url = "https://github.com/bitsandbytes-foundation/bitsandbytes/releases/download/continuous-release_main/bitsandbytes-1.33.7.preview-py3-none-manylinux_2_24_x86_64.whl"
@@ -262,20 +262,24 @@ class SetupManager:
             subprocess.run([venv_python, "-m", "pip", "install", "--force-reinstall", bnb_wheel_url], check=True)
             print("✅ bitsandbytes installed successfully from wheel.")
             
-            # Also try to install triton, as it's a common dependency issue
+            # Also try to install triton and onnx, as they're common dependency issues
             print("Attempting to install triton...")
             subprocess.run([venv_python, "-m", "pip", "install", "triton"], check=True)
             print("✅ Triton installed successfully.")
             
+            print("Attempting to install onnx and onnxruntime...")
+            subprocess.run([venv_python, "-m", "pip", "install", "onnx", "onnxruntime"], check=True)
+            print("✅ ONNX packages installed successfully.")
+            
         except subprocess.CalledProcessError as e:
-            print(f"⚠️ Failed to install bitsandbytes/triton from wheel: {e}")
-            print("🔧 Attempting generic pip install for bitsandbytes/triton...")
+            print(f"⚠️ Failed to install packages from wheel: {e}")
+            print("🔧 Attempting generic pip install for all packages...")
             try:
-                subprocess.run([venv_python, "-m", "pip", "install", "bitsandbytes", "triton"], check=True)
-                print("✅ bitsandbytes and triton installed successfully via generic pip.")
+                subprocess.run([venv_python, "-m", "pip", "install", "bitsandbytes", "triton", "onnx", "onnxruntime"], check=True)
+                print("✅ All packages installed successfully via generic pip.")
             except subprocess.CalledProcessError as e2:
-                print(f"❌ Failed to install bitsandbytes/triton even with generic pip: {e2}")
-                print("💡 You may need to manually install bitsandbytes and triton for your specific CUDA/Python setup.")
+                print(f"❌ Failed to install some packages even with generic pip: {e2}")
+                print("💡 You may need to manually install missing packages for your specific setup.")
         
         # Install requirements with smart filtering
         requirements_file = os.path.join(self.trainer_dir, "requirements.txt")

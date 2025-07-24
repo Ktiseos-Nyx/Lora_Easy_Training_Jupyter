@@ -312,6 +312,19 @@ class HybridTrainingManager:
         elif config['lora_type'] == "DyLoRA":
             network_module = "lycoris.kohya"
             network_args = [f"algo=dylora", f"conv_dim={config['conv_dim']}", f"conv_alpha={config['conv_alpha']}"]
+        elif config['lora_type'] == "DoRA (Weight Decomposition)":
+            network_module = "lycoris.kohya"
+            network_args = [f"algo=dora", f"conv_dim={config['conv_dim']}", f"conv_alpha={config['conv_alpha']}"]
+            print("🎯 Using DoRA - expect 2-3x slower training but higher quality!")
+        elif config['lora_type'] == "LoHa (Hadamard Product)":
+            network_module = "lycoris.kohya"
+            network_args = [f"algo=loha", f"conv_dim={config['conv_dim']}", f"conv_alpha={config['conv_alpha']}"]
+        elif config['lora_type'] == "(IA)³ (Few Parameters)":
+            network_module = "lycoris.kohya"
+            network_args = [f"algo=ia3"]  # IA3 doesn't use conv dimensions
+        elif config['lora_type'] == "GLoRA (Generalized LoRA)":
+            network_module = "lycoris.kohya"
+            network_args = [f"algo=glora", f"conv_dim={config['conv_dim']}", f"conv_alpha={config['conv_alpha']}"]
 
         # 🚀 Advanced Optimizer Handling
         optimizer_args = []
@@ -413,7 +426,6 @@ class HybridTrainingManager:
             "cache_latents": config['cache_latents'],
             "cache_latents_to_disk": config['cache_latents_to_disk'],
             "cache_text_encoder_outputs": config['cache_text_encoder_outputs'],
-            "v_parameterization": config['v_parameterization'] if config['v_parameterization'] else None,
             "min_snr_gamma": config['min_snr_gamma'] if config['min_snr_gamma_enabled'] else None,
             "ip_noise_gamma": config['ip_noise_gamma'] if config['ip_noise_gamma_enabled'] else None,
             "multires_noise_iterations": 6 if config['multinoise'] else None, # Default value from sample notebook
@@ -435,6 +447,11 @@ class HybridTrainingManager:
             "max_grad_norm": 1.0,  # Gradient clipping for stability
             "full_fp16": config['precision'] == 'fp16',  # More aggressive FP16 if selected
         }
+
+        # Add v_parameterization only if explicitly enabled
+        if config.get('v_parameterization', False):
+            training_args["v_parameterization"] = True
+            print("✅ V-Parameterization enabled for v-pred models")
 
         # Apply experimental features
         training_args = self._apply_experimental_features(config, training_args)
@@ -554,7 +571,7 @@ class HybridTrainingManager:
         
         return training_args
 
-    def start_training(self, config):
+    def start_training(self, config, monitor_widget=None):
         """🚀 Start hybrid training with all advanced features"""
         
         print("🧪 FRANKENSTEIN TRAINING MANAGER ACTIVATED! 💥")
@@ -595,6 +612,13 @@ class HybridTrainingManager:
         print("💾 Memory optimization: PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True")
         
         try:
+            # Set up training monitoring
+            if monitor_widget:
+                monitor_widget.clear_log()
+                monitor_widget.update_phase("Initializing training process...", "info")
+                # Set total epochs for progress tracking
+                monitor_widget.total_epochs = config['epochs']
+            
             process = subprocess.Popen(
                 [venv_python, train_script,
                  "--config_file", config_toml_path,
@@ -608,7 +632,11 @@ class HybridTrainingManager:
             )
 
             for line in iter(process.stdout.readline, ''):
-                print(line, end='')
+                print(line, end='')  # Still print to console
+                
+                # Update monitor widget if provided
+                if monitor_widget:
+                    monitor_widget.parse_training_output(line)
             
             process.stdout.close()
             return_code = process.wait()

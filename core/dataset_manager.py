@@ -80,9 +80,18 @@ class DatasetManager:
             "--batch_size", "8" if "v3" in tagger_model or "swinv2" in tagger_model else "1",
             "--max_data_loader_n_workers", "2",
             "--caption_extension", caption_extension,
-            "--remove_underscore",  # Convert underscores to spaces
-            "--onnx"  # Use ONNX for faster inference
+            "--remove_underscore"  # Convert underscores to spaces
         ]
+        
+        # Try to add ONNX flag if ONNX is available
+        try:
+            # Test if ONNX is available in the venv
+            test_onnx_cmd = [venv_python, "-c", "import onnx"]
+            subprocess.run(test_onnx_cmd, check=True, capture_output=True)
+            command.append("--onnx")  # Use ONNX for faster inference
+            print("✅ ONNX available - using accelerated inference")
+        except subprocess.CalledProcessError:
+            print("⚠️ ONNX not available - using standard PyTorch inference (slower but works)")
         
         # Add blacklisted tags if provided
         if blacklist_tags:

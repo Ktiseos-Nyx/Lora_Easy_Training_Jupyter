@@ -2,6 +2,7 @@
 import ipywidgets as widgets
 from IPython.display import display
 from core.training_manager import TrainingManager
+from .training_monitor_widget import TrainingMonitorWidget
 
 class TrainingWidget:
     def __init__(self):
@@ -32,12 +33,12 @@ class TrainingWidget:
 
         # --- Basic Settings ---
         basic_desc = widgets.HTML("""<h3>▶️ Basic Settings</h3>
-        <p>Configure fundamental training parameters. <strong>Target 250-1000 total steps</strong> using this formula:</p>
+        <p>Configure fundamental training parameters. <strong>Target 500-5000+ total steps</strong> using this formula:</p>
         <p><code>Images × Repeats × Epochs ÷ Batch Size = Total Steps</code></p>
         <p><strong>Examples:</strong><br>
-        • 10 images × 10 repeats × 10 epochs ÷ 2 batch = 500 steps<br>
-        • 20 images × 5 repeats × 10 epochs ÷ 4 batch = 250 steps<br>
-        • 100 images × 1 repeat × 10 epochs ÷ 4 batch = 250 steps</p>""")
+        • 20 images × 10 repeats × 10 epochs ÷ 4 batch = 500 steps (minimum)<br>
+        • 50 images × 10 repeats × 15 epochs ÷ 4 batch = 1875 steps (good)<br>
+        • 100 images × 20 repeats × 10 epochs ÷ 4 batch = 5000 steps (excellent!)</p>""")
         self.resolution = widgets.IntText(value=1024, description='Resolution:', style={'description_width': 'initial'})
         self.num_repeats = widgets.IntText(value=10, description='Num Repeats:', style={'description_width': 'initial'})
         self.epochs = widgets.IntText(value=10, description='Epochs:', style={'description_width': 'initial'})
@@ -58,18 +59,21 @@ class TrainingWidget:
             if batch_size > 0:
                 total_steps = (images * repeats * epochs) // batch_size
                 
-                if total_steps < 250:
+                if total_steps < 100:
                     color = "#dc3545"  # Red
-                    status = "⚠️ Too few steps - may be undercooked"
-                elif total_steps <= 3000:
-                    color = "#28a745"  # Green
-                    status = "✅ Good step count"
+                    status = "⚠️ Very few steps - likely undercooked"
+                elif total_steps < 500:
+                    color = "#ffc107"  # Yellow
+                    status = "🟡 Low steps - might need more training"
                 elif total_steps <= 5000:
-                    color = "#ff8c00"  # Orange
-                    status = "🟡 High steps - should work fine for SDXL"
+                    color = "#28a745"  # Green
+                    status = "✅ Great step count - should train well"
+                elif total_steps <= 10000:
+                    color = "#28a745"  # Green
+                    status = "✅ High steps - excellent for complex subjects"
                 else:
-                    color = "#ffc107"  # Yellow  
-                    status = "🔴 Very high steps - consider reducing repeats"
+                    color = "#ff8c00"  # Orange
+                    status = "🔥 Very high steps - might overtrain (but could be fine!)"
                 
                 self.step_calculator.value = f"""
                 <div style='background: {color}20; padding: 10px; border-left: 4px solid {color}; margin: 5px 0;'>
@@ -399,6 +403,10 @@ class TrainingWidget:
     def run_training(self, b):
         self._update_status("Preparing training configuration...", "info")
         
+        # Create and display monitor widget
+        monitor = TrainingMonitorWidget()
+        display(monitor.widget_box)
+        
         with self.training_output:
             self.training_output.clear_output()
             # Gather all the settings
@@ -460,7 +468,7 @@ class TrainingWidget:
                 'lycoris_method': getattr(self, 'lycoris_method', type('obj', (object,), {'value': 'none'})).value,
                 'experimental_features': self._get_experimental_features(),
             }
-            self.manager.start_training(config)
+            self.manager.start_training(config, monitor_widget=monitor)
 
     def _create_advanced_section(self):
         """Creates the Advanced Mode section with educational explanations"""
