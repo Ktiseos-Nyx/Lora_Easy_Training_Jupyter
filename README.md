@@ -1,7 +1,11 @@
 # LoRA Easy Training - Jupyter Widget Edition 🚀
 
-> **A comprehensive, educational LoRA training system with advanced features**  
+> **A comprehensive, educational LoRA training system with advanced features**
 > Widget-based interface designed for both beginners and advanced users
+> Please note this is STILL a work in progress.
+> Testing was only done on a singular RTX 4090 on a Vast AI Docker Container with pre installed SD WEB UI FORGE.
+> Results MAY vary, please feel free to report issues as you see fit.
+> Also the training guide is a little wonky, and the steps calculator isn't perfect.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
@@ -17,7 +21,7 @@
 
 ### 🧪 **Advanced Training Options**
 - **Hybrid optimizer support**: CAME, Prodigy Plus, StableAdamW, ADOPT
-- **LyCORIS methods**: DoRA, LoKr, LoHa, (IA)³, BOFT, GLoRA  
+- **LyCORIS methods**: DoRA, LoKr, LoHa, (IA)³, BOFT, GLoRA
 - **Memory optimizations**: Fused Back Pass, gradient checkpointing
 - **Advanced schedulers**: REX Annealing, Schedule-Free optimization
 
@@ -107,7 +111,7 @@ from widgets.setup_widget import SetupWidget
 setup_widget = SetupWidget()
 setup_widget.display()
 
-# Training configuration  
+# Training configuration
 from widgets.training_widget import TrainingWidget
 training_widget = TrainingWidget()
 training_widget.display()
@@ -322,7 +326,7 @@ This project builds upon the incredible work of many contributors in the AI trai
 This project embodies the principle that **AI training should be accessible, educational, and empowering**. We believe in:
 - **Learning through doing** with real-time explanations
 - **Progressive disclosure** (basic → advanced features)
-- **Community knowledge sharing** 
+- **Community knowledge sharing**
 - **Neurodivergent-friendly** interfaces and clear documentation
 
 ### 💝 **Special Thanks**
