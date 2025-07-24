@@ -3,6 +3,26 @@
 Personal LoRA Training Calculator
 Your "Stop Being a Chicken" Math Helper
 """
+import os
+import glob
+
+def count_images_in_directory(directory_path):
+    """Count image files in a directory"""
+    if not os.path.exists(directory_path):
+        return 0
+    
+    image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.bmp', '*.tiff']
+    image_count = 0
+    
+    for ext in image_extensions:
+        # Search recursively for images
+        pattern = os.path.join(directory_path, '**', ext)
+        image_count += len(glob.glob(pattern, recursive=True))
+        # Also search non-recursively in case they're in the root
+        pattern = os.path.join(directory_path, ext)
+        image_count += len(glob.glob(pattern))
+    
+    return image_count
 
 def main():
     print("🎯 Personal LoRA Training Calculator")
@@ -10,25 +30,51 @@ def main():
     
     # Get basic info
     try:
-        images = int(input("How many images do you have? "))
+        print("How do you want to specify your dataset size?")
+        print("1. Enter number of images manually")
+        print("2. Point to a directory (I'll count for you!)")
+        
+        method = input("Pick (1-2): ").strip()
+        
+        if method == "2":
+            directory = input("Enter the path to your dataset directory: ").strip()
+            images = count_images_in_directory(directory)
+            if images == 0:
+                print(f"❌ No images found in {directory}")
+                print("Maybe check the path or try manual entry?")
+                return
+            print(f"📁 Found {images} images in {directory}")
+        else:
+            images = int(input("How many images do you have? "))
         print(f"\nYou have {images} images...")
         
         # Dataset size assessment
         if images <= 10:
             print("🐣 TINY DATASET - Time to be brave!")
             size_category = "tiny"
-        elif images <= 15:
+        elif images <= 20:
             print("🐤 SMALL DATASET - Your peers are right!")
             size_category = "small"
-        elif images <= 30:
+        elif images <= 50:
             print("🐔 MEDIUM DATASET - Sweet spot territory")
             size_category = "medium"
-        elif images <= 50:
+        elif images <= 200:
             print("🦅 LARGE DATASET - Plenty to work with")
             size_category = "large"
+        elif images <= 1000:
+            print("🦆 VERY LARGE DATASET - You're doing great!")
+            size_category = "very_large"
         else:
-            print("🦆 HUGE DATASET - Stop being a chicken, you have tons!")
+            print("🐉 HUGE DATASET - You absolute madlad! That's truly massive!")
             size_category = "huge"
+        
+        # Model type
+        print("\nWhat base model are you using?")
+        print("1. SDXL (1024x1024, newer models)")
+        print("2. SD 1.5 (512x512, classic models)")
+        
+        model_choice = input("Pick (1-2): ").strip()
+        model_type = {"1": "sdxl", "2": "sd15"}.get(model_choice, "sdxl")
         
         # Training type
         print("\nWhat are you training?")
@@ -39,49 +85,108 @@ def main():
         choice = input("Pick (1-3): ").strip()
         training_type = {"1": "character", "2": "style", "3": "concept"}.get(choice, "character")
         
-        print(f"\n📊 RECOMMENDATIONS FOR {training_type.upper()} LoRA:")
-        print("=" * 50)
+        print(f"\n📊 RECOMMENDATIONS FOR {model_type.upper()} {training_type.upper()} LoRA:")
+        print("=" * 60)
         
-        # Calculate recommendations based on size and type
-        if size_category == "tiny":  # ≤10 images
-            repeats = 20
-            epochs = 15
-            unet_lr = "3e-4"
-            te_lr = "5e-5"
-            batch_size = 1
-            dim_alpha = "8/4"
-            
-        elif size_category == "small":  # 11-15 images  
-            repeats = 15
-            epochs = 12
-            unet_lr = "4e-4" 
-            te_lr = "8e-5"
-            batch_size = 2
-            dim_alpha = "8/4"
-            
-        elif size_category == "medium":  # 16-30 images
-            repeats = 10
-            epochs = 10
-            unet_lr = "5e-4"
-            te_lr = "1e-4" 
-            batch_size = 4
-            dim_alpha = "8/4"
-            
-        elif size_category == "large":  # 31-50 images
-            repeats = 8
-            epochs = 8
-            unet_lr = "5e-4"
-            te_lr = "1e-4"
-            batch_size = 4
-            dim_alpha = "8/4"
-            
-        else:  # huge >50 images
-            repeats = 6
-            epochs = 6
-            unet_lr = "5e-4"
-            te_lr = "1e-4"
-            batch_size = 4
-            dim_alpha = "16/8" if training_type == "style" else "8/4"
+        # Calculate recommendations based on size, type, and model
+        if model_type == "sdxl":
+            # SDXL logic - fewer repeats for larger datasets
+            if size_category == "tiny":  # ≤10 images
+                repeats = 20
+                epochs = 15
+                unet_lr = "3e-4"
+                te_lr = "5e-5"
+                batch_size = 1
+                dim_alpha = "8/4"
+                
+            elif size_category == "small":  # 11-15 images  
+                repeats = 15
+                epochs = 12
+                unet_lr = "4e-4" 
+                te_lr = "8e-5"
+                batch_size = 2
+                dim_alpha = "8/4"
+                
+            elif size_category == "medium":  # 16-30 images
+                repeats = 8
+                epochs = 10
+                unet_lr = "5e-4"
+                te_lr = "1e-4" 
+                batch_size = 4
+                dim_alpha = "8/4"
+                
+            elif size_category == "large":  # 51-200 images
+                repeats = 4
+                epochs = 8
+                unet_lr = "5e-4"
+                te_lr = "1e-4"
+                batch_size = 4
+                dim_alpha = "8/4"
+                
+            elif size_category == "very_large":  # 201-1000 images (like your 821!)
+                repeats = 2
+                epochs = 6
+                unet_lr = "5e-4"
+                te_lr = "1e-4"
+                batch_size = 6
+                dim_alpha = "16/8" if training_type == "style" else "8/4"
+                
+            else:  # huge 1000+ images - you madlad!
+                repeats = 1
+                epochs = 4
+                unet_lr = "4e-4"
+                te_lr = "8e-5"
+                batch_size = 8
+                dim_alpha = "16/8" if training_type == "style" else "8/4"
+                
+        else:  # SD 1.5 logic - traditional approach
+            if size_category == "tiny":  # ≤10 images
+                repeats = 25
+                epochs = 20
+                unet_lr = "3e-4"
+                te_lr = "5e-5"
+                batch_size = 1
+                dim_alpha = "8/4"
+                
+            elif size_category == "small":  # 11-15 images  
+                repeats = 20
+                epochs = 15
+                unet_lr = "4e-4" 
+                te_lr = "8e-5"
+                batch_size = 2
+                dim_alpha = "8/4"
+                
+            elif size_category == "medium":  # 16-30 images
+                repeats = 15
+                epochs = 12
+                unet_lr = "5e-4"
+                te_lr = "1e-4" 
+                batch_size = 4
+                dim_alpha = "8/4"
+                
+            elif size_category == "large":  # 51-200 images
+                repeats = 8
+                epochs = 10
+                unet_lr = "5e-4"
+                te_lr = "1e-4"
+                batch_size = 4
+                dim_alpha = "8/4"
+                
+            elif size_category == "very_large":  # 201-1000 images
+                repeats = 4
+                epochs = 8
+                unet_lr = "5e-4"
+                te_lr = "1e-4"
+                batch_size = 6
+                dim_alpha = "16/8" if training_type == "style" else "8/4"
+                
+            else:  # huge 1000+ images
+                repeats = 2
+                epochs = 6
+                unet_lr = "4e-4"
+                te_lr = "8e-5"
+                batch_size = 8
+                dim_alpha = "16/8" if training_type == "style" else "8/4"
         
         # Style LoRA adjustments
         if training_type == "style":
@@ -141,9 +246,15 @@ def main():
             print("🐤 Your peers train with this few images ALL THE TIME!")
             print("🎯 Quality > Quantity - you've got this!")
             print("⏱️  Faster iteration = more experiments!")
-        else:
+        elif size_category in ["medium", "large"]:
             print("🦅 You have plenty of images - stop worrying!")
             print("🎯 This is a comfortable dataset size!")
+        elif size_category == "very_large":
+            print("🦆 You've got a solid dataset - perfect for experimentation!")
+            print("🎯 Lower repeats = faster training, more tries!")
+        else:
+            print("🐉 MASSIVE dataset! You're in the big leagues now!")
+            print("🎯 Single repeats and low epochs - let the data do the work!")
             
     except KeyboardInterrupt:
         print("\n\n👋 Bye! Go train some LoRAs!")

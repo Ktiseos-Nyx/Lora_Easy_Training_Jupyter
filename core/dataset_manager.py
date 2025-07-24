@@ -13,7 +13,7 @@ class DatasetManager:
     def extract_dataset(self, zip_path, extract_to_dir, hf_token=""):
         if not extract_to_dir:
             print("Error: Please specify a directory to extract to.")
-            return
+            return False
 
         # Handle Hugging Face URL
         if zip_path.startswith("https://huggingface.co/"):
@@ -21,12 +21,12 @@ class DatasetManager:
             downloaded_zip_path = self.model_manager.download_file(zip_path, self.project_root, hf_token)
             if not downloaded_zip_path:
                 print("Failed to download the dataset.")
-                return
+                return False
             zip_path = downloaded_zip_path
 
         if not os.path.exists(zip_path):
             print(f"Error: Zip file not found at '{zip_path}'")
-            return
+            return False
 
         extract_path = os.path.join(self.project_root, extract_to_dir)
         os.makedirs(extract_path, exist_ok=True)
@@ -36,10 +36,13 @@ class DatasetManager:
             with zipfile.ZipFile(zip_path, 'r') as f:
                 f.extractall(extract_path)
             print("Extraction complete.\n")
+            return True
         except zipfile.BadZipFile:
             print("Error: The file is not a valid zip file.")
+            return False
         except Exception as e:
             print(f"An unexpected error occurred during extraction: {e}")
+            return False
         finally:
             # Clean up downloaded zip file if it was from HF
             if 'downloaded_zip_path' in locals() and os.path.exists(downloaded_zip_path):
@@ -50,17 +53,21 @@ class DatasetManager:
         dataset_path = os.path.join(self.project_root, dataset_dir)
         if not os.path.exists(dataset_path):
             print(f"❌ Error: Dataset directory not found at {dataset_path}")
-            return
+            return False
 
         if method == "anime":
-            self._tag_images_wd14(dataset_path, tagger_model, threshold, blacklist_tags, caption_extension)
+            return self._tag_images_wd14(dataset_path, tagger_model, threshold, blacklist_tags, caption_extension)
         elif method == "photo":
-            self._tag_images_blip(dataset_path, caption_extension)
+            return self._tag_images_blip(dataset_path, caption_extension)
         else:
             print(f"❌ Unknown tagging method: {method}")
+            return False
     
     def _tag_images_wd14(self, dataset_path, tagger_model, threshold, blacklist_tags, caption_extension):
         """Tag images using WD14 tagger"""
+        # First ensure the tagger model is available
+        self._ensure_tagger_model_available(tagger_model)
+        
         venv_python = os.path.join(self.sd_scripts_dir, "venv/bin/python")
         tagger_script = os.path.join(self.sd_scripts_dir, "finetune/tag_images_by_wd14_tagger.py")
 
@@ -85,7 +92,7 @@ class DatasetManager:
         if blacklist_tags:
             print(f"🚫 Blacklisted tags: {blacklist_tags}")
             
-        self._run_subprocess(command, "Image tagging")
+        return self._run_subprocess(command, "Image tagging")
     
     def _tag_images_blip(self, dataset_path, caption_extension):
         """Tag images using BLIP captioning"""
@@ -104,7 +111,7 @@ class DatasetManager:
         ]
 
         print(f"📸 Generating BLIP captions...")
-        self._run_subprocess(command, "BLIP captioning")
+        return self._run_subprocess(command, "BLIP captioning")
     
     def _run_subprocess(self, command, task_name):
         """Helper to run subprocess with consistent error handling"""
@@ -141,36 +148,43 @@ class DatasetManager:
         dataset_path = os.path.join(self.project_root, dataset_dir)
         if not os.path.exists(dataset_path):
             print(f"Error: Dataset directory not found at {dataset_path}")
-            return
+            return False
 
         if not trigger_word:
             print("Error: Please specify a trigger word.")
-            return
+            return False
 
-        print(f"Adding trigger word '{trigger_word}' to caption files...")
-        for item in os.listdir(dataset_path):
-            if item.endswith(".txt"):
-                file_path = os.path.join(dataset_path, item)
-                try:
-                    with open(file_path, 'r+') as f:
-                        content = f.read()
-                        f.seek(0, 0)
-                        f.write(f"{trigger_word}, {content}")
-                    print(f"  Added to: {item}")
-                except Exception as e:
-                    print(f"Error processing {item}: {e}")
-        print("✅ Trigger word addition complete.")
+        try:
+            print(f"Adding trigger word '{trigger_word}' to caption files...")
+            files_processed = 0
+            for item in os.listdir(dataset_path):
+                if item.endswith(".txt"):
+                    file_path = os.path.join(dataset_path, item)
+                    try:
+                        with open(file_path, 'r+') as f:
+                            content = f.read()
+                            f.seek(0, 0)
+                            f.write(f"{trigger_word}, {content}")
+                        print(f"  Added to: {item}")
+                        files_processed += 1
+                    except Exception as e:
+                        print(f"Error processing {item}: {e}")
+            print(f"✅ Trigger word addition complete. Processed {files_processed} files.")
+            return True
+        except Exception as e:
+            print(f"❌ Error adding trigger word: {e}")
+            return False
     
     def remove_tags(self, dataset_dir, tags_to_remove):
         """Remove specified tags from all caption files"""
         dataset_path = os.path.join(self.project_root, dataset_dir)
         if not os.path.exists(dataset_path):
             print(f"❌ Error: Dataset directory not found at {dataset_path}")
-            return
+            return False
 
         if not tags_to_remove:
             print("❌ Error: Please specify tags to remove.")
-            return
+            return False
         
         # Parse tags (handle both comma and space separated)
         tags_list = [tag.strip() for tag in tags_to_remove.replace(',', ' ').split() if tag.strip()]
@@ -208,3 +222,45 @@ class DatasetManager:
                     print(f"⚠️ Error processing {item}: {e}")
         
         print(f"✅ Tag removal complete. {files_processed} files updated.")
+        return True
+    
+    def _ensure_tagger_model_available(self, tagger_model):
+        """Ensure the tagger model is downloaded and available"""
+        print(f"🔍 Checking tagger model availability: {tagger_model}")
+        
+        # Try to import huggingface_hub to check model availability
+        try:
+            from huggingface_hub import snapshot_download, hf_hub_download
+            import torch
+        except ImportError:
+            print("⚠️ huggingface_hub or torch not available - model download may fail")
+            print("💡 The tagger script will attempt to download automatically")
+            return
+        
+        try:
+            # Check if model is already cached
+            model_path = snapshot_download(repo_id=tagger_model, allow_patterns=["*.onnx", "*.json"])
+            print(f"✅ Tagger model found at: {model_path}")
+            
+        except Exception as e:
+            print(f"📥 Downloading tagger model {tagger_model}...")
+            try:
+                # Download the model files we need
+                files_to_download = [
+                    "model.onnx",
+                    "selected_tags.csv", 
+                    "config.json"
+                ]
+                
+                for file in files_to_download:
+                    try:
+                        hf_hub_download(repo_id=tagger_model, filename=file)
+                        print(f"  ✅ Downloaded: {file}")
+                    except Exception as file_error:
+                        print(f"  ⚠️ Could not download {file}: {file_error}")
+                        
+                print(f"✅ Tagger model {tagger_model.split('/')[-1]} ready!")
+                
+            except Exception as download_error:
+                print(f"⚠️ Model download failed: {download_error}")
+                print("💡 The tagger script will attempt to download automatically during tagging")

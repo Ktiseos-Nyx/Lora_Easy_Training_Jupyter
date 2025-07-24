@@ -39,12 +39,6 @@ class SetupWidget:
         
         return info
 
-    def create_widgets(self):
-        """Creates all the UI components for the widget."""
-        header_icon = "🚩"
-        env_status = self._get_environment_status_html()
-        header_main = widgets.HTML(f"<h2>{header_icon} 1. Setup & Models</h2>{env_status}")
-        
     def _get_environment_status_html(self):
         """Creates HTML status display for current environment"""
         if self.container_info['is_vastai']:
@@ -54,6 +48,12 @@ class SetupWidget:
         else:
             gpu_status = "🟢 GPU Available" if self.container_info['has_gpu'] else "🔴 No GPU Detected"
             return f"<div style='background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0;'><strong>💻 Local Environment</strong> | {gpu_status}</div>"
+
+    def create_widgets(self):
+        """Creates all the UI components for the widget."""
+        header_icon = "🚩"
+        env_status = self._get_environment_status_html()
+        header_main = widgets.HTML(f"<h2>{header_icon} 1. Setup & Models</h2>{env_status}")
         
         # --- Environment Section ---
         env_desc = widgets.HTML("<h3>▶️ Environment Setup</h3><p>Install training backend and dependencies. Run this first before any other steps.</p>")
@@ -64,41 +64,15 @@ class SetupWidget:
         self.env_button = widgets.Button(description="🚩 Setup Environment", button_style='primary', layout=button_layout)
         
         button_box = widgets.HBox([self.validate_button, self.env_button])
-        self.env_output = widgets.Output()
-        env_box = widgets.VBox([env_desc, button_box, self.env_output])
+        self.env_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>📊 Status:</strong> Ready for setup</div>")
+        self.env_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
+        env_box = widgets.VBox([env_desc, button_box, self.env_status, self.env_output])
 
         # --- Model Section ---
         model_desc = widgets.HTML("<h3>▶️ Base Model</h3><p>Choose a pre-trained model or enter a custom URL from HuggingFace or Civitai.</p>")
         
         # Popular model presets - adjust based on environment
         model_presets = self._get_model_presets()
-        
-    def _get_model_presets(self):
-        """Returns model presets optimized for current environment"""
-        base_presets = {
-            "Custom URL (enter below)": "",
-            "(XL) Illustrious v0.1": "https://huggingface.co/OnomaAIResearch/Illustrious-xl-early-release-v0/resolve/main/Illustrious-XL-v0.1.safetensors",
-            "(XL) NoobAI Epsilon v1.0": "https://huggingface.co/Laxhar/noobai-XL-1.0/resolve/main/NoobAI-XL-v1.0.safetensors", 
-            "(XL) PonyDiffusion v6": "https://huggingface.co/AstraliteHeart/pony-diffusion-v6/resolve/main/v6.safetensors",
-            "(XL) Animagine 3.1": "https://huggingface.co/cagliostrolab/animagine-xl-3.1/resolve/main/animagine-xl-3.1.safetensors",
-            "(XL) SDXL 1.0 Base": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
-            "(1.5) Anime Full Final": "https://huggingface.co/hollowstrawberry/stable-diffusion-guide/resolve/main/models/animefull-final-pruned-fp16.safetensors",
-            "(1.5) AnyLora": "https://huggingface.co/Lykon/AnyLoRA/resolve/main/AnyLoRA_noVae_fp16-pruned.safetensors",
-            "(1.5) SD 1.5": "https://huggingface.co/hollowstrawberry/stable-diffusion-guide/resolve/main/models/sd-v1-5-pruned-noema-fp16.safetensors"
-        }
-        
-        # For VastAI, prioritize the most popular/stable models
-        if self.container_info['is_vastai']:
-            vastai_order = {
-                "(XL) Illustrious v0.1 ⭐ Popular": base_presets["(XL) Illustrious v0.1"],
-                "(XL) PonyDiffusion v6 ⭐ Popular": base_presets["(XL) PonyDiffusion v6"],
-                "(XL) NoobAI Epsilon v1.0 ⭐ Popular": base_presets["(XL) NoobAI Epsilon v1.0"],
-                "Custom URL (enter below)": ""
-            }
-            vastai_order.update({k: v for k, v in base_presets.items() if k not in vastai_order and "Custom" not in k})
-            return vastai_order
-            
-        return base_presets
         
         self.model_preset = widgets.Dropdown(
             options=list(model_presets.keys()),
@@ -119,7 +93,8 @@ class SetupWidget:
         )
         
         self.model_button = widgets.Button(description="📥 Download Model", button_style='success')
-        self.model_output = widgets.Output()
+        self.model_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>📊 Status:</strong> Ready to download</div>")
+        self.model_output = widgets.Output(layout=widgets.Layout(height='250px', overflow='scroll', border='1px solid #ddd'))
         
         # Update URL when preset changes
         def on_preset_change(change):
@@ -132,7 +107,8 @@ class SetupWidget:
             self.model_preset,
             self.model_url,
             self.model_name,
-            self.model_button, 
+            self.model_button,
+            self.model_status,
             self.model_output
         ])
 
@@ -164,7 +140,8 @@ class SetupWidget:
         )
         
         self.vae_button = widgets.Button(description="📥 Download VAE", button_style='success')
-        self.vae_output = widgets.Output()
+        self.vae_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>📊 Status:</strong> Ready to download</div>")
+        self.vae_output = widgets.Output(layout=widgets.Layout(height='250px', overflow='scroll', border='1px solid #ddd'))
         
         # Update VAE URL when preset changes
         def on_vae_preset_change(change):
@@ -181,6 +158,7 @@ class SetupWidget:
             self.vae_url,
             self.vae_name,
             self.vae_button,
+            self.vae_status,
             self.vae_output
         ])
 
@@ -225,12 +203,39 @@ class SetupWidget:
         self.env_button.on_click(self.run_setup_environment)
         self.model_button.on_click(self.run_download_model)
         self.vae_button.on_click(self.run_download_vae)
+        
+    def _get_model_presets(self):
+        """Returns model presets optimized for current environment"""
+        base_presets = {
+            "Custom URL (enter below)": "",
+            "(XL) Illustrious v0.1": "https://huggingface.co/OnomaAIResearch/Illustrious-xl-early-release-v0/resolve/main/Illustrious-XL-v0.1.safetensors",
+            "(XL) NoobAI Epsilon v1.0": "https://huggingface.co/Laxhar/noobai-XL-1.0/resolve/main/NoobAI-XL-v1.0.safetensors", 
+            "(XL) PonyDiffusion v6": "https://huggingface.co/AstraliteHeart/pony-diffusion-v6/resolve/main/v6.safetensors",
+            "(XL) Animagine 3.1": "https://huggingface.co/cagliostrolab/animagine-xl-3.1/resolve/main/animagine-xl-3.1.safetensors",
+            "(XL) SDXL 1.0 Base": "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/resolve/main/sd_xl_base_1.0.safetensors",
+            "(1.5) Anime Full Final": "https://huggingface.co/hollowstrawberry/stable-diffusion-guide/resolve/main/models/animefull-final-pruned-fp16.safetensors",
+            "(1.5) AnyLora": "https://huggingface.co/Lykon/AnyLoRA/resolve/main/AnyLoRA_noVae_fp16-pruned.safetensors",
+            "(1.5) SD 1.5": "https://huggingface.co/hollowstrawberry/stable-diffusion-guide/resolve/main/models/sd-v1-5-pruned-noema-fp16.safetensors"
+        }
+        
+        # For VastAI, prioritize the most popular/stable models
+        if self.container_info['is_vastai']:
+            vastai_order = {
+                "(XL) Illustrious v0.1 ⭐ Popular": base_presets["(XL) Illustrious v0.1"],
+                "(XL) PonyDiffusion v6 ⭐ Popular": base_presets["(XL) PonyDiffusion v6"],
+                "(XL) NoobAI Epsilon v1.0 ⭐ Popular": base_presets["(XL) NoobAI Epsilon v1.0"],
+                "Custom URL (enter below)": ""
+            }
+            vastai_order.update({k: v for k, v in base_presets.items() if k not in vastai_order and "Custom" not in k})
+            return vastai_order
+            
+        return base_presets
 
     def run_setup_environment(self, b):
         """Sets up the training environment"""
+        self.env_output.clear_output()
+        self.env_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Setting up environment...</div>"
         with self.env_output:
-            self.env_output.clear_output()
-            
             if self.container_info['environment'] != 'local':
                 print(f"🔧 Setting up training environment for {self.container_info['environment']}...")
             else:
@@ -238,17 +243,18 @@ class SetupWidget:
                 
             success = self.setup_manager.setup_environment()
             if success:
-                with self.status_output:
-                    self.status_output.clear_output()
-                    status_msg = "✅ Environment setup complete! You can now download models and prepare datasets."
-                    if self.container_info['is_vastai']:
-                        status_msg += "\n📝 VastAI optimizations applied automatically."
-                    print(status_msg)
+                status_msg = "Environment setup complete! You can now download models and prepare datasets."
+                if self.container_info['is_vastai']:
+                    status_msg += "<br>📝 VastAI optimizations applied automatically."
+                self.env_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {status_msg}</div>"
+            else:
+                self.env_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Environment setup failed. Check logs.</div>"
     
     def run_validate_environment(self, b):
         """Validates the current environment without installing anything"""
+        self.env_output.clear_output()
+        self.env_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Validating environment...</div>"
         with self.env_output:
-            self.env_output.clear_output()
             print("🔍 Running comprehensive environment validation...\n")
             
             # Check system info
@@ -348,15 +354,46 @@ class SetupWidget:
                 except Exception as e:
                     print(f"   ❌ {url}: {e}")
             
+            # Check SD Scripts installation
+            print("\n📂 Checking SD Scripts installation...")
+            trainer_dir = os.path.join(os.path.dirname(__file__), '..', 'trainer')
+            sd_scripts_dir = os.path.join(trainer_dir, 'sd_scripts')
+            
+            if os.path.exists(trainer_dir):
+                print("   ✅ Trainer directory exists")
+                
+                if os.path.exists(sd_scripts_dir):
+                    print("   ✅ SD Scripts directory exists")
+                    
+                    # Check for key training scripts
+                    key_scripts = ['sdxl_train_network.py', 'train_network.py', 'networks/lora.py']
+                    scripts_found = 0
+                    for script in key_scripts:
+                        script_path = os.path.join(sd_scripts_dir, script)
+                        if os.path.exists(script_path):
+                            scripts_found += 1
+                            print(f"   ✅ {script}")
+                        else:
+                            print(f"   ❌ {script} (missing)")
+                    
+                    if scripts_found >= 2:
+                        print("   ✅ SD Scripts appear properly installed")
+                    else:
+                        print("   ❌ SD Scripts incomplete - run Setup Environment")
+                else:
+                    print("   ❌ SD Scripts directory missing - run Setup Environment")
+            else:
+                print("   ❌ Trainer directory missing - run Setup Environment")
+            
             # Summary
             print("\n" + "="*50)
             if missing:
-                print(f"⚠️  VALIDATION COMPLETE - {len(missing)} missing dependencies")
+                self.env_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> Validation complete - {len(missing)} missing dependencies</div>"
                 print("\n📝 Missing commands can be installed during setup:")
                 for cmd in missing:
                     print(f"   • {cmd}")
             else:
-                print("✅ VALIDATION COMPLETE - Environment ready for setup!")
+                self.env_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Validation complete - Environment ready for setup!</div>"
             
             # Container detection info
             if self.container_info['environment'] != 'local':
@@ -365,11 +402,12 @@ class SetupWidget:
 
     def run_download_model(self, b):
         """Downloads the selected model"""
+        self.model_output.clear_output()
+        self.model_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Downloading model...</div>"
         with self.model_output:
-            self.model_output.clear_output()
-            
             model_url = self.model_url.value.strip()
             if not model_url:
+                self.model_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a model URL or select a preset.</div>"
                 print("❌ Please enter a model URL or select a preset.")
                 return
             
@@ -389,17 +427,18 @@ class SetupWidget:
             )
             
             if result:
-                with self.status_output:
-                    self.status_output.clear_output()
-                    print(f"✅ Model downloaded: {result}")
+                self.model_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Model downloaded: {os.path.basename(result)}</div>"
+            else:
+                self.model_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Model download failed. Check logs.</div>"
 
     def run_download_vae(self, b):
         """Downloads the selected VAE"""
+        self.vae_output.clear_output()
+        self.vae_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Downloading VAE...</div>"
         with self.vae_output:
-            self.vae_output.clear_output()
-            
             vae_url = self.vae_url.value.strip()
             if not vae_url:
+                self.vae_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>ℹ️ Status:</strong> No VAE URL provided, skipping.</div>"
                 print("ℹ️ No VAE URL provided, skipping VAE download.")
                 return
             
@@ -419,9 +458,9 @@ class SetupWidget:
             )
             
             if result:
-                with self.status_output:
-                    self.status_output.clear_output() 
-                    print(f"✅ VAE downloaded: {result}")
+                self.vae_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> VAE downloaded: {os.path.basename(result)}</div>"
+            else:
+                self.vae_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> VAE download failed. Check logs.</div>"
 
     def display(self):
         """Displays the widget."""

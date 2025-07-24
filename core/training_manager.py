@@ -1,6 +1,7 @@
 # core/training_manager.py
 import subprocess
 import os
+import sys
 import toml
 import json
 from typing import Dict, List, Optional, Any
@@ -17,20 +18,145 @@ class HybridTrainingManager:
     """
     
     def __init__(self):
-        self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        # Use current working directory to match where notebook is running
+        self.project_root = os.getcwd()
         self.trainer_dir = os.path.join(self.project_root, "trainer")
-        self.runtime_store_dir = os.path.join(self.trainer_dir, "runtime_store")
+        self.config_dir = os.path.join(self.project_root, "training_configs")  # Much better name!
         self.sd_scripts_dir = os.path.join(self.trainer_dir, "sd_scripts")
         self.output_dir = os.path.join(self.project_root, "output")
         self.logging_dir = os.path.join(self.project_root, "logs")
-        os.makedirs(self.runtime_store_dir, exist_ok=True)
+        os.makedirs(self.config_dir, exist_ok=True)
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.logging_dir, exist_ok=True)
+        
+        # 🔧 Setup Python path for Derrian's custom optimizers
+        self._setup_custom_optimizers()
         
         # 🔬 Advanced feature support
         self.advanced_optimizers = self._init_advanced_optimizers()
         self.lycoris_methods = self._init_lycoris_methods()
         self.experimental_features = self._init_experimental_features()
+    
+    
+    
+    def _find_training_script(self):
+        """Find the training script in various possible locations"""
+        possible_scripts = [
+            # Derrian's backend might have scripts in different locations
+            os.path.join(self.trainer_dir, "sd_scripts", "sdxl_train_network.py"),
+            os.path.join(self.trainer_dir, "sd_scripts", "train_network.py"), 
+            os.path.join(self.trainer_dir, "sdxl_train_network.py"),
+            os.path.join(self.trainer_dir, "train_network.py"),
+            # Also check for kohya scripts structure
+            os.path.join(self.sd_scripts_dir, "sdxl_train_network.py"),
+            os.path.join(self.sd_scripts_dir, "train_network.py")
+        ]
+        
+        for script_path in possible_scripts:
+            if os.path.exists(script_path):
+                script_type = "SDXL" if "sdxl" in os.path.basename(script_path) else "SD 1.5"
+                print(f"✅ Found {script_type} training script: {script_path}")
+                return script_path
+        
+        return None
+    
+    def _setup_custom_optimizers(self):
+        """Add Derrian's backend to Python path so we can import custom optimizers"""
+        if os.path.exists(self.trainer_dir) and self.trainer_dir not in sys.path:
+            sys.path.insert(0, self.trainer_dir)
+            print(f"🔧 Added {self.trainer_dir} to Python path for custom optimizers")
+            
+        # Also add custom_scheduler directory to path
+        custom_scheduler_dir = os.path.join(self.trainer_dir, "custom_scheduler")
+        if os.path.exists(custom_scheduler_dir) and custom_scheduler_dir not in sys.path:
+            sys.path.insert(0, custom_scheduler_dir)
+            print(f"🔧 Added {custom_scheduler_dir} to Python path for CAME/REX optimizers")
+            
+        # Debug: Check what's actually in the trainer directory
+        print("🔍 Checking trainer directory contents...")
+        try:
+            contents = os.listdir(self.trainer_dir)
+            print(f"Found: {contents}")
+            
+            # Look for optimizer-related files/folders
+            optimizer_files = [f for f in contents if 'optim' in f.lower() or 'came' in f.lower() or 'rex' in f.lower() or 'custom_scheduler' in f.lower()]
+            if optimizer_files:
+                print(f"📁 Optimizer-related files: {optimizer_files}")
+                
+            # Check custom_scheduler directory specifically
+            custom_scheduler_dir = os.path.join(self.trainer_dir, "custom_scheduler")
+            if os.path.exists(custom_scheduler_dir):
+                try:
+                    scheduler_contents = os.listdir(custom_scheduler_dir)
+                    print(f"📁 custom_scheduler contents: {scheduler_contents}")
+                except Exception as e:
+                    print(f"⚠️ Error reading custom_scheduler: {e}")
+            
+            # Check for Python files
+            py_files = [f for f in contents if f.endswith('.py')]
+            if py_files:
+                print(f"🐍 Python files: {py_files}")
+                
+        except Exception as e:
+            print(f"❌ Error listing directory: {e}")
+            
+        # Try to import and verify CAME is available (from custom_scheduler)
+        try:
+            import LoraEasyCustomOptimizer.came
+            print("✅ CAME optimizer found and ready!")
+        except ImportError as e:
+            print(f"⚠️ CAME optimizer not found: {e}")
+            
+            # Try alternative import paths for Derrian's structure
+            alt_paths = [
+                'came', 'optimizers.came', 'custom_optimizers.came',
+                'custom_scheduler.LoraEasyCustomOptimizer.came'
+            ]
+            
+            for alt_path in alt_paths:
+                try:
+                    __import__(alt_path)
+                    print(f"✅ Found CAME at: {alt_path}")
+                    break
+                except ImportError:
+                    continue
+            else:
+                print("💡 CAME optimizer not found in any expected location")
+            
+        # Try to import REX scheduler
+        try:
+            import LoraEasyCustomOptimizer.RexAnnealingWarmRestarts
+            print("✅ REX scheduler found and ready!")
+        except ImportError as e:
+            print(f"⚠️ REX scheduler not found: {e}")
+            print("💡 Custom optimizers might not be available - using standard optimizers")
+    
+    def _detect_model_type(self, config):
+        """Detect model type from model path or config to choose appropriate SD scripts"""
+        model_path = config.get('model_path', '').lower()
+        
+        # Check for Flux indicators
+        if any(flux_indicator in model_path for flux_indicator in [
+            'flux', 'schnell', 'dev', 'black-forest-labs'
+        ]):
+            return 'flux'
+        
+        # Check for SD3 indicators  
+        if any(sd3_indicator in model_path for sd3_indicator in [
+            'sd3', 'stable-diffusion-3', 'sd3-medium', 'sd3-large'
+        ]):
+            return 'sd3'
+        
+        # Check for SDXL indicators
+        if any(sdxl_indicator in model_path for sdxl_indicator in [
+            'sdxl', 'xl', '1024', 'base_1.0', 'refiner'
+        ]):
+            return 'sdxl'
+        
+        # Default to SD 1.5/2.x
+        return 'sd15'
+    
+    
         
     def _init_advanced_optimizers(self) -> Dict[str, Dict[str, Any]]:
         """Initialize advanced optimizer configurations"""
@@ -126,15 +252,17 @@ class HybridTrainingManager:
         dataset_config = {
             "general": {
                 "resolution": config['resolution'],
-                "shuffle_caption": True,
-                "keep_tokens": 0,
+                "shuffle_caption": config.get('shuffle_caption', True),
+                "keep_tokens": config.get('keep_tokens', 0),
                 "flip_aug": config['flip_aug'],
                 "caption_extension": ".txt",
                 "enable_bucket": True,
-                "bucket_no_upscale": False,
-                "bucket_reso_steps": 64,
-                "min_bucket_reso": 256,
-                "max_bucket_reso": 2048,
+                "bucket_no_upscale": config.get('bucket_no_upscale', False),
+                "bucket_reso_steps": config.get('bucket_reso_steps', 64),
+                "min_bucket_reso": config.get('min_bucket_reso', 256),
+                "max_bucket_reso": config.get('max_bucket_reso', 2048),
+                "caption_dropout_rate": config.get('caption_dropout_rate', 0.0),
+                "caption_tag_dropout_rate": config.get('caption_tag_dropout_rate', 0.0),
             },
             "datasets": [
                 {
@@ -147,7 +275,7 @@ class HybridTrainingManager:
                 }
             ]
         }
-        dataset_toml_path = os.path.join(self.runtime_store_dir, "dataset.toml")
+        dataset_toml_path = os.path.join(self.config_dir, "dataset.toml")
         with open(dataset_toml_path, "w") as f:
             toml.dump(dataset_config, f)
         return dataset_toml_path
@@ -209,28 +337,107 @@ class HybridTrainingManager:
             
             print(f"🚀 Using advanced optimizer: {advanced_optimizer} - {adv_config['description']}")
             
-            # Override learning rate if specified
-            if 'learning_rate_override' in adv_config:
+            # Check if CAME optimizer is actually available
+            if advanced_optimizer == 'came':
+                try:
+                    import LoraEasyCustomOptimizer.came
+                    print("✅ CAME optimizer verified and ready!")
+                except ImportError as e:
+                    print(f"❌ CAME optimizer not available: {e}")
+                    print("🔄 Falling back to standard AdamW optimizer...")
+                    optimizer_type = "AdamW"
+                    optimizer_args = ["weight_decay=0.01", "betas=[0.9,0.999]"]
+                    lr_scheduler_type = None
+                    lr_scheduler_args = None
+                    advanced_optimizer = 'standard'  # Reset to prevent other CAME-specific logic
+            
+            # Override learning rate if specified (and optimizer is still advanced)
+            if advanced_optimizer != 'standard' and 'learning_rate_override' in adv_config:
                 config['unet_lr'] = adv_config['learning_rate_override']
                 config['text_encoder_lr'] = adv_config['learning_rate_override']
                 print(f"📊 Learning rate auto-set to: {adv_config['learning_rate_override']}")
         
-        # Standard optimizer configurations
+        # Standard optimizer configurations - ensure all use correct module paths
         elif config['optimizer'] == "Prodigy":
+            # Prodigy is usually in torch.optim or external package
             optimizer_args.extend(["decouple=True", "weight_decay=0.01", "betas=[0.9,0.999]", "d_coef=2", "use_bias_correction=True"])
             if config['lr_warmup_ratio'] > 0:
                 optimizer_args.append("safeguard_warmup=True")
         elif config['optimizer'] == "AdamW8bit":
+            # AdamW8bit is in bitsandbytes
+            optimizer_type = "bitsandbytes.optim.AdamW8bit"
             optimizer_args.extend(["weight_decay=0.1", "betas=[0.9,0.99]"])
         elif config['optimizer'] == "AdaFactor":
+            # AdaFactor is in transformers
+            optimizer_type = "transformers.optimization.Adafactor"
             optimizer_args.extend(["scale_parameter=False", "relative_step=False", "warmup_init=False"])
         elif config['optimizer'] == "Came":
+            optimizer_type = "LoraEasyCustomOptimizer.came.CAME"
             optimizer_args.extend(["weight_decay=0.04"])
+        elif config['optimizer'] == "DAdaptation":
+            # DAdaptation is external package
+            pass  # Let SD scripts handle the import
+        elif config['optimizer'] == "DadaptAdam":
+            # DAdaptAdam is in dadaptation package
+            pass  # Let SD scripts handle the import
+        elif config['optimizer'] == "DadaptLion":
+            # DadaptLion is in dadaptation package  
+            pass  # Let SD scripts handle the import
+        # AdamW, Lion, SGDNesterov, SGDNesterov8bit are in torch.optim - use defaults
 
         # Handle REX scheduler
         if config['lr_scheduler'] == "rex" and not lr_scheduler_type:
-            lr_scheduler_type = "LoraEasyCustomOptimizer.RexAnnealingWarmRestarts.RexAnnealingWarmRestarts"
-            lr_scheduler_args = ["min_lr=1e-9", "gamma=0.9", "d=0.9"]
+            try:
+                import LoraEasyCustomOptimizer.RexAnnealingWarmRestarts
+                lr_scheduler_type = "LoraEasyCustomOptimizer.RexAnnealingWarmRestarts.RexAnnealingWarmRestarts"
+                lr_scheduler_args = ["min_lr=1e-9", "gamma=0.9", "d=0.9"]
+                print("✅ REX scheduler verified and ready!")
+            except ImportError as e:
+                print(f"❌ REX scheduler not available: {e}")
+                print("🔄 Falling back to cosine scheduler...")
+                lr_scheduler_type = None  # Use default cosine
+                lr_scheduler_args = None
+
+        training_args = {
+            "lowram": True,
+            "pretrained_model_name_or_path": config['model_path'],
+            "max_train_epochs": config['epochs'],
+            "train_batch_size": config['train_batch_size'],
+            "mixed_precision": config['precision'],
+            "save_precision": config['precision'],
+            "save_every_n_epochs": config['save_every_n_epochs'],
+            "save_last_n_epochs": config['keep_only_last_n_epochs'],
+            "output_name": config['project_name'],
+            "output_dir": self.output_dir,
+            "logging_dir": self.logging_dir,
+            "cache_latents": config['cache_latents'],
+            "cache_latents_to_disk": config['cache_latents_to_disk'],
+            "cache_text_encoder_outputs": config['cache_text_encoder_outputs'],
+            "v_parameterization": config['v_parameterization'] if config['v_parameterization'] else None,
+            "min_snr_gamma": config['min_snr_gamma'] if config['min_snr_gamma_enabled'] else None,
+            "ip_noise_gamma": config['ip_noise_gamma'] if config['ip_noise_gamma_enabled'] else None,
+            "multires_noise_iterations": 6 if config['multinoise'] else None, # Default value from sample notebook
+            "multires_noise_discount": 0.3 if config['multinoise'] else None, # Default value from sample notebook
+            "xformers": True if config['cross_attention'] == "xformers" else None,
+            "sdpa": True if config['cross_attention'] == "sdpa" else None,
+            "log_with": "wandb" if config['wandb_key'] else None,
+            "wandb_api_key": config['wandb_key'] if config['wandb_key'] else None,
+            # Advanced training options
+            "noise_offset": config.get('noise_offset', 0.0) if config.get('noise_offset', 0.0) > 0 else None,
+            "adaptive_noise_scale": config.get('adaptive_noise_scale', 0.0) if config.get('adaptive_noise_scale', 0.0) > 0 else None,
+            "zero_terminal_snr": config.get('zero_terminal_snr', False) if config.get('zero_terminal_snr', False) else None,
+            "clip_skip": config.get('clip_skip', 2),
+            "vae_batch_size": config.get('vae_batch_size', 1),
+            "no_half_vae": config.get('no_half_vae', False) if config.get('no_half_vae', False) else None,
+            # Memory optimization flags
+            "gradient_checkpointing": True,  # Always enable for memory savings
+            "gradient_accumulation_steps": max(1, 4 // config['train_batch_size']),  # Auto-adjust for small batch sizes
+            "max_grad_norm": 1.0,  # Gradient clipping for stability
+            "full_fp16": config['precision'] == 'fp16',  # More aggressive FP16 if selected
+        }
+
+        # Apply experimental features
+        training_args = self._apply_experimental_features(config, training_args)
 
         config_toml = {
             "network_arguments": {
@@ -247,38 +454,14 @@ class HybridTrainingManager:
                 "lr_scheduler": config['lr_scheduler'],
                 "lr_scheduler_num_cycles": config['lr_scheduler_number'] if config['lr_scheduler'] == "cosine_with_restarts" else None,
                 "lr_warmup_steps": int(config['lr_warmup_ratio'] * config['epochs'] * 100) if config['lr_warmup_ratio'] > 0 else None, # Simplified calculation
-                "optimizer_type": config['optimizer'],
+                "optimizer_type": optimizer_type,
                 "optimizer_args": optimizer_args if optimizer_args else None,
                 "lr_scheduler_type": lr_scheduler_type,
                 "lr_scheduler_args": lr_scheduler_args,
             },
-            "training_arguments": {
-                "lowram": True,
-                "pretrained_model_name_or_path": config['model_path'],
-                "max_train_epochs": config['epochs'],
-                "train_batch_size": config['train_batch_size'],
-                "mixed_precision": config['precision'],
-                "save_precision": config['precision'],
-                "save_every_n_epochs": config['save_every_n_epochs'],
-                "save_last_n_epochs": config['keep_only_last_n_epochs'],
-                "output_name": config['project_name'],
-                "output_dir": self.output_dir,
-                "logging_dir": self.logging_dir,
-                "cache_latents": config['cache_latents'],
-                "cache_latents_to_disk": config['cache_latents_to_disk'],
-                "cache_text_encoder_outputs": config['cache_text_encoder_outputs'],
-                "v_parameterization": config['v_parameterization'] if config['v_parameterization'] else None,
-                "min_snr_gamma": config['min_snr_gamma'] if config['min_snr_gamma_enabled'] else None,
-                "ip_noise_gamma": config['ip_noise_gamma'] if config['ip_noise_gamma_enabled'] else None,
-                "multires_noise_iterations": 6 if config['multinoise'] else None, # Default value from sample notebook
-                "multires_noise_discount": 0.3 if config['multinoise'] else None, # Default value from sample notebook
-                "xformers": True if config['cross_attention'] == "xformers" else None,
-                "sdpa": True if config['cross_attention'] == "sdpa" else None,
-                "log_with": "wandb" if config['wandb_key'] else None,
-                "wandb_api_key": config['wandb_key'] if config['wandb_key'] else None,
-            }
+            "training_arguments": training_args
         }
-        config_toml_path = os.path.join(self.runtime_store_dir, "config.toml")
+        config_toml_path = os.path.join(self.config_dir, "config.toml")
         with open(config_toml_path, "w") as f:
             toml.dump(config_toml, f)
         return config_toml_path
@@ -286,6 +469,37 @@ class HybridTrainingManager:
     def _validate_advanced_config(self, config) -> List[str]:
         """🛡️ Validate advanced configuration for compatibility issues"""
         warnings = []
+        
+        # Check memory requirements and auto-adjust for VRAM constraints
+        batch_size = config.get('train_batch_size', 1)
+        resolution = config.get('resolution', 1024)
+        
+        # VRAM usage estimation (very rough)
+        estimated_vram_gb = (batch_size * resolution * resolution) / (1024 * 1024 * 200)  # Rough estimate
+        
+        if estimated_vram_gb > 20:  # Likely too much for most cards
+            new_batch_size = max(1, batch_size // 2)
+            warnings.append(f"💾 High VRAM usage detected - reducing batch size from {batch_size} to {new_batch_size}")
+            config['train_batch_size'] = new_batch_size
+            
+        # Auto-enable basic memory saving for large models (but respect user choices)
+        if resolution >= 1024:
+            warnings.append("💾 Large resolution detected - enabling basic memory optimizations")
+            if not config.get('cache_latents'):
+                config['cache_latents'] = True
+                warnings.append("ℹ️ Auto-enabled latent caching for memory savings")
+            if not config.get('cache_latents_to_disk'):
+                config['cache_latents_to_disk'] = True
+                warnings.append("ℹ️ Auto-enabled disk caching for memory savings")
+        
+        # Validate text encoder conflicts (but don't auto-fix)
+        if config.get('cache_text_encoder_outputs') and config.get('shuffle_caption'):
+            warnings.append("🚨 CONFLICT: Cannot use caption shuffling with text encoder caching!")
+            warnings.append("💡 Please disable one of these options in the training widget")
+            
+        if config.get('cache_text_encoder_outputs') and config.get('text_encoder_lr', 0) > 0:
+            warnings.append("🚨 CONFLICT: Cannot cache text encoder while training it!")
+            warnings.append("💡 Set Text Encoder LR to 0 or disable text encoder caching")
         
         # Check fused back pass compatibility
         if config.get('fused_back_pass', False):
@@ -319,11 +533,10 @@ class HybridTrainingManager:
     def _apply_experimental_features(self, config, training_args: Dict[str, Any]) -> Dict[str, Any]:
         """🔬 Apply experimental features to training arguments"""
         
-        # Fused Back Pass (OneTrainer)
+        # Fused Back Pass (OneTrainer) - Currently disabled, requires OneTrainer backend
         if config.get('fused_back_pass', False):
-            training_args['fused_backward_pass'] = True
-            training_args['gradient_accumulation_steps'] = 1
-            print("⚡ Fused Back Pass enabled - VRAM optimization active")
+            print("⚠️ Fused Back Pass requires OneTrainer integration - feature disabled")
+            print("💡 Using standard gradient checkpointing for VRAM optimization instead")
         
         # Aggressive Gradient Checkpointing
         if config.get('gradient_checkpointing', False):
@@ -359,10 +572,28 @@ class HybridTrainingManager:
         dataset_toml_path = self._create_dataset_toml(config)
         config_toml_path = self._create_config_toml(config)
 
-        venv_python = os.path.join(self.sd_scripts_dir, "venv/bin/python")
-        train_script = os.path.join(self.sd_scripts_dir, "sdxl_train_network.py") # Assuming SDXL for now
+        # Check for venv python first, fall back to system python
+        venv_python_path = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        if os.path.exists(venv_python_path):
+            venv_python = venv_python_path
+        else:
+            venv_python = "python"  # Use system python (common in containers)
+        
+        # Find the training script in flexible locations
+        train_script = self._find_training_script()
+        if not train_script:
+            print("❌ No training script found in any expected location!")
+            print("💡 Please ensure the environment setup completed successfully!")
+            return
 
         print("\n🚀 Starting hybrid training...")
+        
+        # Set memory optimization environment variables
+        env = os.environ.copy()
+        env['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'  # Reduce fragmentation
+        env['CUDA_LAUNCH_BLOCKING'] = '1'  # Better error reporting
+        print("💾 Memory optimization: PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True")
+        
         try:
             process = subprocess.Popen(
                 [venv_python, train_script,
@@ -372,7 +603,8 @@ class HybridTrainingManager:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                cwd=self.project_root
+                cwd=self.project_root,
+                env=env
             )
 
             for line in iter(process.stdout.readline, ''):
@@ -389,10 +621,27 @@ class HybridTrainingManager:
 
         except subprocess.CalledProcessError as e:
             print(f"💥 Training error occurred: {e}")
-            print("🔧 This is experimental - try adjusting settings or using standard mode")
+            print("\n🔧 TROUBLESHOOTING SUGGESTIONS:")
+            if "CAME" in str(e) or "LoraEasyCustomOptimizer" in str(e):
+                print("1. 🧪 CAME/REX optimizer issue - custom optimizers may not be installed")
+                print("2. 🔄 Try disabling Advanced Mode and using standard AdamW optimizer")
+                print("3. 📦 Run environment setup again to install custom optimizers")
+                print("4. 🚀 Switch to Prodigy optimizer as alternative to CAME")
+            elif "bitsandbytes" in str(e) or "triton" in str(e):
+                print("1. 📊 Try switching from AdamW8bit to AdamW (compatibility issues)")
+                print("2. 🔧 bitsandbytes/triton version conflict detected")
+                print("3. 🚀 Use standard optimizers: AdamW, Prodigy, Lion")
+            else:
+                print("1. 💾 Reduce batch size if getting CUDA out of memory")
+                print("2. 🎯 Check that model path and dataset directory exist")
+                print("3. 📊 Try different optimizer (AdamW, Prodigy)")
+                print("4. 🔧 Check file paths and permissions")
+            print("5. 📝 Check the detailed error log above for specific issues")
+            return False
         except Exception as e:
             print(f"🚨 Unexpected error: {e}")
             print("🧪 Welcome to the bleeding edge - backup and try again!")
+            return False
     
     def _print_advanced_features_summary(self, config):
         """📊 Print summary of active advanced features"""

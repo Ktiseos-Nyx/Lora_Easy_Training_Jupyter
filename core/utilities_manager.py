@@ -12,13 +12,13 @@ class UtilitiesManager:
     def upload_to_huggingface(self, hf_token, model_path, repo_name):
         if not hf_token:
             print("Error: Hugging Face token is required.")
-            return
+            return False
         if not os.path.exists(model_path):
             print(f"Error: Model file not found at {model_path}")
-            return
+            return False
         if not repo_name:
             print("Error: Repository name is required.")
-            return
+            return False
 
         try:
             login(token=hf_token)
@@ -35,27 +35,29 @@ class UtilitiesManager:
                 commit_message=f"Upload {filename}"
             )
             print(f"Upload complete. View your model at https://huggingface.co/{repo_id}/blob/main/{filename}")
+            return True
 
         except Exception as e:
             print(f"An error occurred during Hugging Face upload: {e}")
+            return False
 
     def resize_lora(self, input_path, output_path, new_dim, new_alpha):
         if not os.path.exists(input_path):
             print(f"Error: Input LoRA file not found at {input_path}")
-            return
+            return False
         if not output_path:
             print("Error: Please specify an output path for the resized LoRA.")
-            return
+            return False
         if not new_dim or not new_alpha:
             print("Error: Please specify new dim and alpha values.")
-            return
+            return False
 
         venv_python = os.path.join(self.sd_scripts_dir, "venv/bin/python")
         resize_script = os.path.join(self.sd_scripts_dir, "networks/resize_lora.py")
 
         if not os.path.exists(resize_script):
             print(f"Error: LoRA resize script not found at {resize_script}. Please ensure your trainer backend is correctly installed.")
-            return
+            return False
 
         command = [
             venv_python, resize_script,
@@ -87,16 +89,19 @@ class UtilitiesManager:
                 raise subprocess.CalledProcessError(return_code, command)
 
             print("\nLoRA resizing complete.")
+            return True
 
         except subprocess.CalledProcessError as e:
             print(f"An error occurred while resizing LoRA: {e}")
+            return False
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
+            return False
 
     def count_dataset_files(self, dataset_path):
         if not os.path.exists(dataset_path):
             print(f"Error: Dataset path not found at {dataset_path}")
-            return
+            return False
 
         image_extensions = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
         caption_extensions = (".txt", ".caption")
@@ -106,16 +111,22 @@ class UtilitiesManager:
         other_files = 0
 
         print(f"Counting files in {dataset_path}...")
-        for root, _, files in os.walk(dataset_path):
-            for file in files:
-                if file.lower().endswith(image_extensions):
-                    image_count += 1
-                elif file.lower().endswith(caption_extensions):
-                    caption_count += 1
-                else:
-                    other_files += 1
-        
-        print(f"\nResults for {dataset_path}:")
-        print(f"  Images: {image_count}")
-        print(f"  Captions: {caption_count}")
-        print(f"  Other files: {other_files}")
+        try:
+            for root, _, files in os.walk(dataset_path):
+                for file in files:
+                    if file.lower().endswith(image_extensions):
+                        image_count += 1
+                    elif file.lower().endswith(caption_extensions):
+                        caption_count += 1
+                    else:
+                        other_files += 1
+            
+            print(f"\nResults for {dataset_path}:")
+            print(f"  Images: {image_count}")
+            print(f"  Captions: {caption_count}")
+            print(f"  Other files: {other_files}")
+            return True
+            
+        except Exception as e:
+            print(f"Error counting files: {e}")
+            return False
