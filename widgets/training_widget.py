@@ -736,12 +736,6 @@ class TrainingWidget:
         self.experimental_options = widgets.VBox([
             widgets.Checkbox(
                 value=False,
-                description="🧬 HakuLatent EQ-VAE (Future)",
-                style={'description_width': 'initial'},
-                disabled=True  # Not implemented yet
-            ),
-            widgets.Checkbox(
-                value=False,
                 description="⚡ Adversarial Loss (Research)",
                 style={'description_width': 'initial'},
                 disabled=True  # Not implemented yet
@@ -754,7 +748,6 @@ class TrainingWidget:
             widgets.HTML("""
             <div style='padding: 8px; border: 1px solid #856404; border-radius: 5px;'>
             <strong>🚧 Work in Progress:</strong><br>
-            • EQ-VAE: HakuLatent's advanced latent regularization<br>
             • Adversarial Loss: GAN-style training improvements<br>
             • Multi-Res: Train on multiple resolutions simultaneously<br><br>
             <em>These will be enabled as they become stable!</em>

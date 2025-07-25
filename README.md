@@ -40,25 +40,42 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-- **Linux environment** (tested on Ubuntu 20.04+, VastAI containers)
-- **Python 3.10+**
-- **NVIDIA GPU** with 6GB+ VRAM (8GB+ recommended)
-- **Git** and **aria2c** for downloading
+- **Operating System**: Windows, macOS, or Linux.
+- **Python**: Version 3.10 or newer.
+- **GPU**: An NVIDIA GPU with at least 8GB of VRAM is strongly recommended for a smooth experience.
+- **Git**: Required to download the repository.
 
 ### Installation
 
-```bash
-# Clone the repository
-git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/
-cd Lora_Easy_Training_Jupyter
+1.  **Install Git**
 
-# Make installer executable and run
-chmod +x ./jupyter.sh
-./jupyter.sh
+    If you don't have Git installed, you can get it here:
+    -   **Windows**: Download and install from [git-scm.com](https://git-scm.com/download/win).
+    -   **macOS**: Open your terminal and run `xcode-select --install`.
+    -   **Linux**: Use your distribution's package manager (e.g., `sudo apt-get install git` for Debian/Ubuntu).
 
-# Alternative: Run installer directly
-python ./installer.py
-```
+2.  **Clone the Repository**
+
+    Open your terminal or command prompt, navigate to where you want to store the project, and run:
+    ```bash
+    git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git
+    cd Lora_Easy_Training_Jupyter
+    ```
+
+3.  **Run the Setup Script**
+
+    This script will prepare the environment and install all necessary dependencies.
+    -   **On macOS and Linux**:
+        ```bash
+        chmod +x ./jupyter.sh
+        ./jupyter.sh
+        ```
+    -   **On Windows (or as an alternative for other platforms)**:
+        ```bash
+        python ./installer.py
+        ```
+    > **Note:** All other requirements are automatically installed by the setup script.
+
 
 ### 🧮 Quick Training Calculator
 
@@ -75,6 +92,8 @@ This tool helps you:
 - Build confidence for small datasets (stop being a chicken!) 🐔➡️🦅
 
 ### Launch Jupyter
+
+- Please note this is only if you're using this on a barebones rental OR a local machine, most rented setups have Jupyter already running.
 
 ```bash
 # Start Jupyter notebook
@@ -102,6 +121,49 @@ dataset_widget.display()
 - Tag images with WD14 v3 taggers or BLIP captioning
 - Manage captions and trigger words
 - Remove unwanted tags
+
+### How to Get Model/VAE Links
+
+To use custom models or VAEs, you need to provide a direct download link. Here’s how to find them on popular platforms:
+
+#### From Civitai
+
+**Method 1: Using the Model Version ID**
+
+This is the easiest method if a model has multiple versions.
+
+1.  Navigate to the model or VAE page.
+2.  Look at the URL in your browser's address bar. If it includes `?modelVersionId=XXXXXX`, you can copy the entire URL and paste it directly into the widget.
+3.  If you don't see this ID, try switching to a different version of the model and then back to your desired version. The ID should then appear in the URL.
+
+![How to get a link from Civitai using the version ID](./assets/model_url_civitai_1.png)
+
+**Method 2: Copying the Download Link**
+
+Use this method if the model has only one version or if a version has multiple files.
+
+1.  On the model or VAE page, scroll down to the "Files" section.
+2.  Right-click the **Download** button for the file you want.
+3.  Select "Copy Link Address" (or similar text) from the context menu.
+
+![How to get a link from Civitai by copying the download address](./assets/model_url_civitai_2.png)
+
+#### From Hugging Face
+
+**Method 1: Using the Repository URL**
+
+1.  Go to the main page of the model or VAE repository you want to use.
+2.  Copy the URL directly from your browser's address bar.
+
+![How to get a link from Hugging Face using the repository URL](./assets/model_url_hf_1.png)
+
+**Method 2: Copying the Direct File Link**
+
+1.  Navigate to the "Files and versions" tab of the repository.
+2.  Find the specific file you want to download.
+3.  Click the **"..."** menu to the right of the file size, then right-click the "Download" link and copy the link address.
+
+![How to get a link from Hugging Face by copying the direct file address](./assets/model_url_hf_2.png)
 
 ### 2. Training Setup (`Lora_Trainer_Widget.ipynb`)
 

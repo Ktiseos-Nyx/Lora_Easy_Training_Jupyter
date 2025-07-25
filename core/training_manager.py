@@ -131,6 +131,15 @@ class HybridTrainingManager:
             print(f"⚠️ REX scheduler not found: {e}")
             print("💡 Custom optimizers might not be available - using standard optimizers")
     
+    def _safe_float(self, value, default=0.0):
+        """Safely convert value to float with fallback"""
+        try:
+            if isinstance(value, str):
+                return float(value.strip()) if value.strip() else default
+            return float(value) if value is not None else default
+        except (ValueError, TypeError):
+            return default
+    
     def _detect_model_type(self, config):
         """Detect model type from model path or config to choose appropriate SD scripts"""
         model_path = config.get('model_path', '').lower()
@@ -328,7 +337,7 @@ class HybridTrainingManager:
 
         # 🚀 Advanced Optimizer Handling
         optimizer_args = []
-        optimizer_type = config['optimizer']
+        optimizer_type = config['optimizer']  # Default to widget selection
         lr_scheduler_type = None
         lr_scheduler_args = None
         loss_type = None
@@ -372,7 +381,7 @@ class HybridTrainingManager:
         
         # Standard optimizer configurations - ensure all use correct module paths
         elif config['optimizer'] == "Prodigy":
-            # Prodigy is usually in torch.optim or external package
+            # Prodigy - keep default name, let SD scripts handle the import
             optimizer_args.extend(["decouple=True", "weight_decay=0.01", "betas=[0.9,0.999]", "d_coef=2", "use_bias_correction=True"])
             if config['lr_warmup_ratio'] > 0:
                 optimizer_args.append("safeguard_warmup=True")
@@ -385,18 +394,32 @@ class HybridTrainingManager:
             optimizer_type = "transformers.optimization.Adafactor"
             optimizer_args.extend(["scale_parameter=False", "relative_step=False", "warmup_init=False"])
         elif config['optimizer'] == "Came":
+            # CAME optimizer (custom)
             optimizer_type = "LoraEasyCustomOptimizer.came.CAME"
             optimizer_args.extend(["weight_decay=0.04"])
         elif config['optimizer'] == "DAdaptation":
-            # DAdaptation is external package
-            pass  # Let SD scripts handle the import
+            # DAdaptation - keep default name, let SD scripts handle the import
+            optimizer_args.extend(["weight_decay=0.01"])
         elif config['optimizer'] == "DadaptAdam":
-            # DAdaptAdam is in dadaptation package
-            pass  # Let SD scripts handle the import
+            # DadaptAdam - keep default name, let SD scripts handle the import
+            optimizer_args.extend(["weight_decay=0.01"])
         elif config['optimizer'] == "DadaptLion":
-            # DadaptLion is in dadaptation package  
-            pass  # Let SD scripts handle the import
-        # AdamW, Lion, SGDNesterov, SGDNesterov8bit are in torch.optim - use defaults
+            # DadaptLion - keep default name, let SD scripts handle the import
+            optimizer_args.extend(["weight_decay=0.01"])
+        elif config['optimizer'] == "Lion":
+            # Lion optimizer - keep default name
+            optimizer_args.extend(["weight_decay=0.01", "betas=[0.9,0.99]"])
+        elif config['optimizer'] == "SGDNesterov":
+            # SGD with Nesterov momentum
+            optimizer_args.extend(["momentum=0.9", "weight_decay=0.01"])
+        elif config['optimizer'] == "SGDNesterov8bit":
+            # 8-bit SGD with Nesterov momentum  
+            optimizer_type = "bitsandbytes.optim.SGD8bit"
+            optimizer_args.extend(["momentum=0.9", "weight_decay=0.01"])
+        elif config['optimizer'] == "AdamW":
+            # AdamW - default, no need to override optimizer_type
+            optimizer_args.extend(["weight_decay=0.01", "betas=[0.9,0.999]"])
+        # If no match, use the optimizer name as-is and let SD scripts handle it
 
         # Handle REX scheduler
         if config['lr_scheduler'] == "rex" and not lr_scheduler_type:
@@ -424,23 +447,23 @@ class HybridTrainingManager:
             "output_dir": self.output_dir,
             "logging_dir": self.logging_dir,
             "cache_latents": config['cache_latents'],
-            "cache_latents_to_disk": config['cache_latents_to_disk'],
+            "cache_latents_to_disk": config['cache_latents_to_disk'], 
             "cache_text_encoder_outputs": config['cache_text_encoder_outputs'],
-            "min_snr_gamma": config['min_snr_gamma'] if config['min_snr_gamma_enabled'] else None,
+            "min_snr_gamma": self._safe_float(config['min_snr_gamma']) if config['min_snr_gamma_enabled'] else None,
             "ip_noise_gamma": config['ip_noise_gamma'] if config['ip_noise_gamma_enabled'] else None,
             "multires_noise_iterations": 6 if config['multinoise'] else None, # Default value from sample notebook
             "multires_noise_discount": 0.3 if config['multinoise'] else None, # Default value from sample notebook
-            "xformers": True if config['cross_attention'] == "xformers" else None,
-            "sdpa": True if config['cross_attention'] == "sdpa" else None,
+            "xformers": config['cross_attention'] == "xformers",
+            "sdpa": config['cross_attention'] == "sdpa",
             "log_with": "wandb" if config['wandb_key'] else None,
             "wandb_api_key": config['wandb_key'] if config['wandb_key'] else None,
             # Advanced training options
-            "noise_offset": config.get('noise_offset', 0.0) if config.get('noise_offset', 0.0) > 0 else None,
-            "adaptive_noise_scale": config.get('adaptive_noise_scale', 0.0) if config.get('adaptive_noise_scale', 0.0) > 0 else None,
-            "zero_terminal_snr": config.get('zero_terminal_snr', False) if config.get('zero_terminal_snr', False) else None,
+            "noise_offset": self._safe_float(config.get('noise_offset', 0.0)) if self._safe_float(config.get('noise_offset', 0.0)) > 0 else None,
+            "adaptive_noise_scale": self._safe_float(config.get('adaptive_noise_scale', 0.0)) if self._safe_float(config.get('adaptive_noise_scale', 0.0)) > 0 else None,
+            "zero_terminal_snr": config.get('zero_terminal_snr', False),
             "clip_skip": config.get('clip_skip', 2),
             "vae_batch_size": config.get('vae_batch_size', 1),
-            "no_half_vae": config.get('no_half_vae', False) if config.get('no_half_vae', False) else None,
+            "no_half_vae": config.get('no_half_vae', False),
             # Memory optimization flags
             "gradient_checkpointing": True,  # Always enable for memory savings
             "gradient_accumulation_steps": max(1, 4 // config['train_batch_size']),  # Auto-adjust for small batch sizes
@@ -470,7 +493,7 @@ class HybridTrainingManager:
                 "learning_rate": config['unet_lr'],
                 "lr_scheduler": config['lr_scheduler'],
                 "lr_scheduler_num_cycles": config['lr_scheduler_number'] if config['lr_scheduler'] == "cosine_with_restarts" else None,
-                "lr_warmup_steps": int(config['lr_warmup_ratio'] * config['epochs'] * 100) if config['lr_warmup_ratio'] > 0 else None, # Simplified calculation
+                "lr_warmup_steps": int(self._safe_float(config['lr_warmup_ratio']) * config['epochs'] * 100) if self._safe_float(config['lr_warmup_ratio']) > 0 else None, # Simplified calculation
                 "optimizer_type": optimizer_type,
                 "optimizer_args": optimizer_args if optimizer_args else None,
                 "lr_scheduler_type": lr_scheduler_type,

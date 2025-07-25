@@ -39,6 +39,41 @@
   - **PyTorch compatibility**: AMD-optimized PyTorch builds
   - **Performance analysis**: Training speed vs NVIDIA equivalents
   - **Memory optimization**: Leverage high system RAM for model offloading
+- 🎯 **Regularization support for LoRA training** - Research and implement optional regularization features
+  - **KohyaSS regularization parameters**: Investigate `--reg_data_dir` and related flags in training scripts
+  - **UI integration**: Add regularization options to Advanced Options accordion
+  - **Default behavior**: Keep regularization OFF by default (most successful trainers don't use it)
+  - **Documentation**: Explain when/why to use regularization vs pure LoRA training
+- 🎯 **LECO integration** - Low-rank adaptation for Erasing COncepts support
+  - **Concept manipulation**: Enable targeted concept erasing/modification in diffusion models
+  - **Advanced workflows**: Support for removing art styles, adding features, concept swapping
+  - **Multi-model support**: Integrate with SD v1.5, v2.1, SDXL architectures
+  - **UI design**: Create intuitive interface for concept manipulation tasks
+  - **Training pipeline**: Integrate LECO methodology with existing KohyaSS backend
+- 🎯 **HakuLatent VAE training integration** - Separate VAE training workflow for advanced latent space manipulation
+  - **EQ-VAE training**: Equivariance regularization for smoother latent representations
+  - **VAE fine-tuning**: Modify underlying latent space encoding mechanisms
+  - **Advanced regularization**: Kepler Codebook regularization and novel techniques
+  - **Separate training pipeline**: Distinct from LoRA training, focuses on VAE architecture
+  - **Research integration**: Support for experimental latent space improvements
+- 🎯 **HakuBooru integration** - Advanced dataset management and tagging system
+  - **Automated tagging**: AI-powered image tagging and metadata extraction
+  - **Dataset organization**: Smart organization and curation of training datasets
+  - **Tag management**: Advanced tagging workflows for consistent dataset preparation
+  - **Integration with training**: Seamless pipeline from dataset prep to training
+  - **Quality control**: Automated dataset quality assessment and filtering
+- 🎯 **YOLO training integration** - Object detection training support using Ultralytics YOLO
+  - **Multi-task training**: Support for object detection alongside diffusion model training
+  - **Dataset format conversion**: Convert between YOLO and other annotation formats
+  - **Unified interface**: Integrated YOLO training widgets alongside LoRA training
+  - **Model export**: Support for various YOLO export formats (ONNX, TensorRT, etc.)
+  - **Detection visualization**: Real-time detection result visualization and validation
+- 🎯 **Timestep Attention research integration** - Bleeding-edge attention mechanism experiments
+  - **Timestep-aware attention**: Advanced attention patterns that adapt based on diffusion timestep
+  - **Experimental shenanigans**: Support for Anzhc's latest attention mechanism research
+  - **Custom attention layers**: Pluggable attention modules for experimental training
+  - **Research-grade features**: Cutting-edge attention techniques for quality improvements
+  - **Bleeding-edge warning**: High-risk experimental features for advanced users only
 
 ## 🎯 **Critical Fixes Already Completed (Previous Session)**
 
