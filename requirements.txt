@@ -1,24 +1,26 @@
 # LoRA Easy Training - Jupyter Widget Edition
-# Core dependencies for the widget-based training system
+# Core dependencies required for the widget-based training system
 
-# Jupyter ecosystem
-jupyter>=1.0.0
-ipywidgets>=8.0.0
-notebook>=6.4.12
-ipython>=8.0.0
+# Essential Jupyter ecosystem (always required)
+jupyter>=1.0.0                # Core Jupyter functionality
+ipywidgets>=8.0.0             # Interactive widgets (absolutely required)
+notebook>=6.4.12              # Jupyter notebook server
+ipython>=8.0.0                # Interactive Python shell
 
-# Core Python packages
-toml>=0.10.2
-requests>=2.28.0
-tqdm>=4.64.0
-Pillow>=9.0.0
+# Core Python packages (used by our code)
+toml>=0.10.2                  # Configuration file parsing (required by training_manager.py)
+requests>=2.28.0              # HTTP requests (used by managers.py for downloads)
+tqdm>=4.64.0                  # Progress bars (used by custom tagger)
+Pillow>=9.0.0                 # Image processing (required by dataset handling)
 
-# Data handling
-numpy>=1.21.0
-pandas>=1.5.0
+# Data handling (used by dataset processing)
+numpy>=1.21.0                 # Array operations (required by custom tagger)
 
-# Optional: For enhanced dataset management
-# huggingface-hub>=0.10.0  # Uncomment if using HF datasets directly
+# Optional packages (commonly available, but not always)
+# pandas>=1.5.0               # Data manipulation (currently unused, commented out)
 
-# Note: Training dependencies (PyTorch, etc.) are installed
-# by the training backend during environment setup
+# Optional: Enhanced features (uncomment if needed)
+# huggingface-hub>=0.10.0     # Direct HuggingFace dataset access
+
+# Note: Training dependencies (PyTorch, transformers, etc.) are installed
+# by the LoRA training backend during environment setup, not here

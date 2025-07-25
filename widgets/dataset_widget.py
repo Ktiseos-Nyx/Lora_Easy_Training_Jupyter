@@ -17,10 +17,32 @@ class DatasetWidget:
         header_icon = "📊"
         header_main = widgets.HTML(f"<h2>{header_icon} 2. Dataset Manager</h2>")
 
-        # --- Project Setup Section ---
-        project_desc = widgets.HTML("""<h3>▶️ Project Setup</h3>
-        <p><strong>🎯 One-stop project creation!</strong> Enter your project name and dataset URL - we'll create the folder, download, extract, and calculate training parameters automatically!</p>
-        """)
+        # --- Unified Dataset Setup Section ---
+        dataset_setup_desc = widgets.HTML("""<h3>📁 Dataset Setup</h3>
+        <p><strong>🎯 Choose your preferred method to set up your training dataset.</strong></p>
+        <div style='background: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <strong>📋 Available Methods:</strong><br>
+        • <strong>URL/ZIP Download:</strong> Download and extract from URLs or file paths<br>
+        • <strong>Direct Image Upload:</strong> Upload individual images directly (perfect for small datasets)<br>
+        </div>""")
+        
+        # Dataset method selection
+        self.dataset_method = widgets.RadioButtons(
+            options=[('📥 URL/ZIP Download', 'url'), ('📁 Direct Image Upload', 'upload')],
+            description='Method:',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='99%')
+        )
+        
+        # Shared dataset directory (will be auto-populated)
+        self.dataset_directory = widgets.Text(
+            description="Dataset Directory:",
+            placeholder="Will be set automatically or enter manually",
+            layout=widgets.Layout(width='99%')
+        )
+        
+        # URL/ZIP Download Section
+        url_method_desc = widgets.HTML("<h4>📥 URL/ZIP Download Setup</h4>")
         
         self.project_name = widgets.Text(
             description="Project Name:", 
@@ -28,47 +50,25 @@ class DatasetWidget:
             layout=widgets.Layout(width='99%')
         )
         
-        self.project_dataset_url = widgets.Text(
-            description="Dataset URL:", 
+        self.dataset_url = widgets.Text(
+            description="Dataset URL/Path:", 
             placeholder="/path/to/dataset.zip or HuggingFace URL", 
             layout=widgets.Layout(width='99%')
         )
         
-        self.create_project_button = widgets.Button(description="🚀 Create Project & Setup Dataset", button_style='success')
-        self.project_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>Status:</strong> Ready</div>")
-        self.project_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
+        self.url_download_button = widgets.Button(description="🚀 Download & Extract Dataset", button_style='success')
         
-        project_box = widgets.VBox([
-            project_desc,
+        self.url_method_box = widgets.VBox([
+            url_method_desc,
             self.project_name,
-            self.project_dataset_url, 
-            self.create_project_button,
-            self.project_status,
-            self.project_output
+            self.dataset_url,
+            self.url_download_button
         ])
-
-        # --- Manual Upload Section ---
-        upload_desc = widgets.HTML("<h3>▶️ Manual Upload & Extract</h3><p>For manual control over dataset extraction.</p>")
-        self.upload_path = widgets.Text(description="Zip Path:", placeholder="/path/to/dataset.zip or HuggingFace URL", layout=widgets.Layout(width='99%'))
-        self.extract_dir = widgets.Text(description="Extract to:", placeholder="e.g., my_dataset_folder", layout=widgets.Layout(width='99%'))
-        self.upload_button = widgets.Button(description="Upload & Extract", button_style='primary')
-        self.upload_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>Status:</strong> Ready</div>")
-        self.upload_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
-        upload_box = widgets.VBox([upload_desc, self.upload_path, self.extract_dir, self.upload_button, self.upload_status, self.upload_output])
-
-        # --- Bulk Image Upload Section ---
-        bulk_upload_desc = widgets.HTML("""<h3>▶️ Bulk Image Upload</h3>
-        <p><strong>📁 Upload images directly!</strong> Create a new folder and upload multiple images at once - perfect for quick prototyping and small datasets.</p>
-        <div style='background: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
-        <strong>📋 Workflow:</strong><br>
-        1. <strong>Create Folder:</strong> Enter folder name and create directory<br>
-        2. <strong>Upload Images:</strong> Select multiple images (.jpg, .png, .webp, etc.)<br>
-        3. <strong>Ready to Tag:</strong> Use the tagging section below<br>
-        <em>💡 Perfect for workspace environments and manual dataset curation!</em>
-        </div>""")
         
-        # Folder creation
-        self.new_folder_name = widgets.Text(
+        # Direct Upload Section  
+        upload_method_desc = widgets.HTML("<h4>📁 Direct Image Upload Setup</h4>")
+        
+        self.folder_name = widgets.Text(
             description="Folder Name:",
             placeholder="e.g., my_character_dataset",
             layout=widgets.Layout(width='70%')
@@ -80,40 +80,53 @@ class DatasetWidget:
             layout=widgets.Layout(width='25%')
         )
         
-        folder_creation_box = widgets.HBox([self.new_folder_name, self.create_folder_button])
+        folder_creation_box = widgets.HBox([self.folder_name, self.create_folder_button])
         
-        # File upload
-        self.bulk_file_upload = widgets.FileUpload(
+        self.file_upload = widgets.FileUpload(
             accept='.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif',
             multiple=True,
             description='Select Images:',
             layout=widgets.Layout(width='99%')
         )
         
-        self.upload_to_folder = widgets.Text(
-            description="Upload to:",
-            placeholder="Select or create a folder first",
-            layout=widgets.Layout(width='99%'),
-            disabled=True
-        )
-        
-        self.bulk_upload_button = widgets.Button(
+        self.upload_images_button = widgets.Button(
             description="🚀 Upload Images", 
             button_style='success',
             disabled=True
         )
         
-        self.bulk_upload_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>Status:</strong> Create a folder first, then select images</div>")
-        self.bulk_upload_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
-        
-        bulk_upload_box = widgets.VBox([
-            bulk_upload_desc,
+        self.upload_method_box = widgets.VBox([
+            upload_method_desc,
             folder_creation_box,
-            self.bulk_file_upload,
-            self.upload_to_folder,
-            self.bulk_upload_button,
-            self.bulk_upload_status,
-            self.bulk_upload_output
+            self.file_upload,
+            self.upload_images_button
+        ])
+        
+        # Status and output (shared)
+        self.dataset_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>Status:</strong> Select a method to begin</div>")
+        self.dataset_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
+        
+        # Show/hide method boxes based on selection
+        def on_method_change(change):
+            if change['new'] == 'url':
+                self.url_method_box.layout.display = 'block'
+                self.upload_method_box.layout.display = 'none'
+            else:
+                self.url_method_box.layout.display = 'none'
+                self.upload_method_box.layout.display = 'block'
+        
+        self.dataset_method.observe(on_method_change, names='value')
+        # Initialize with URL method visible
+        self.upload_method_box.layout.display = 'none'
+        
+        dataset_setup_box = widgets.VBox([
+            dataset_setup_desc,
+            self.dataset_method,
+            self.dataset_directory,
+            self.url_method_box,
+            self.upload_method_box,
+            self.dataset_status,
+            self.dataset_output
         ])
 
         # --- Tagging Section ---
@@ -132,11 +145,7 @@ class DatasetWidget:
         <em>🔄 Models auto-download from HuggingFace on first use!</em>
         </div>""")
         
-        self.tagging_dataset_dir = widgets.Text(
-            description="Dataset Dir:", 
-            placeholder="e.g., my_dataset_folder", 
-            layout=widgets.Layout(width='99%')
-        )
+        # Dataset directory will be auto-populated from setup section
         
         self.tagging_method = widgets.Dropdown(
             options=['anime', 'photo'], 
@@ -199,7 +208,6 @@ class DatasetWidget:
         
         tagging_box = widgets.VBox([
             tagging_desc,
-            self.tagging_dataset_dir, 
             self.tagging_method, 
             self.tagger_model, 
             self.tagger_desc,
@@ -224,11 +232,7 @@ class DatasetWidget:
         <em>🎯 Use this when you want to re-tag a dataset or clean up accidentally extracted files</em>
         </div>""")
         
-        self.cleanup_dataset_dir = widgets.Text(
-            description="Dataset Dir:", 
-            placeholder="e.g., my_dataset_folder", 
-            layout=widgets.Layout(width='99%')
-        )
+        # Dataset directory will be auto-populated from setup section
         
         # Cleanup options
         self.cleanup_text_files = widgets.Checkbox(
@@ -267,7 +271,6 @@ class DatasetWidget:
         
         cleanup_box = widgets.VBox([
             cleanup_desc,
-            self.cleanup_dataset_dir,
             self.cleanup_text_files,
             self.cleanup_npz_files, 
             self.cleanup_caption_files,
@@ -281,11 +284,7 @@ class DatasetWidget:
         # --- Caption Management ---
         caption_desc = widgets.HTML("<h3>▶️ Caption Management</h3><p>Add trigger words to activate your LoRA, or clean up captions by removing unwanted tags.</p>")
         
-        self.caption_dataset_dir = widgets.Text(
-            description="Dataset Dir:", 
-            placeholder="e.g., my_dataset_folder", 
-            layout=widgets.Layout(width='99%')
-        )
+        # Dataset directory will be auto-populated from setup section
         
         # Trigger word management
         self.trigger_word = widgets.Text(
@@ -310,7 +309,6 @@ class DatasetWidget:
         
         caption_box = widgets.VBox([
             caption_desc,
-            self.caption_dataset_dir, 
             self.trigger_word, 
             self.add_trigger_button,
             self.remove_tags,
@@ -321,49 +319,84 @@ class DatasetWidget:
 
         # --- Accordion ---
         self.accordion = widgets.Accordion(children=[
-            project_box,
-            upload_box,
-            bulk_upload_box,
+            dataset_setup_box,
             tagging_box,
-            cleanup_box,
-            caption_box
+            caption_box,
+            cleanup_box
         ])
-        self.accordion.set_title(0, "🚀 Project Setup")
-        self.accordion.set_title(1, "▶️ Manual Upload & Extract")
-        self.accordion.set_title(2, "📁 Bulk Image Upload")
-        self.accordion.set_title(3, "▶️ Image Tagging")
-        self.accordion.set_title(4, "🧹 Dataset Cleanup")
-        self.accordion.set_title(5, "▶️ Caption Management")
+        self.accordion.set_title(0, "📁 Dataset Setup")
+        self.accordion.set_title(1, "🏷️ Image Tagging")
+        self.accordion.set_title(2, "📝 Caption Management")
+        self.accordion.set_title(3, "🧹 Dataset Cleanup")
 
         self.widget_box = widgets.VBox([header_main, self.accordion])
 
         # --- Button Events ---
-        self.create_project_button.on_click(self.run_create_project)
-        self.upload_button.on_click(self.run_upload)
+        self.url_download_button.on_click(self.run_url_download)
         self.create_folder_button.on_click(self.run_create_folder)
-        self.bulk_upload_button.on_click(self.run_bulk_upload)
+        self.upload_images_button.on_click(self.run_upload_images)
         self.tagging_button.on_click(self.run_tagging)
         self.cleanup_button.on_click(self.run_cleanup)
         self.add_trigger_button.on_click(self.run_add_trigger)
         self.remove_tags_button.on_click(self.run_remove_tags)
 
-    def run_upload(self, b):
-        self.upload_output.clear_output()
-        self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Uploading and extracting...</div>"
-        with self.upload_output:
-            success = self.manager.extract_dataset(self.upload_path.value, self.extract_dir.value)
+    def run_url_download(self, b):
+        """Handle URL/ZIP download method"""
+        self.dataset_output.clear_output()
+        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Downloading and extracting...</div>"
+        with self.dataset_output:
+            project_name = self.project_name.value.strip()
+            dataset_url = self.dataset_url.value.strip()
+            
+            if not project_name:
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a project name.</div>"
+                print("❌ Please enter a project name.")
+                return
+                
+            if not dataset_url:
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a dataset URL.</div>"
+                print("❌ Please enter a dataset URL.")
+                return
+            
+            # Sanitize project name
+            import re
+            clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', project_name)
+            if clean_name != project_name:
+                print(f"📝 Cleaned project name: '{project_name}' → '{clean_name}'")
+                project_name = clean_name
+            
+            project_dir = f"datasets/{project_name}"
+            
+            # Create project directory
+            import os
+            os.makedirs(project_dir, exist_ok=True)
+            
+            success = self.manager.extract_dataset(dataset_url, project_dir)
             if success:
-                self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Upload and extraction complete.</div>"
+                # Update shared dataset directory
+                self.dataset_directory.value = project_dir
+                
+                # Count images
+                try:
+                    from core.image_utils import count_images_in_directory
+                    image_count = count_images_in_directory(project_dir)
+                    print(f"📁 Found {image_count} images in {project_dir}")
+                    print(f"📝 Dataset directory set: {project_dir}")
+                    
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Downloaded {image_count} images to {project_dir}</div>"
+                except Exception as e:
+                    print(f"⚠️ Image counting error: {e}")
+                    self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Download complete.</div>"
             else:
-                self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Upload and extraction failed. Check logs.</div>"
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Download and extraction failed. Check logs.</div>"
 
     def run_create_folder(self, b):
-        """Create a new folder for bulk image upload"""
-        self.bulk_upload_output.clear_output()
-        folder_name = self.new_folder_name.value.strip()
+        """Create a new folder for image upload"""
+        self.dataset_output.clear_output()
+        folder_name = self.folder_name.value.strip()
         
         if not folder_name:
-            self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a folder name.</div>"
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a folder name.</div>"
             return
         
         # Sanitize folder name
@@ -376,45 +409,41 @@ class DatasetWidget:
         # Create folder in datasets directory
         folder_path = f"datasets/{folder_name}"
         
-        with self.bulk_upload_output:
+        with self.dataset_output:
             try:
                 os.makedirs(folder_path, exist_ok=True)
                 print(f"✅ Created folder: {folder_path}")
                 
-                # Update UI to show folder is ready
-                self.upload_to_folder.value = folder_path
-                self.upload_to_folder.disabled = False
-                self.bulk_upload_button.disabled = False
+                # Update shared dataset directory
+                self.dataset_directory.value = folder_path
                 
-                self.bulk_upload_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! Now select images to upload.</div>"
+                # Enable upload button
+                self.upload_images_button.disabled = False
                 
-                # Auto-populate tagging directory
-                self.tagging_dataset_dir.value = folder_path
-                self.caption_dataset_dir.value = folder_path
-                self.cleanup_dataset_dir.value = folder_path
+                self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! Now select images to upload.</div>"
                 
             except Exception as e:
                 print(f"❌ Failed to create folder: {e}")
-                self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create folder.</div>"
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create folder.</div>"
 
-    def run_bulk_upload(self, b):
+    def run_upload_images(self, b):
         """Upload multiple images to the created folder"""
-        self.bulk_upload_output.clear_output()
+        self.dataset_output.clear_output()
         
-        if not self.upload_to_folder.value:
-            self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
+        if not self.dataset_directory.value:
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
             return
         
-        if not self.bulk_file_upload.value:
-            self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please select images to upload.</div>"
+        if not self.file_upload.value:
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please select images to upload.</div>"
             return
         
-        upload_folder = self.upload_to_folder.value
-        uploaded_files = self.bulk_file_upload.value
+        upload_folder = self.dataset_directory.value
+        uploaded_files = self.file_upload.value
         
-        self.bulk_upload_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Uploading {len(uploaded_files)} images...</div>"
+        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Uploading {len(uploaded_files)} images...</div>"
         
-        with self.bulk_upload_output:
+        with self.dataset_output:
             import os
             uploaded_count = 0
             total_size = 0
@@ -446,33 +475,30 @@ class DatasetWidget:
             print(f"📊 Uploaded: {uploaded_count}/{len(uploaded_files)} images")
             print(f"💾 Total size: {total_size_mb:.2f} MB")
             print(f"📁 Location: {upload_folder}")
-            print(f"\n💡 Next steps:")
-            print(f"   1. Use the Image Tagging section to auto-generate captions")
-            print(f"   2. Add trigger words in Caption Management")
-            print(f"   3. Ready for training!")
             
             if uploaded_count > 0:
-                self.bulk_upload_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
+                self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
                 
                 # Clear the file upload widget for next use
-                self.bulk_file_upload.value = ()
+                self.file_upload.value = ()
             else:
-                self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
 
     def run_tagging(self, b):
         self.tagging_output.clear_output()
         self.tagging_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Starting {self.tagging_method.value} tagging...</div>"
         with self.tagging_output:
-            if not self.tagging_dataset_dir.value:
-                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify a dataset directory.</div>"
-                print("❌ Please specify a dataset directory.")
+            if not self.dataset_directory.value:
+                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
+                print("❌ Please set up a dataset first in the Dataset Setup section.")
                 return
                 
             print(f"🏷️ Starting {self.tagging_method.value} tagging with {self.tagger_model.value.split('/')[-1]}...")
+            print(f"📁 Dataset: {self.dataset_directory.value}")
             
             # Enhanced tagging with more options
             success = self.manager.tag_images(
-                self.tagging_dataset_dir.value,
+                self.dataset_directory.value,
                 self.tagging_method.value,
                 self.tagger_model.value,
                 self.tagging_threshold.value,
@@ -490,12 +516,14 @@ class DatasetWidget:
         self.cleanup_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Scanning for files to clean...</div>"
         
         with self.cleanup_output:
-            dataset_dir = self.cleanup_dataset_dir.value.strip()
+            dataset_dir = self.dataset_directory.value.strip()
             
             if not dataset_dir:
-                self.cleanup_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify a dataset directory.</div>"
-                print("❌ Please specify a dataset directory.")
+                self.cleanup_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
+                print("❌ Please set up a dataset first in the Dataset Setup section.")
                 return
+                
+            print(f"🧩 Cleaning dataset: {dataset_dir}")
             
             import os
             import glob
@@ -608,9 +636,9 @@ class DatasetWidget:
         self.caption_output.clear_output()
         self.caption_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Adding trigger word...</div>"
         with self.caption_output:
-            if not self.caption_dataset_dir.value:
-                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify a dataset directory.</div>"
-                print("❌ Please specify a dataset directory.")
+            if not self.dataset_directory.value:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
+                print("❌ Please set up a dataset first in the Dataset Setup section.")
                 return
                 
             if not self.trigger_word.value:
@@ -619,7 +647,8 @@ class DatasetWidget:
                 return
                 
             print(f"➕ Adding trigger word '{self.trigger_word.value}' to captions...")
-            success = self.manager.add_trigger_word(self.caption_dataset_dir.value, self.trigger_word.value)
+            print(f"📁 Dataset: {self.dataset_directory.value}")
+            success = self.manager.add_trigger_word(self.dataset_directory.value, self.trigger_word.value)
             if success:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Trigger word added.</div>"
             else:
@@ -630,9 +659,9 @@ class DatasetWidget:
         self.caption_output.clear_output()
         self.caption_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Removing tags...</div>"
         with self.caption_output:
-            if not self.caption_dataset_dir.value:
-                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify a dataset directory.</div>"
-                print("❌ Please specify a dataset directory.")
+            if not self.dataset_directory.value:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
+                print("❌ Please set up a dataset first in the Dataset Setup section.")
                 return
                 
             if not self.remove_tags.value:
@@ -641,84 +670,13 @@ class DatasetWidget:
                 return
                 
             print(f"➖ Removing tags '{self.remove_tags.value}' from captions...")
-            success = self.manager.remove_tags(self.caption_dataset_dir.value, self.remove_tags.value)
+            print(f"📁 Dataset: {self.dataset_directory.value}")
+            success = self.manager.remove_tags(self.dataset_directory.value, self.remove_tags.value)
             if success:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Tags removed.</div>"
             else:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to remove tags. Check logs.</div>"
 
-    def run_create_project(self, b):
-        """🚀 One-stop project creation with calculator integration"""
-        self.project_output.clear_output()
-        self.project_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Creating project...</div>"
-        with self.project_output:
-            project_name = self.project_name.value.strip()
-            dataset_url = self.project_dataset_url.value.strip()
-            
-            if not project_name:
-                self.project_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a project name.</div>"
-                print("❌ Please enter a project name.")
-                return
-                
-            if not dataset_url:
-                self.project_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a dataset URL.</div>"
-                print("❌ Please enter a dataset URL.")
-                return
-            
-            # Sanitize project name
-            import re
-            clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', project_name)
-            if clean_name != project_name:
-                print(f"📝 Cleaned project name: '{project_name}' → '{clean_name}'")
-                project_name = clean_name
-            
-            project_dir = f"datasets/{project_name}"
-            
-            print(f"🚀 Creating project: {project_name}")
-            print(f"📁 Project directory: {project_dir}")
-            
-            # Step 1: Create project directory
-            import os
-            os.makedirs(project_dir, exist_ok=True)
-            print(f"✅ Created project directory: {project_dir}")
-            
-            # Step 2: Download and extract dataset
-            print(f"📥 Downloading dataset from: {dataset_url}")
-            success = self.manager.extract_dataset(dataset_url, project_dir)
-            
-            if success:
-                # Step 3: Run personal calculator
-                print(f"🧮 Running personal LoRA calculator...")
-                try:
-                    from core.image_utils import count_images_in_directory
-                    image_count = count_images_in_directory(project_dir)
-                    
-                    if image_count > 0:
-                        self.project_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Project created successfully! Found {image_count} images.</div>"
-                        print(f"📊 Found {image_count} images!")
-                        print(f"")
-                        print(f"🎯 TRAINING RECOMMENDATIONS:")
-                        print(f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-                        print(f"📁 Dataset Directory: {project_dir}")
-                        print(f"📸 Image Count: {image_count}")
-                        print(f"")
-                        print(f"💡 Copy this path to your training widget:")
-                        print(f"   {project_dir}")
-                        print(f"")
-                        print(f"🧮 Run the personal calculator notebook for detailed training parameters!")
-                        
-                    else:
-                        self.project_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> Project created, but no images found.</div>"
-                        print("⚠️ No images found in extracted dataset. Check the extraction.")
-                        
-                except Exception as e:
-                    self.project_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> Project created, but calculator failed.</div>"
-                    print(f"⚠️ Calculator error: {e}")
-                    print(f"📊 Project created successfully, but calculator failed.")
-                    print(f"💡 Use dataset directory: {project_dir}")
-            else:
-                self.project_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Dataset download/extraction failed.</div>"
-                print(f"❌ Dataset download/extraction failed.")
 
     def display(self):
         display(self.widget_box)

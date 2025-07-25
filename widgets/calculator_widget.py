@@ -82,7 +82,7 @@ class CalculatorWidget:
             print(f"📦 Batch Size:   {batch_size}")
             print("=" * 27)
             print(f"⚡ Total Steps:  {total_steps}")
-            print("\nYour steps and epochs with that dataset is Doro.")
+            print("\n🎯 Calculation complete! Your training parameters look good.")
 
             # --- Display Doro Image ---
             image_path = os.path.join(os.path.dirname(__file__), '..', 'assets', 'doro.png')

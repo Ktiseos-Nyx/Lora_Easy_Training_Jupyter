@@ -44,6 +44,9 @@ venv.bak/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Development documentation (private)
+docs/development/
+
 # IDEs
 .vscode/
 .idea/

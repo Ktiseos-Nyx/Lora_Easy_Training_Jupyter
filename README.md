@@ -6,7 +6,7 @@
 - Please note this is STILL a work in progress.
 - Testing was only done on a singular RTX 4090 on a Vast AI Docker Container with pre installed SD WEB UI FORGE.
 - Results MAY vary, please feel free to report issues as you see fit.
-- Also the training guide is a little wonky, and the steps calculator isn't perfect.
+- The system has been recently streamlined with improved widget organization and calculator accuracy.
 
 ![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/discord/1024442483750490222?logo=discord&style=for-the-badge&color=5865F2)](https://discord.gg/HhBSvM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a>
 
@@ -20,10 +20,10 @@
 - **Visual warnings** for incompatible settings
 
 ### 🧪 **Advanced Training Options**
-- **Hybrid optimizer support**: CAME, Prodigy Plus, StableAdamW, ADOPT
-- **LyCORIS methods**: DoRA, LoKr, LoHa, (IA)³, BOFT, GLoRA
-- **Memory optimizations**: gradient checkpointing
-- **Advanced schedulers**: REX Annealing, Schedule-Free optimization
+- **Advanced optimizers**: CAME (memory efficient), Prodigy Plus (adaptive learning)
+- **LyCORIS methods**: DoRA, LoKr, LoHa, IA³, BOFT, GLoRA
+- **Memory optimizations**: Gradient checkpointing and 8-bit variants
+- **Advanced schedulers**: REX Annealing, cosine with restarts
 
 ### 🛠️ **Professional Tools**
 - **Two-notebook architecture**: Separate dataset prep and training workflows
@@ -89,7 +89,7 @@ This tool helps you:
 - Calculate optimal repeats and epochs for your dataset size
 - Get personalized learning rate recommendations
 - Estimate total training steps
-- Build confidence for small datasets (stop being a chicken!) 🐔➡️🦅
+- Build confidence for any dataset size (no more guesswork!) 🎯
 
 ### Launch Jupyter
 
@@ -102,6 +102,7 @@ jupyter notebook
 # Open the training notebooks:
 # 1. Dataset_Maker_Widget.ipynb - for dataset preparation
 # 2. Lora_Trainer_Widget.ipynb - for training configuration
+# 3. LoRA_Calculator_Widget.ipynb - for step calculations
 ```
 
 ## 📖 Usage Guide
@@ -117,10 +118,11 @@ dataset_widget.display()
 ```
 
 **Features:**
-- Upload and extract dataset ZIP files
-- Tag images with WD14 v3 taggers or BLIP captioning
-- Manage captions and trigger words
-- Remove unwanted tags
+- **Unified Dataset Setup**: Choose between URL/ZIP download or direct image upload
+- **WD14 v3 Taggers**: Advanced anime tagging with ONNX optimization
+- **BLIP Captioning**: Professional photo captioning support
+- **Caption Management**: Add trigger words and remove unwanted tags
+- **Dataset Cleanup**: Smart cleanup tools for re-tagging workflows
 
 ### How to Get Model/VAE Links
 
@@ -182,7 +184,7 @@ training_widget.display()
 **Key Settings (Following Holostrawberry's Guide):**
 - **Learning Rate**: UNet `5e-4`, Text Encoder `1e-4`
 - **LoRA Structure**: `8 dim / 4 alpha` (great for characters, ~50MB)
-- **Scheduler**: Cosine with 3 restarts
+- **Scheduler**: Cosine (with optional restarts)
 - **Target Steps**: 250-1000 (calculated automatically)
 
 ### 3. Advanced Mode
@@ -190,9 +192,9 @@ training_widget.display()
 Enable advanced features by checking **"🧪 Enable Advanced Training Options"**:
 
 - **🚀 Advanced Optimizers**: CAME (memory efficient), Prodigy Plus (learning rate free)
-- **💾 Memory Wizardry**: Fused Back Pass for VRAM optimization
-- **🦄 LyCORIS Methods**: DoRA for higher quality, LoKr for efficiency
-- **🔬 Experimental Lab**: Future features and research-grade techniques
+- **🦄 LyCORIS Methods**: DoRA, LoKr, LoHa, BOFT, GLoRA for advanced adaptation
+- **💾 Memory Optimizations**: Gradient checkpointing and efficient training
+- **🔬 Experimental Features**: REX scheduler, Huber loss, and more
 
 ## 🔧 Architecture
 
@@ -226,19 +228,22 @@ This project builds upon the incredible work of many contributors in the AI trai
 - **[Kohaku-BlueLeaf](https://github.com/KohakuBlueleaf)** - LyCORIS advanced adaptation methods and HakuLatent research
 
 ### 🚀 **Technical Foundations**
-- **[OneTrainer](https://github.com/Nerogar/OneTrainer)** - Fused Back Pass implementation and modern architecture studies (coming soon)
-- **[kohya_ss](https://github.com/kohya-ss/sd-scripts/)** - Back end scripts for Derrian & others.
+- **[kohya_ss](https://github.com/kohya-ss/sd-scripts/)** - Core training scripts and infrastructure
+- **[OneTrainer](https://github.com/Nerogar/OneTrainer)** - Advanced training research and future integration
 - **[Jelosus2](https://github.com/Jelosus2)** - Colab notebook adaptations
-- **[AndroidXXL](https://github.com/AndroidXXL)** - Colab notebook adaptations.
+- **[AndroidXXL](https://github.com/AndroidXXL)** - Colab notebook adaptations
 
 ### 🧪 **Research & Innovation**
-- **LyCORIS Team** - DoRA, LoKr, LoHa, and advanced adaptation research
-- **OneTrainer Contributors** - Memory optimization and training efficiency
-- **HakuLatent Project** - Future-focused latent space research
+- **LyCORIS Team** - DoRA, LoKr, LoHa, BOFT, GLoRA and advanced adaptation research
+- **Training Research Community** - Memory optimization and efficiency improvements
 - **Stable Diffusion Community** - Continuous innovation and knowledge sharing
 ---
 
 **"Either gonna work or blow up!" - Built with curiosity, tested with courage! 😄**
+
+## 🔒 Security
+
+Found a security issue? Check our [Security Policy](SECURITY.md) for responsible disclosure guidelines.
 
 ## 📄 License
 
@@ -246,7 +251,7 @@ MIT License - Feel free to use, modify, and distribute. See [LICENSE](LICENSE) f
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Check out our [Contributing Guide](CONTRIBUTING.md) for details on how to get involved. Feel free to open issues or submit pull requests on GitHub.
 
 ---
 

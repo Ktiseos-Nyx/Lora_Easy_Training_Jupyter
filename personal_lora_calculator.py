@@ -75,9 +75,9 @@ def main():
         print(f"📅 Epochs:       {epochs}")
         print(f"📦 Batch Size:   {batch_size}")
         print("=" * 27)
-        print(f"⚡ Total Steps:  {total_steps})
+        print(f"⚡ Total Steps:  {total_steps}")
         
-        print("\nYour steps and epochs with that dataset is Doro.")
+        print("\n🎯 Calculation complete! Your training parameters look good.")
 
         # --- Step 5: Display Doro ---
         try:

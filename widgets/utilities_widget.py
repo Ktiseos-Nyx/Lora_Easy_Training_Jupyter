@@ -39,29 +39,21 @@ class UtilitiesWidget:
             self.resize_output
         ])
 
-        # --- Dataset Counting ---
-        self.dataset_count_path = widgets.Text(description="Dataset Path:", placeholder="/path/to/your/dataset", layout=widgets.Layout(width='99%'))
-        self.count_button = widgets.Button(description="Count Dataset Files", button_style='primary')
-        self.count_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>📊 Status:</strong> Ready to count</div>")
-        self.count_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
-        dataset_count_box = widgets.VBox([self.dataset_count_path, self.count_button, self.count_status, self.count_output])
+        # Dataset counting has been moved to the Dataset Widget for better organization
 
         # --- Accordion ---
         accordion = widgets.Accordion(children=[
             hf_upload_box,
-            lora_resize_box,
-            dataset_count_box
+            lora_resize_box
         ])
         accordion.set_title(0, "▶️ Upload to Hugging Face")
         accordion.set_title(1, "▶️ LoRA Resizing")
-        accordion.set_title(2, "▶️ Dataset Counting")
 
         self.widget_box = widgets.VBox([header_main, accordion])
 
         # --- Button Events ---
         self.upload_button.on_click(self.run_upload_to_hf)
         self.resize_button.on_click(self.run_resize_lora)
-        self.count_button.on_click(self.run_count_dataset_files)
 
     def run_upload_to_hf(self, b):
         self.upload_output.clear_output()
@@ -92,15 +84,7 @@ class UtilitiesWidget:
             else:
                 self.resize_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> LoRA resize failed. Check logs.</div>"
 
-    def run_count_dataset_files(self, b):
-        self.count_output.clear_output()
-        self.count_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Counting files...</div>"
-        with self.count_output:
-            result = self.manager.count_dataset_files(self.dataset_count_path.value)
-            if result:
-                self.count_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> File count complete!</div>"
-            else:
-                self.count_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> File count failed. Check logs.</div>"
+    # Dataset counting has been moved to the Dataset Widget for better organization
 
     def display(self):
         display(self.widget_box)
