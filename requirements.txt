@@ -11,7 +11,7 @@ ipython>=8.0.0                # Interactive Python shell
 toml>=0.10.2                  # Configuration file parsing (required by training_manager.py)
 requests>=2.28.0              # HTTP requests (used by managers.py for downloads)
 tqdm>=4.64.0                  # Progress bars (used by custom tagger)
-Pillow>=9.0.0                 # Image processing (required by dataset handling)
+Pillow>=9.0.0,<10.0.0         # Image processing (compatible with gradio/blendmodes)
 
 # Data handling (used by dataset processing)
 numpy>=1.21.0                 # Array operations (required by custom tagger)
