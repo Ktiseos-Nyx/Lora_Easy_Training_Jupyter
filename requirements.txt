@@ -20,7 +20,7 @@ numpy>=1.21.0                 # Array operations (required by custom tagger)
 # pandas>=1.5.0               # Data manipulation (currently unused, commented out)
 
 # Optional: Enhanced features (uncomment if needed)
-# huggingface-hub>=0.10.0     # Direct HuggingFace dataset access
+huggingface-hub>=0.10.0       # HuggingFace model uploads (required by utilities)
 
 # Note: Training dependencies (PyTorch, transformers, etc.) are installed
 # by the LoRA training backend during environment setup, not here

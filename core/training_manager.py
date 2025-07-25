@@ -646,6 +646,9 @@ class HybridTrainingManager:
                 monitor_widget.clear_log()
                 monitor_widget.update_phase("Launching training from files...", "info")
             
+            # Set working directory to trainer for proper LyCORIS imports
+            train_cwd = self.trainer_dir if os.path.exists(self.trainer_dir) else self.project_root
+            
             process = subprocess.Popen(
                 [venv_python, train_script,
                  "--config_file", config_toml_path,
@@ -654,7 +657,7 @@ class HybridTrainingManager:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                cwd=self.project_root,
+                cwd=train_cwd,  # Run from trainer directory for proper imports
                 env=env
             )
 
@@ -741,6 +744,9 @@ class HybridTrainingManager:
                 # Set total epochs for progress tracking
                 monitor_widget.total_epochs = config['epochs']
             
+            # Set working directory to trainer for proper LyCORIS imports
+            train_cwd = self.trainer_dir if os.path.exists(self.trainer_dir) else self.project_root
+            
             process = subprocess.Popen(
                 [venv_python, train_script,
                  "--config_file", config_toml_path,
@@ -749,7 +755,7 @@ class HybridTrainingManager:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                cwd=self.project_root,
+                cwd=train_cwd,  # Run from trainer directory for proper imports
                 env=env
             )
 

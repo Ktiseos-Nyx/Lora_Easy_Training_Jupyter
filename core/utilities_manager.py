@@ -10,15 +10,25 @@ class UtilitiesManager:
         self.sd_scripts_dir = os.path.join(self.trainer_dir, "sd_scripts")
 
     def upload_to_huggingface(self, hf_token, model_path, repo_name):
-        if not hf_token:
-            print("Error: Hugging Face token is required.")
+        if not hf_token or not hf_token.strip():
+            print("❌ Error: Hugging Face token is required.")
+            print("💡 Get your token from: https://huggingface.co/settings/tokens")
+            return False
+        if not model_path or not model_path.strip():
+            print("❌ Error: Model file path is required.")
             return False
         if not os.path.exists(model_path):
-            print(f"Error: Model file not found at {model_path}")
+            print(f"❌ Error: Model file not found at {model_path}")
             return False
-        if not repo_name:
-            print("Error: Repository name is required.")
+        if not repo_name or not repo_name.strip():
+            print("❌ Error: Repository name is required.")
+            print("💡 Example: 'my-awesome-loras' (no spaces, lowercase preferred)")
             return False
+        
+        # Validate file extension
+        if not model_path.lower().endswith(('.safetensors', '.ckpt', '.pt', '.pth')):
+            print("⚠️ Warning: File doesn't appear to be a model file (.safetensors, .ckpt, .pt, .pth)")
+            print("🤔 Continuing anyway...")
 
         try:
             login(token=hf_token)
@@ -27,18 +37,25 @@ class UtilitiesManager:
             filename = os.path.basename(model_path)
             repo_id = f"{api.whoami()['name']}/{repo_name}"
 
-            print(f"Uploading {filename} to {repo_id}...")
+            print(f"🚀 Uploading {filename} to {repo_id}...")
             api.upload_file(
                 path_or_fileobj=model_path,
                 path_in_repo=filename,
                 repo_id=repo_id,
-                commit_message=f"Upload {filename}"
+                commit_message=f"Upload {filename}",
+                repo_type="model"
             )
-            print(f"Upload complete. View your model at https://huggingface.co/{repo_id}/blob/main/{filename}")
+            print(f"✅ Upload complete!")
+            print(f"🔗 View your model at: https://huggingface.co/{repo_id}")
+            print(f"📁 Direct file link: https://huggingface.co/{repo_id}/blob/main/{filename}")
             return True
 
         except Exception as e:
-            print(f"An error occurred during Hugging Face upload: {e}")
+            print(f"❌ Error during Hugging Face upload: {e}")
+            if "Invalid token" in str(e):
+                print("💡 Check your HuggingFace token: https://huggingface.co/settings/tokens")
+            elif "Repository not found" in str(e):
+                print("💡 Repository will be created automatically on first upload")
             return False
 
     def resize_lora(self, input_path, output_path, new_dim, new_alpha):
@@ -52,11 +69,18 @@ class UtilitiesManager:
             print("Error: Please specify new dim and alpha values.")
             return False
 
-        venv_python = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        # Check for venv python first, fall back to system python
+        venv_python_path = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        if os.path.exists(venv_python_path):
+            venv_python = venv_python_path
+        else:
+            venv_python = "python"  # Use system python (common in containers)
+        
         resize_script = os.path.join(self.sd_scripts_dir, "networks/resize_lora.py")
 
         if not os.path.exists(resize_script):
-            print(f"Error: LoRA resize script not found at {resize_script}. Please ensure your trainer backend is correctly installed.")
+            print(f"Error: LoRA resize script not found at {resize_script}")
+            print("💡 Please ensure the trainer environment setup completed successfully.")
             return False
 
         command = [
@@ -76,7 +100,7 @@ class UtilitiesManager:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                cwd=self.project_root
+                cwd=self.trainer_dir  # Run from trainer directory like training scripts
             )
 
             for line in iter(process.stdout.readline, ''):
