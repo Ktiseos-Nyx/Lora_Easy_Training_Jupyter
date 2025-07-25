@@ -28,7 +28,7 @@ class TrainingWidget:
         self.model_path = widgets.Text(description="Model Path:", placeholder="Absolute path to your base model (e.g., /path/to/model.safetensors)", layout=widgets.Layout(width='99%'))
         self.dataset_dir = widgets.Text(description="Dataset Dir:", placeholder="Absolute path to your dataset directory (e.g., /path/to/my_dataset)", layout=widgets.Layout(width='99%'))
         self.continue_from_lora = widgets.Text(description="Continue from LoRA:", placeholder="Absolute path to an existing LoRA to continue training (optional)", layout=widgets.Layout(width='99%'))
-        self.wandb_key = widgets.Text(description="WandB API Key:", placeholder="Your Weights & Biases API key (optional, for logging)", layout=widgets.Layout(width='99%'))
+        self.wandb_key = widgets.Password(description="WandB API Key:", placeholder="Your key will be hidden (e.g., ••••••••••••••••••••••••)", layout=widgets.Layout(width='99%'))
         project_box = widgets.VBox([project_desc, self.project_name, self.model_path, self.dataset_dir, self.continue_from_lora, self.wandb_key])
 
         # --- Training Configuration (merged: Basic Settings + Learning Rate + Training Options) ---
@@ -54,7 +54,7 @@ class TrainingWidget:
             dataset_path = self.dataset_dir.value.strip()
             if dataset_path:
                 try:
-                    from personal_lora_calculator import count_images_in_directory
+                    from core.image_utils import count_images_in_directory
                     image_count = count_images_in_directory(dataset_path)
                     self.dataset_size.value = image_count
                     update_step_calculation()
@@ -115,6 +115,10 @@ class TrainingWidget:
             # Check text encoder caching vs text encoder training conflict  
             if self.cache_text_encoder_outputs.value and float(self.text_encoder_lr.value) > 0:
                 warnings.append("⚠️ Cannot cache Text Encoder while training it (set Text LR to 0)")
+            
+            # Check random crop vs latent caching conflict
+            if self.random_crop.value and self.cache_latents.value:
+                warnings.append("⚠️ Cannot use Random Crop with Latent Caching - choose one or the other")
                 
             if warnings:
                 warning_html = "<div style='padding: 10px; border: 1px solid #856404; border-radius: 5px; margin: 5px 0;'>"
@@ -139,6 +143,23 @@ class TrainingWidget:
         self.multinoise = widgets.Checkbox(value=False, description="Multi-noise (can help with color balance)", indent=False)
         self.noise_offset = widgets.Text(value='0.0', description='Noise Offset:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         # Training options widgets (no separate section header)
+        self.zero_terminal_snr = widgets.Checkbox(value=False, description="Zero Terminal SNR (recommended for SDXL)", indent=False)
+        self.enable_bucket = widgets.Checkbox(value=True, description="Enable Bucket (resolution bucketing)", indent=False)
+        self.gradient_checkpointing = widgets.Checkbox(value=True, description="Gradient Checkpointing (saves memory - REQUIRED for 4090)", indent=False)
+        self.gradient_accumulation_steps = widgets.IntText(value=1, description='Gradient Accumulation Steps:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.max_grad_norm = widgets.Text(value='1.0', description='Max Grad Norm:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.full_fp16 = widgets.Checkbox(value=False, description="Full FP16 (more aggressive mixed precision)", indent=False)
+        self.random_crop = widgets.Checkbox(value=False, description="Random Crop (data augmentation)", indent=False)
+        
+        # Bucketing settings (moved from "advanced")
+        self.bucket_reso_steps = widgets.IntSlider(value=64, min=32, max=128, step=32, description='Bucket Resolution Steps:', style={'description_width': 'initial'}, continuous_update=False)
+        self.min_bucket_reso = widgets.IntSlider(value=256, min=128, max=512, step=64, description='Min Bucket Resolution:', style={'description_width': 'initial'}, continuous_update=False)
+        self.max_bucket_reso = widgets.IntSlider(value=2048, min=1024, max=4096, step=512, description='Max Bucket Resolution:', style={'description_width': 'initial'}, continuous_update=False)
+        self.bucket_no_upscale = widgets.Checkbox(value=False, description="No Bucket Upscale (prevent upscaling small images)", indent=False)
+        
+        # VAE settings (moved from "advanced")
+        self.vae_batch_size = widgets.IntSlider(value=1, min=1, max=8, step=1, description='VAE Batch Size:', style={'description_width': 'initial'}, continuous_update=False)
+        self.no_half_vae = widgets.Checkbox(value=False, description="No Half VAE (fixes some VAE issues, uses more VRAM)", indent=False)
 
         # --- LoRA Structure ---
         lora_struct_desc = widgets.HTML("""
@@ -163,7 +184,8 @@ class TrainingWidget:
                 'DoRA (Weight Decomposition)', 
                 'LoHa (Hadamard Product)', 
                 '(IA)³ (Few Parameters)', 
-                'GLoRA (Generalized LoRA)'
+                'GLoRA (Generalized LoRA)',
+                'BOFT (Butterfly Transform)'
             ], 
             value='LoRA', 
             description='LoRA Type:', 
@@ -190,6 +212,7 @@ class TrainingWidget:
         self.optimizer = widgets.Dropdown(options=['AdamW', 'AdamW8bit', 'Prodigy', 'DAdaptation', 'DadaptAdam', 'DadaptLion', 'Lion', 'SGDNesterov', 'SGDNesterov8bit', 'AdaFactor', 'Came'], value='AdamW', description='Optimizer:', style={'description_width': 'initial'})
         self.cross_attention = widgets.Dropdown(options=['sdpa', 'xformers'], value='sdpa', description='Cross Attention:', style={'description_width': 'initial'})
         self.precision = widgets.Dropdown(options=['fp16', 'bf16', 'float'], value='fp16', description='Precision:', style={'description_width': 'initial'})
+        self.fp8_base = widgets.Checkbox(value=False, description="FP8 Base (experimental, requires PyTorch 2.1+)", indent=False)
         self.cache_latents = widgets.Checkbox(value=True, description="Cache Latents (saves memory)", indent=False)
         self.cache_latents_to_disk = widgets.Checkbox(value=True, description="Cache Latents to Disk (uses disk space, saves more memory)", indent=False)
         self.cache_text_encoder_outputs = widgets.Checkbox(value=False, description="Cache Text Encoder Outputs (disables text encoder training)", indent=False)
@@ -210,9 +233,14 @@ class TrainingWidget:
             self.min_snr_gamma_enabled, self.min_snr_gamma, self.ip_noise_gamma_enabled, self.ip_noise_gamma, 
             self.multinoise, self.noise_offset,
             # Training options
-            self.optimizer, self.cross_attention, self.precision, 
+            self.optimizer, self.cross_attention, self.precision, self.fp8_base,
             self.cache_latents, self.cache_latents_to_disk, self.cache_text_encoder_outputs,
-            self.v_parameterization, self.save_every_n_epochs, self.keep_only_last_n_epochs,
+            self.v_parameterization, self.zero_terminal_snr, self.enable_bucket, 
+            self.gradient_checkpointing, self.gradient_accumulation_steps, self.max_grad_norm, self.full_fp16, self.random_crop,
+            # Bucketing and VAE settings
+            self.bucket_reso_steps, self.min_bucket_reso, self.max_bucket_reso, self.bucket_no_upscale,
+            self.vae_batch_size, self.no_half_vae,
+            self.save_every_n_epochs, self.keep_only_last_n_epochs,
             # Config warnings at the end
             self.config_warnings
         ])
@@ -263,11 +291,7 @@ class TrainingWidget:
             continuous_update=False
         )
         
-        self.zero_terminal_snr = widgets.Checkbox(
-            value=False,
-            description="Zero Terminal SNR (recommended for SDXL)",
-            indent=False
-        )
+        # Zero Terminal SNR moved to basic training options
         
         # Clip skip moved to basic settings
         
@@ -322,7 +346,6 @@ class TrainingWidget:
             widgets.HTML("<h4>🔊 Noise & Stability</h4>"),
             self.noise_offset,
             self.adaptive_noise_scale,
-            self.zero_terminal_snr,
             self.clip_skip,
             widgets.HTML("<h4>🎨 VAE & Performance</h4>"),
             self.vae_batch_size,
@@ -366,10 +389,21 @@ class TrainingWidget:
         self.cache_text_encoder_outputs.observe(check_config_conflicts, names='value')
         self.shuffle_caption.observe(check_config_conflicts, names='value')
         self.text_encoder_lr.observe(check_config_conflicts, names='value')
+        self.random_crop.observe(check_config_conflicts, names='value')
+        self.cache_latents.observe(check_config_conflicts, names='value')
+
+        # New button to prepare/commit configuration
+        self.prepare_config_button = widgets.Button(
+            description="✅ Prepare Training Configuration",
+            button_style='primary',
+            layout=widgets.Layout(width='auto', height='40px')
+        )
+        self.prepare_config_button.on_click(self.run_training) # This will now trigger config collection
 
         self.widget_box = widgets.VBox([
-            header_main, 
-            accordion, 
+            header_main,
+            accordion,
+            self.prepare_config_button, # Add the new button here
             progress_desc,
             self.status_bar,
             self.training_output
@@ -389,84 +423,109 @@ class TrainingWidget:
         self.status_bar.value = f"<div style='padding: 10px; border: 1px solid {color}; border-radius: 5px;'><strong>📊 Status:</strong> {message}</div>"
 
     def run_training(self, b):
-        self._update_status("Preparing training configuration... Check the Training Progress Monitor section below for live updates!", "info")
-        
-        # Use the dedicated training progress section if available
+        # Actually generate the TOML files when user clicks "Prepare"!
+        config = self._get_training_config()
+        try:
+            self.manager.prepare_config_only(config)  # Generate TOML files only
+            self._update_status("✅ Configuration TOML files generated! Now click 'Start LoRA Training' below!", "success")
+        except Exception as e:
+            self._update_status(f"❌ Failed to generate config: {str(e)}", "error")
+            return
+
+        # Get the existing monitor if available
         try:
             import __main__
-            if hasattr(__main__, 'show_training_monitor'):
-                monitor = __main__.show_training_monitor()
+            if hasattr(__main__, 'training_monitor'):
+                monitor = __main__.training_monitor
             else:
-                # Fallback: create and display monitor inline if dedicated section not available
-                monitor = TrainingMonitorWidget()
+                # Fallback: create and display monitor
+                # The TrainingMonitorWidget now needs the TrainingManager instance
+                monitor = TrainingMonitorWidget(training_manager_instance=self.manager)
+                __main__.training_monitor = monitor  # Store globally
                 display(monitor.widget_box)
-        except:
-            # Fallback: create and display monitor inline
-            monitor = TrainingMonitorWidget()
+        except Exception as e:
+            # Fallback: create and display monitor
+            print(f"Error getting/creating monitor: {e}")
+            monitor = TrainingMonitorWidget(training_manager_instance=self.manager)
             display(monitor.widget_box)
-        
+
+        # Pass the training configuration to the monitor
+        config = self._get_training_config()
+        monitor.set_training_config(config)
+
         with self.training_output:
             self.training_output.clear_output()
-            # Gather all the settings
-            config = {
-                'project_name': self.project_name.value,
-                'model_path': self.model_path.value,
-                'dataset_dir': self.dataset_dir.value,
-                'continue_from_lora': self.continue_from_lora.value,
-                'wandb_key': self.wandb_key.value,
-                'resolution': self.resolution.value,
-                'num_repeats': self.num_repeats.value,
-                'epochs': self.epochs.value,
-                'train_batch_size': self.train_batch_size.value,
-                'flip_aug': self.flip_aug.value,
-                'unet_lr': self._parse_learning_rate(self.unet_lr.value),
-                'text_encoder_lr': self._parse_learning_rate(self.text_encoder_lr.value),
-                'lr_scheduler': self.lr_scheduler.value,
-                'lr_scheduler_number': self.lr_scheduler_number.value,
-                'lr_warmup_ratio': self.lr_warmup_ratio.value,
-                'min_snr_gamma_enabled': self.min_snr_gamma_enabled.value,
-                'min_snr_gamma': self.min_snr_gamma.value,
-                'ip_noise_gamma_enabled': self.ip_noise_gamma_enabled.value,
-                'ip_noise_gamma': self.ip_noise_gamma.value,
-                'multinoise': self.multinoise.value,
-                'lora_type': self.lora_type.value,
-                'network_dim': self.network_dim.value,
-                'network_alpha': self.network_alpha.value,
-                'conv_dim': self.conv_dim.value,
-                'conv_alpha': self.conv_alpha.value,
-                'optimizer': self.optimizer.value,
-                'cross_attention': self.cross_attention.value,
-                'precision': self.precision.value,
-                'cache_latents': self.cache_latents.value,
-                'cache_latents_to_disk': self.cache_latents_to_disk.value,
-                'cache_text_encoder_outputs': self.cache_text_encoder_outputs.value,
-                'shuffle_caption': self.shuffle_caption.value,
-                'v_parameterization': self.v_parameterization.value,
-                'save_every_n_epochs': self.save_every_n_epochs.value,
-                'keep_only_last_n_epochs': self.keep_only_last_n_epochs.value,
-                # Advanced training options
-                'caption_dropout_rate': self.caption_dropout_rate.value,
-                'caption_tag_dropout_rate': self.caption_tag_dropout_rate.value,
-                'keep_tokens': self.keep_tokens.value,
-                'noise_offset': self.noise_offset.value,
-                'adaptive_noise_scale': self.adaptive_noise_scale.value,
-                'zero_terminal_snr': self.zero_terminal_snr.value,
-                'clip_skip': self.clip_skip.value,
-                'vae_batch_size': self.vae_batch_size.value,
-                'no_half_vae': self.no_half_vae.value,
-                'bucket_reso_steps': self.bucket_reso_steps.value,
-                'min_bucket_reso': self.min_bucket_reso.value,
-                'max_bucket_reso': self.max_bucket_reso.value,
-                'bucket_no_upscale': self.bucket_no_upscale.value,
-                # Advanced options
-                'advanced_mode_enabled': getattr(self, 'advanced_mode', widgets.Checkbox(value=False)).value,
-                'advanced_optimizer': getattr(self, 'advanced_optimizer', type('obj', (object,), {'value': 'standard'})).value,
-                'advanced_scheduler': getattr(self, 'advanced_scheduler', type('obj', (object,), {'value': 'auto'})).value,
-                'fused_back_pass': getattr(self, 'fused_back_pass', widgets.Checkbox(value=False)).value,
-                'lycoris_method': getattr(self, 'lycoris_method', type('obj', (object,), {'value': 'none'})).value,
-                'experimental_features': self._get_experimental_features(),
-            }
-            self.manager.start_training(config, monitor_widget=monitor)
+        # The monitor's start button will now trigger the training via its own manager reference
+
+    def _get_training_config(self):
+        """Helper method to gather all config settings from widget values"""
+        return {
+            'project_name': self.project_name.value,
+            'model_path': self.model_path.value,
+            'dataset_dir': self.dataset_dir.value,
+            'continue_from_lora': self.continue_from_lora.value,
+            'wandb_key': self.wandb_key.value,
+            'resolution': self.resolution.value,
+            'num_repeats': self.num_repeats.value,
+            'epochs': self.epochs.value,
+            'train_batch_size': self.train_batch_size.value,
+            'flip_aug': self.flip_aug.value,
+            'unet_lr': self._parse_learning_rate(self.unet_lr.value),
+            'text_encoder_lr': self._parse_learning_rate(self.text_encoder_lr.value),
+            'lr_scheduler': self.lr_scheduler.value,
+            'lr_scheduler_number': self.lr_scheduler_number.value,
+            'lr_warmup_ratio': self.lr_warmup_ratio.value,
+            'min_snr_gamma_enabled': self.min_snr_gamma_enabled.value,
+            'min_snr_gamma': self.min_snr_gamma.value,
+            'ip_noise_gamma_enabled': self.ip_noise_gamma_enabled.value,
+            'ip_noise_gamma': self.ip_noise_gamma.value,
+            'multinoise': self.multinoise.value,
+            'lora_type': self.lora_type.value,
+            'network_dim': self.network_dim.value,
+            'network_alpha': self.network_alpha.value,
+            'conv_dim': self.conv_dim.value,
+            'conv_alpha': self.conv_alpha.value,
+            'optimizer': self.optimizer.value,
+            'cross_attention': self.cross_attention.value,
+            'precision': self.precision.value,
+            'fp8_base': self.fp8_base.value,
+            'cache_latents': self.cache_latents.value,
+            'cache_latents_to_disk': self.cache_latents_to_disk.value,
+            'cache_text_encoder_outputs': self.cache_text_encoder_outputs.value,
+            'shuffle_caption': self.shuffle_caption.value,
+            'v_parameterization': self.v_parameterization.value,
+            'save_every_n_epochs': self.save_every_n_epochs.value,
+            'keep_only_last_n_epochs': self.keep_only_last_n_epochs.value,
+            # Advanced training options
+            'caption_dropout_rate': self.caption_dropout_rate.value,
+            'caption_tag_dropout_rate': self.caption_tag_dropout_rate.value,
+            'keep_tokens': self.keep_tokens.value,
+            'noise_offset': self.noise_offset.value,
+            'adaptive_noise_scale': self.adaptive_noise_scale.value,
+            'zero_terminal_snr': self.zero_terminal_snr.value,
+            'clip_skip': self.clip_skip.value,
+            'enable_bucket': self.enable_bucket.value,
+            'gradient_checkpointing': self.gradient_checkpointing.value,
+            'gradient_accumulation_steps': self.gradient_accumulation_steps.value,
+            'max_grad_norm': self.max_grad_norm.value,
+            'full_fp16': self.full_fp16.value,
+            'random_crop': self.random_crop.value,
+            'bucket_reso_steps': self.bucket_reso_steps.value,
+            'min_bucket_reso': self.min_bucket_reso.value,
+            'max_bucket_reso': self.max_bucket_reso.value,
+            'bucket_no_upscale': self.bucket_no_upscale.value,
+            'vae_batch_size': self.vae_batch_size.value,
+            'no_half_vae': self.no_half_vae.value,
+            'max_bucket_reso': self.max_bucket_reso.value,
+            'bucket_no_upscale': self.bucket_no_upscale.value,
+            # Advanced options
+            'advanced_mode_enabled': getattr(self, 'advanced_mode', widgets.Checkbox(value=False)).value,
+            'advanced_optimizer': getattr(self, 'advanced_optimizer', type('obj', (object,), {'value': 'standard'})).value,
+            'advanced_scheduler': getattr(self, 'advanced_scheduler', type('obj', (object,), {'value': 'auto'})).value,
+            'fused_back_pass': getattr(self, 'fused_back_pass', widgets.Checkbox(value=False)).value,
+            'lycoris_method': getattr(self, 'lycoris_method', type('obj', (object,), {'value': 'none'})).value,
+            'experimental_features': self._get_experimental_features(),
+        }
 
     def _create_combined_advanced_section(self, advanced_training_box):
         """Create combined advanced section merging Advanced Training Options with Advanced Mode"""

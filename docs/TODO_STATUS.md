@@ -2,8 +2,8 @@
 *Last updated: 2025-07-25*
 
 ## 🎉 **Completed Today (Major UI Overhaul)**
-- ✅ **Complete widget interface reorganization** - Streamlined from 7 accordions to 4 logical sections
-- ✅ **Unified Training Configuration section** - Merged Basic Settings + Learning Rate + Training Options  
+- ✅ **Started widget interface reorganization** - Streamlined from 7 accordions to 4 logical sections
+- ✅ **Unified Training Configuration section** - Merged Basic Settings + Learning Rate + Training Options
 - ✅ **Converted all sliders to text inputs** - MinSNR, Warmup, LoRA structure (Network Dim/Alpha, Conv Dim/Alpha)
 - ✅ **Moved commonly used options to basic settings** - Keep tokens, noise offset, clip skip now in main section
 - ✅ **Merged advanced sections** - Advanced Training Options + Advanced Mode now single accordion
@@ -16,10 +16,35 @@
 - ✅ **Better notebook organization** - Logical flow: Setup → Configure → Start/Monitor → Utilities → Tips
 
 ## 🚧 **Still Pending (High Priority)**
+- ⏳ **Untangle the uploaders** - Fix confusing upload widget logic and organization
+- ⏳ **Fix custom optimizer imports** - LoraEasyCustomOptimizer module not found, setup script needs environment prerequisite checking
+- ⏳ **Environment prerequisite validation** - Setup script should verify SD scripts requirements compatibility and install missing custom optimizers
 - ⏳ **Update training manager for different model types** - Need FLUX/SD3/SDXL/SD1.5 script selection
 - ⏳ **Add model type detection** - Auto-detect from model path/name
 - ⏳ **Update network module selection** - Different LoRA modules for different model architectures
-- ⏳ **Audit ALL selector logic** - Check every dropdown/checkbox actually works (V-pred & DoRA were broken!)
+- ✅ **Audit ALL selector logic** - Check every dropdown/checkbox actually works (V-pred & DoRA were broken!)
+- ✅ **Complete widget logic** - Fixed with ConfigManager file hunting approach, training should now work!
+
+## 🔧 **Code Quality Issues (Low Priority)**
+- 📝 **Optimize image counting in core/image_utils.py** - Currently does both recursive AND non-recursive search which is redundant (but works correctly due to set() deduplication)
+- 📝 **Consolidate duplicate image counting logic** - Training manager has fallback counting that duplicates widget logic
+- 📝 **Standardize import paths** - Some inconsistency between personal_lora_calculator vs core.image_utils imports
+
+## 🎛️ **Widget Logic Audit Results**
+### **Duplicated Information Issues:**
+- ❌ **Keep Tokens** - Appears in both "Training Configuration" and "Advanced Training Options" sections
+- ❌ **Noise Offset** - Duplicated between main training config and advanced options  
+- ❌ **Clip Skip** - Shows up in both main section and advanced section
+- ❌ **Dataset Directory** - Entered 4 times across tagging/cleanup/caption sections
+
+### **Improper "ADVANCED" Categorization:**
+- 🔄 **Miscategorized as Advanced:** Caption Dropout, Tag Dropout, VAE Batch Size, Bucket Resolution Steps (all common settings)
+- 🔄 **Should be Advanced:** IP Noise Gamma (FLUX-only), Multi-noise (experimental), Adaptive Noise Scale (research-grade)
+- 📝 **IP Noise Gamma Note:** This feature is ONLY for FLUX models and should be model-specific
+
+### **Organizational Issues:**
+- 🔄 **Inconsistent Section Logic:** Caching options scattered, scheduler settings mixed between basic/advanced
+- 🔄 **Conv Dim/Alpha:** Explanation in LoRA Structure but used across multiple LoRA types
 
 ## 🔮 **Long-term Goals (Future Features)**
 - 🎯 **Diffusers integration for epoch sampling** - Generate sample images from each epoch automatically during training
@@ -79,7 +104,7 @@
 
 ### **V-Parameterization Bug (CRITICAL)**
 - **Issue**: Checkbox wasn't actually enabling v-pred support
-- **Result**: LoRAs trained on v-pred models (NoobAI-XL) looked "overbaked" 
+- **Result**: LoRAs trained on v-pred models (NoobAI-XL) looked "overbaked"
 - **Fix**: Now properly adds `v_parameterization: true` only when checked
 - **Impact**: This was probably the main issue with the "overbaked" LoRA!
 
@@ -146,4 +171,4 @@
 - **All critical bugs fixed** - V-pred and LoRA type selection now work correctly
 
 ---
-*System is now ready for production SDXL/SD1.5 training. Focus next session on FLUX/SD3 support for complete model coverage.*
+*System is now ready for production SDXL/SD1.5 training. Focus next session on Completing Widget logic before going onto the next advanced stages.*

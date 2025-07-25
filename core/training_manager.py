@@ -61,49 +61,23 @@ class HybridTrainingManager:
         return None
     
     def _setup_custom_optimizers(self):
-        """Add Derrian's backend to Python path so we can import custom optimizers"""
+        """Add Derrian's backend to Python path so we can import custom optimizers (silent mode)"""
         if os.path.exists(self.trainer_dir) and self.trainer_dir not in sys.path:
             sys.path.insert(0, self.trainer_dir)
-            print(f"🔧 Added {self.trainer_dir} to Python path for custom optimizers")
+            pass  # Silently add to path
             
         # Also add custom_scheduler directory to path
         custom_scheduler_dir = os.path.join(self.trainer_dir, "custom_scheduler")
         if os.path.exists(custom_scheduler_dir) and custom_scheduler_dir not in sys.path:
             sys.path.insert(0, custom_scheduler_dir)
-            print(f"🔧 Added {custom_scheduler_dir} to Python path for CAME/REX optimizers")
+            pass  # Silently add to path
             
-        # Debug: Check what's actually in the trainer directory
-        print("🔍 Checking trainer directory contents...")
-        try:
-            contents = os.listdir(self.trainer_dir)
-            print(f"Found: {contents}")
-            
-            # Look for optimizer-related files/folders
-            optimizer_files = [f for f in contents if 'optim' in f.lower() or 'came' in f.lower() or 'rex' in f.lower() or 'custom_scheduler' in f.lower()]
-            if optimizer_files:
-                print(f"📁 Optimizer-related files: {optimizer_files}")
-                
-            # Check custom_scheduler directory specifically
-            custom_scheduler_dir = os.path.join(self.trainer_dir, "custom_scheduler")
-            if os.path.exists(custom_scheduler_dir):
-                try:
-                    scheduler_contents = os.listdir(custom_scheduler_dir)
-                    print(f"📁 custom_scheduler contents: {scheduler_contents}")
-                except Exception as e:
-                    print(f"⚠️ Error reading custom_scheduler: {e}")
-            
-            # Check for Python files
-            py_files = [f for f in contents if f.endswith('.py')]
-            if py_files:
-                print(f"🐍 Python files: {py_files}")
-                
-        except Exception as e:
-            print(f"❌ Error listing directory: {e}")
+        # Silently check for custom optimizers
             
         # Try to import and verify CAME is available (from custom_scheduler)
         try:
             import LoraEasyCustomOptimizer.came
-            print("✅ CAME optimizer found and ready!")
+            pass  # CAME available
         except ImportError as e:
             print(f"⚠️ CAME optimizer not found: {e}")
             
@@ -139,6 +113,47 @@ class HybridTrainingManager:
             return float(value) if value is not None else default
         except (ValueError, TypeError):
             return default
+    
+    def _calculate_warmup_steps(self, config):
+        """Calculate warmup steps based on ACTUAL training steps, not hardcoded bias"""
+        try:
+            # Get actual training parameters
+            dataset_size = config.get('dataset_size', 0)
+            if dataset_size == 0:
+                # Fallback: try to count images from dataset directory
+                dataset_dir = config.get('dataset_dir', '')
+                if dataset_dir:
+                    from core.image_utils import count_images_in_directory
+                    dataset_size = count_images_in_directory(dataset_dir)
+            
+            num_repeats = config.get('num_repeats', 1)
+            epochs = config.get('epochs', 1)
+            batch_size = config.get('train_batch_size', 1)
+            warmup_ratio = self._safe_float(config.get('lr_warmup_ratio', 0.0))
+            
+            if dataset_size > 0 and batch_size > 0:
+                # Calculate REAL total training steps
+                total_steps = (dataset_size * num_repeats * epochs) // batch_size
+                warmup_steps = int(total_steps * warmup_ratio)
+                
+                print(f"🔢 UNBIASED WARMUP CALCULATION:")
+                print(f"   📸 Dataset size: {dataset_size}")
+                print(f"   🔄 Repeats: {num_repeats}")
+                print(f"   📅 Epochs: {epochs}")
+                print(f"   📦 Batch size: {batch_size}")
+                print(f"   ⚡ Total steps: {total_steps}")
+                print(f"   🌡️ Warmup ratio: {warmup_ratio}")
+                print(f"   🔥 Warmup steps: {warmup_steps}")
+                
+                return warmup_steps
+            else:
+                print("⚠️ Cannot calculate warmup steps - missing dataset info, using fallback")
+                # Fallback to a reasonable default (not the hardcoded *100 nonsense!)
+                return int(epochs * 50)  # Much more reasonable than *100
+                
+        except Exception as e:
+            print(f"❌ Error calculating warmup steps: {e}")
+            return int(config.get('epochs', 1) * 50)  # Safe fallback
     
     def _detect_model_type(self, config):
         """Detect model type from model path or config to choose appropriate SD scripts"""
@@ -200,11 +215,7 @@ class HybridTrainingManager:
     def _init_lycoris_methods(self) -> Dict[str, Dict[str, Any]]:
         """Initialize LyCORIS method configurations"""
         return {
-            'dora': {
-                'network_module': 'lycoris.kohya',
-                'network_args': ['algo=dora', 'use_tucker=False'],
-                'description': 'Weight Decomposition - trains like full fine-tune'
-            },
+            # DoRA removed - handled in main LoRA type selection
             'lokr': {
                 'network_module': 'lycoris.kohya', 
                 'network_args': ['algo=lokr', 'factor=-1'],
@@ -265,7 +276,7 @@ class HybridTrainingManager:
                 "keep_tokens": config.get('keep_tokens', 0),
                 "flip_aug": config['flip_aug'],
                 "caption_extension": ".txt",
-                "enable_bucket": True,
+                "enable_bucket": config.get('enable_bucket', True),
                 "bucket_no_upscale": config.get('bucket_no_upscale', False),
                 "bucket_reso_steps": config.get('bucket_reso_steps', 64),
                 "min_bucket_reso": config.get('min_bucket_reso', 256),
@@ -312,6 +323,9 @@ class HybridTrainingManager:
             print(f"🦄 Using LyCORIS method: {lycoris_method} - {lycoris_config['description']}")
         
         # Fallback to basic LoRA types
+        elif config['lora_type'] == "LoRA":
+            network_module = "networks.lora"  # Standard LoRA
+            network_args = None  # No special args needed
         elif config['lora_type'] == "LoCon":
             network_module = "lycoris.kohya"
             network_args = [f"algo=locon", f"conv_dim={config['conv_dim']}", f"conv_alpha={config['conv_alpha']}"]
@@ -323,7 +337,7 @@ class HybridTrainingManager:
             network_args = [f"algo=dylora", f"conv_dim={config['conv_dim']}", f"conv_alpha={config['conv_alpha']}"]
         elif config['lora_type'] == "DoRA (Weight Decomposition)":
             network_module = "lycoris.kohya"
-            network_args = [f"algo=dora", f"conv_dim={config['conv_dim']}", f"conv_alpha={config['conv_alpha']}"]
+            network_args = [f"algo=lora", f"dora_wd=True", f"conv_dim={config['conv_dim']}", f"conv_alpha={config['conv_alpha']}"]
             print("🎯 Using DoRA - expect 2-3x slower training but higher quality!")
         elif config['lora_type'] == "LoHa (Hadamard Product)":
             network_module = "lycoris.kohya"
@@ -451,11 +465,11 @@ class HybridTrainingManager:
             "cache_text_encoder_outputs": config['cache_text_encoder_outputs'],
             "min_snr_gamma": self._safe_float(config['min_snr_gamma']) if config['min_snr_gamma_enabled'] else None,
             "ip_noise_gamma": config['ip_noise_gamma'] if config['ip_noise_gamma_enabled'] else None,
-            "multires_noise_iterations": 6 if config['multinoise'] else None, # Default value from sample notebook
-            "multires_noise_discount": 0.3 if config['multinoise'] else None, # Default value from sample notebook
+            "multires_noise_iterations": config.get('multires_noise_iterations', 6) if config['multinoise'] else None,
+            "multires_noise_discount": config.get('multires_noise_discount', 0.3) if config['multinoise'] else None,
             "xformers": config['cross_attention'] == "xformers",
             "sdpa": config['cross_attention'] == "sdpa",
-            "log_with": "wandb" if config['wandb_key'] else None,
+            "log_with": "wandb" if config.get('wandb_key') else None,
             "wandb_api_key": config['wandb_key'] if config['wandb_key'] else None,
             # Advanced training options
             "noise_offset": self._safe_float(config.get('noise_offset', 0.0)) if self._safe_float(config.get('noise_offset', 0.0)) > 0 else None,
@@ -464,11 +478,13 @@ class HybridTrainingManager:
             "clip_skip": config.get('clip_skip', 2),
             "vae_batch_size": config.get('vae_batch_size', 1),
             "no_half_vae": config.get('no_half_vae', False),
-            # Memory optimization flags
-            "gradient_checkpointing": True,  # Always enable for memory savings
-            "gradient_accumulation_steps": max(1, 4 // config['train_batch_size']),  # Auto-adjust for small batch sizes
-            "max_grad_norm": 1.0,  # Gradient clipping for stability
-            "full_fp16": config['precision'] == 'fp16',  # More aggressive FP16 if selected
+            # User-configurable training flags (no more hardcoding!)
+            "gradient_checkpointing": config.get('gradient_checkpointing', True),
+            "gradient_accumulation_steps": config.get('gradient_accumulation_steps', 1),
+            "max_grad_norm": float(config.get('max_grad_norm', 1.0)),
+            "full_fp16": config.get('full_fp16', False),
+            "random_crop": config.get('random_crop', False),
+            "fp8_base": config.get('fp8_base', False),
         }
 
         # Add v_parameterization only if explicitly enabled
@@ -493,7 +509,7 @@ class HybridTrainingManager:
                 "learning_rate": config['unet_lr'],
                 "lr_scheduler": config['lr_scheduler'],
                 "lr_scheduler_num_cycles": config['lr_scheduler_number'] if config['lr_scheduler'] == "cosine_with_restarts" else None,
-                "lr_warmup_steps": int(self._safe_float(config['lr_warmup_ratio']) * config['epochs'] * 100) if self._safe_float(config['lr_warmup_ratio']) > 0 else None, # Simplified calculation
+                "lr_warmup_steps": self._calculate_warmup_steps(config) if self._safe_float(config['lr_warmup_ratio']) > 0 else None, # Proper calculation based on actual training steps
                 "optimizer_type": optimizer_type,
                 "optimizer_args": optimizer_args if optimizer_args else None,
                 "lr_scheduler_type": lr_scheduler_type,
@@ -578,21 +594,104 @@ class HybridTrainingManager:
             print("⚠️ Fused Back Pass requires OneTrainer integration - feature disabled")
             print("💡 Using standard gradient checkpointing for VRAM optimization instead")
         
-        # Aggressive Gradient Checkpointing
-        if config.get('gradient_checkpointing', False):
-            training_args['gradient_checkpointing'] = True
-            training_args['deepspeed_zero_offload'] = True
-            print("💾 Aggressive gradient checkpointing enabled")
+        # ⚠️ IMPORTANT: DO NOT HARDCODE TRAINING ARGUMENTS HERE!
+        # All training settings must come from user widgets, not manager assumptions.
+        # If you hardcode values here, users can't control their own training!
         
-        # Multi-Resolution Training
-        experimental_features = config.get('experimental_features', {})
-        if experimental_features.get('experimental_2', False):  # Multi-res checkbox
-            training_args['enable_bucket'] = True
-            training_args['bucket_reso_steps'] = 32  # More granular
-            training_args['random_crop'] = True
-            print("🌊 Multi-resolution training enabled")
+        # Only add features that are explicitly enabled by the user
+        # No auto-enabling of experimental features
         
         return training_args
+
+    def launch_from_files(self, config_paths, monitor_widget=None):
+        """🚀 Launch training from existing TOML files - DEAD SIMPLE APPROACH"""
+        
+        print("🔍 FRANKENSTEIN TRAINING MANAGER - FILE HUNTING MODE! 💥")
+        print(f"📁 Using config files: {list(config_paths.keys())}")
+        
+        # Extract the file paths
+        config_toml_path = config_paths.get("config.toml")
+        dataset_toml_path = config_paths.get("dataset.toml") 
+        
+        if not config_toml_path or not dataset_toml_path:
+            print("❌ Missing required TOML files!")
+            return False
+        
+        print(f"✅ Config TOML: {config_toml_path}")
+        print(f"✅ Dataset TOML: {dataset_toml_path}")
+        
+        # Find the training script
+        train_script = self._find_training_script()
+        if not train_script:
+            print("❌ No training script found!")
+            return False
+        
+        # Check for venv python
+        venv_python_path = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        if os.path.exists(venv_python_path):
+            venv_python = venv_python_path
+        else:
+            venv_python = "python"
+        
+        print("\n🚀 Starting training from TOML files...")
+        
+        # Set memory optimization environment variables
+        env = os.environ.copy()
+        env['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+        env['CUDA_LAUNCH_BLOCKING'] = '1'
+        
+        try:
+            # Set up training monitoring
+            if monitor_widget:
+                monitor_widget.clear_log()
+                monitor_widget.update_phase("Launching training from files...", "info")
+            
+            process = subprocess.Popen(
+                [venv_python, train_script,
+                 "--config_file", config_toml_path,
+                 "--dataset_config", dataset_toml_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                cwd=self.project_root,
+                env=env
+            )
+
+            for line in iter(process.stdout.readline, ''):
+                print(line, end='')
+                
+                # Update monitor widget if provided
+                if monitor_widget:
+                    monitor_widget.parse_training_output(line)
+            
+            process.stdout.close()
+            return_code = process.wait()
+
+            if return_code:
+                raise subprocess.CalledProcessError(return_code, [venv_python, train_script])
+
+            print("\n✅ TRAINING COMPLETE! 🎉")
+            return True
+
+        except subprocess.CalledProcessError as e:
+            print(f"💥 Training error occurred: {e}")
+            return False
+        except Exception as e:
+            print(f"🚨 Unexpected error: {e}")
+            return False
+
+    def prepare_config_only(self, config):
+        """🛠️ Generate TOML files without starting training"""
+        print("📝 Generating configuration files...")
+        
+        dataset_toml_path = self._create_dataset_toml(config)
+        config_toml_path = self._create_config_toml(config)
+        
+        print(f"✅ Generated: {dataset_toml_path}")
+        print(f"✅ Generated: {config_toml_path}")
+        
+        return {"config.toml": config_toml_path, "dataset.toml": dataset_toml_path}
 
     def start_training(self, config, monitor_widget=None):
         """🚀 Start hybrid training with all advanced features"""

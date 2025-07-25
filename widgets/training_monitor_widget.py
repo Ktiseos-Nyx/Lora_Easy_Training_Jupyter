@@ -4,9 +4,12 @@ from IPython.display import display
 import re
 import time
 import threading
+from core.config_manager import ConfigManager
 
 class TrainingMonitorWidget:
-    def __init__(self):
+    def __init__(self, training_manager_instance):
+        self.training_manager = training_manager_instance
+        self.training_config = None # To store the config passed from TrainingWidget
         self.create_widgets()
         self.current_epoch = 0
         self.total_epochs = 0
@@ -138,21 +141,35 @@ class TrainingMonitorWidget:
             self.autosave_status
         ])
     
+    def set_training_config(self, config):
+        """Set the training configuration received from TrainingWidget"""
+        self.training_config = config
+
     def start_training_clicked(self, b):
-        """Handle start training button click"""
-        # This will be connected to the actual training widget's run_training method
+        """Handle start training button click - DEAD SIMPLE FILE HUNTING APPROACH"""
         try:
-            import __main__
-            if hasattr(__main__, 'training_widget'):
-                # Update status and switch to progress monitoring
-                self.control_status.value = "<div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px; margin: 10px 0;'><strong>Status:</strong> Training started! Check the Live Progress Monitor tab below.</div>"
-                self.accordion.selected_index = 1  # Switch to progress tab
-                # Call the training widget's run_training method
-                __main__.training_widget.run_training(b)
-            else:
-                self.control_status.value = "<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>Error:</strong> Training widget not found. Make sure to run the Training Configuration cell first.</div>"
+            # Create our brilliant file hunter
+            config_mgr = ConfigManager()
+            
+            # Step 1: Hunt for TOML files like a boss
+            if not config_mgr.files_ready():
+                self.control_status.value = "<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>❌ Error:</strong> Config files not ready! Click 'Prepare Training Configuration' first!</div>"
+                return
+            
+            # Step 2: Files found? LET'S FUCKING GOOOOO! 🚀
+            self.control_status.value = "<div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px; margin: 10px 0;'><strong>Status:</strong> ✅ Config files found! Starting training! 🚀</div>"
+            self.accordion.selected_index = 1  # Switch to progress tab
+            
+            # Step 3: Get the file paths and launch
+            config_paths = config_mgr.get_config_paths()
+            print(f"🔍 Found config files: {list(config_paths.keys())}")
+            
+            # Launch training using the file paths
+            self.training_manager.launch_from_files(config_paths, monitor_widget=self)
+            
         except Exception as e:
-            self.control_status.value = f"<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>Error:</strong> {str(e)}</div>"
+            self.control_status.value = f"<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>💥 Error:</strong> {str(e)}</div>"
+            print(f"💥 Training start error: {e}")
     
     def display(self):
         """Display the training monitor widget"""
