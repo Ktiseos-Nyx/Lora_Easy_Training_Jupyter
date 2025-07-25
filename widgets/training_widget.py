@@ -31,24 +31,40 @@ class TrainingWidget:
         self.wandb_key = widgets.Text(description="WandB API Key:", placeholder="Your Weights & Biases API key (optional, for logging)", layout=widgets.Layout(width='99%'))
         project_box = widgets.VBox([project_desc, self.project_name, self.model_path, self.dataset_dir, self.continue_from_lora, self.wandb_key])
 
-        # --- Basic Settings ---
-        basic_desc = widgets.HTML("""<h3>▶️ Basic Settings</h3>
-        <p>Configure fundamental training parameters. <strong>Target 500-5000+ total steps</strong> using this formula:</p>
-        <p><code>Images × Repeats × Epochs ÷ Batch Size = Total Steps</code></p>
-        <p><strong>Examples:</strong><br>
-        • 20 images × 10 repeats × 10 epochs ÷ 4 batch = 500 steps (minimum)<br>
-        • 50 images × 10 repeats × 15 epochs ÷ 4 batch = 1875 steps (good)<br>
-        • 100 images × 20 repeats × 10 epochs ÷ 4 batch = 5000 steps (excellent!)</p>""")
+        # --- Training Configuration (merged: Basic Settings + Learning Rate + Training Options) ---
+        training_config_desc = widgets.HTML("""<h3>▶️ Training Configuration</h3>
+        <p>Configure all core training parameters including dataset settings, learning rates, optimizer, and training options. Total steps calculated automatically based on your dataset.</p>""")
         self.resolution = widgets.IntText(value=1024, description='Resolution:', style={'description_width': 'initial'})
         self.num_repeats = widgets.IntText(value=10, description='Num Repeats:', style={'description_width': 'initial'})
         self.epochs = widgets.IntText(value=10, description='Epochs:', style={'description_width': 'initial'})
         self.train_batch_size = widgets.IntText(value=4, description='Train Batch Size:', style={'description_width': 'initial'})
-        self.flip_aug = widgets.Checkbox(value=False, description="Flip Augmentation (recommended for small datasets)", indent=False)
+        self.flip_aug = widgets.Checkbox(value=False, description="Flip Augmentation (data augmentation)", indent=False)
         self.shuffle_caption = widgets.Checkbox(value=True, description="Shuffle Captions (improves variety, incompatible with text encoder caching)", indent=False)
         
-        # Live step calculator
-        self.dataset_size = widgets.IntText(value=20, description="Dataset Size:", style={'description_width': 'initial'})
+        # Basic training options (moved from advanced)
+        self.keep_tokens = widgets.IntText(value=0, description='Keep Tokens:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.clip_skip = widgets.IntText(value=2, description='Clip Skip:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        
+        # Auto-detected dataset size (will be updated when dataset directory changes)
+        self.dataset_size = widgets.IntText(value=0, description="Dataset Size:", style={'description_width': 'initial'}, disabled=True)
         self.step_calculator = widgets.HTML()
+        
+        # Auto-detect dataset size when dataset_dir changes
+        def update_dataset_size(*args):
+            dataset_path = self.dataset_dir.value.strip()
+            if dataset_path:
+                try:
+                    from personal_lora_calculator import count_images_in_directory
+                    image_count = count_images_in_directory(dataset_path)
+                    self.dataset_size.value = image_count
+                    update_step_calculation()
+                except Exception as e:
+                    self.dataset_size.value = 0
+            else:
+                self.dataset_size.value = 0
+            update_step_calculation()
+        
+        self.dataset_dir.observe(update_dataset_size, names='value')
         
         def update_step_calculation(*args):
             images = self.dataset_size.value
@@ -56,30 +72,24 @@ class TrainingWidget:
             epochs = self.epochs.value
             batch_size = self.train_batch_size.value
             
-            if batch_size > 0:
+            if batch_size > 0 and images > 0:
                 total_steps = (images * repeats * epochs) // batch_size
                 
-                if total_steps < 100:
-                    color = "#dc3545"  # Red
-                    status = "⚠️ Very few steps - likely undercooked"
-                elif total_steps < 500:
-                    color = "#ffc107"  # Yellow
-                    status = "🟡 Low steps - might need more training"
-                elif total_steps <= 5000:
-                    color = "#28a745"  # Green
-                    status = "✅ Great step count - should train well"
-                elif total_steps <= 10000:
-                    color = "#28a745"  # Green
-                    status = "✅ High steps - excellent for complex subjects"
-                else:
-                    color = "#ff8c00"  # Orange
-                    status = "🔥 Very high steps - might overtrain (but could be fine!)"
+                # Neutral color scheme
+                color = "#17a2b8"  # Blue-teal, neutral
                 
                 self.step_calculator.value = f"""
                 <div style='background: {color}20; padding: 10px; border-left: 4px solid {color}; margin: 5px 0;'>
                 <strong>📊 Total Steps: {total_steps}</strong><br>
-                {images} images × {repeats} repeats × {epochs} epochs ÷ {batch_size} batch = {total_steps} steps<br>
-                <em>{status}</em>
+                {images} images × {repeats} repeats × {epochs} epochs ÷ {batch_size} batch = {total_steps} steps
+                </div>
+                """
+            else:
+                # No dataset or invalid parameters
+                self.step_calculator.value = """
+                <div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 5px 0;'>
+                <strong>📊 Total Steps: Pending</strong><br>
+                <em>Select a dataset directory to calculate training steps</em>
                 </div>
                 """
         
@@ -107,7 +117,7 @@ class TrainingWidget:
                 warnings.append("⚠️ Cannot cache Text Encoder while training it (set Text LR to 0)")
                 
             if warnings:
-                warning_html = "<div style='background: #fff3cd; padding: 10px; border-left: 4px solid #856404; margin: 5px 0;'>"
+                warning_html = "<div style='padding: 10px; border: 1px solid #856404; border-radius: 5px; margin: 5px 0;'>"
                 warning_html += "<br>".join(warnings)
                 warning_html += "<br><em>💡 Fix these conflicts to enable training</em></div>"
                 self.config_warnings.value = warning_html
@@ -116,31 +126,26 @@ class TrainingWidget:
         
         # Note: Observers will be attached after all widgets are created
         
-        basic_box = widgets.VBox([basic_desc, self.dataset_size, self.resolution, self.num_repeats, self.epochs, self.train_batch_size, self.step_calculator, self.flip_aug, self.shuffle_caption, self.config_warnings])
-
-        # --- Learning Rate ---
-        lr_desc = widgets.HTML("<h3>▶️ Learning Rate</h3><p>Adjust learning rates for the UNet and Text Encoder. Experiment with different schedulers and warmup ratios. Min SNR Gamma and IP Noise Gamma can improve results.</p>")
+        # Learning rate widgets (no separate section header)
         self.unet_lr = widgets.Text(value='5e-4', placeholder='e.g., 5e-4 or 0.0005', description='🧠 UNet LR:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.text_encoder_lr = widgets.Text(value='1e-4', placeholder='e.g., 1e-4 or 0.0001', description='📝 Text LR:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.lr_scheduler = widgets.Dropdown(options=['cosine', 'cosine_with_restarts', 'constant', 'linear', 'polynomial', 'rex'], value='cosine', description='Scheduler:', style={'description_width': 'initial'})
         self.lr_scheduler_number = widgets.IntSlider(value=3, min=1, max=10, description='Scheduler Num (for restarts/polynomial):', style={'description_width': 'initial'}, continuous_update=False)
-        self.lr_warmup_ratio = widgets.FloatSlider(value=0.05, min=0.0, max=0.5, step=0.01, description='Warmup Ratio:', style={'description_width': 'initial'}, continuous_update=False)
+        self.lr_warmup_ratio = widgets.Text(value='0.05', description='Warmup Ratio:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.min_snr_gamma_enabled = widgets.Checkbox(value=True, description="Enable Min SNR Gamma (recommended for better results)", indent=False)
-        self.min_snr_gamma = widgets.FloatSlider(value=5.0, min=0.0, max=10.0, step=0.1, description='Min SNR Gamma:', style={'description_width': 'initial'}, continuous_update=False)
+        self.min_snr_gamma = widgets.Text(value='5.0', description='Min SNR Gamma:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.ip_noise_gamma_enabled = widgets.Checkbox(value=False, description="Enable IP Noise Gamma", indent=False)
         self.ip_noise_gamma = widgets.FloatSlider(value=0.05, min=0.0, max=0.1, step=0.01, description='IP Noise Gamma:', style={'description_width': 'initial'}, continuous_update=False)
         self.multinoise = widgets.Checkbox(value=False, description="Multi-noise (can help with color balance)", indent=False)
-        learning_box = widgets.VBox([
-            lr_desc, self.unet_lr, self.text_encoder_lr, self.lr_scheduler, self.lr_scheduler_number, self.lr_warmup_ratio,
-            self.min_snr_gamma_enabled, self.min_snr_gamma, self.ip_noise_gamma_enabled, self.ip_noise_gamma, self.multinoise
-        ])
+        self.noise_offset = widgets.Text(value='0.0', description='Noise Offset:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        # Training options widgets (no separate section header)
 
         # --- LoRA Structure ---
         lora_struct_desc = widgets.HTML("""
         <h3>▶️ LoRA Structure</h3>
         <p>Choose your LoRA type and define its dimensions. <strong>8 dim/4 alpha works great for characters (~50MB)</strong>. Higher dimensions capture more detail but create larger files.</p>
         
-        <div style='background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 10px 0;'>
         <h4>🧩 Conv Layers Explained:</h4>
         <p><strong>Conv Dim/Alpha</strong> control additional convolutional learning layers (for LoCon, LoKR, DyLoRA, etc.):</p>
         <ul>
@@ -164,17 +169,17 @@ class TrainingWidget:
             description='LoRA Type:', 
             style={'description_width': 'initial'}
         )
-        self.network_dim = widgets.IntSlider(value=8, min=1, max=128, step=1, description='Network Dim:', style={'description_width': 'initial'}, continuous_update=False)
-        self.network_alpha = widgets.IntSlider(value=4, min=1, max=128, step=1, description='Network Alpha:', style={'description_width': 'initial'}, continuous_update=False)
-        self.conv_dim = widgets.IntSlider(value=8, min=1, max=128, step=1, description='🧩 Conv Dim (for textures/details):', style={'description_width': 'initial'}, continuous_update=False)
-        self.conv_alpha = widgets.IntSlider(value=4, min=1, max=128, step=1, description='🧩 Conv Alpha (conv learning rate):', style={'description_width': 'initial'}, continuous_update=False)
+        self.network_dim = widgets.IntText(value=8, description='Network Dim:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.network_alpha = widgets.IntText(value=4, description='Network Alpha:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.conv_dim = widgets.IntText(value=8, description='🧩 Conv Dim (for textures/details):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.conv_alpha = widgets.IntText(value=4, description='🧩 Conv Alpha (conv learning rate):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         lora_box = widgets.VBox([lora_struct_desc, self.lora_type, self.network_dim, self.network_alpha, self.conv_dim, self.conv_alpha])
 
         # --- Training Options ---
         train_opt_desc = widgets.HTML("""<h3>▶️ Training Options</h3>
-        <p>Select your optimizer, cross-attention mechanism, and precision. Caching latents can save memory. Enable V-Parameterization for SDXL v-pred models.</p>
+        <p>Select your optimizer, cross-attention mechanism, and precision. Caching latents can save memory. Enable V-Parameterization for SDXL v-pred models. Configure saving frequency and retention.</p>
         
-        <div style='background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #856404;'>
+        <div style='padding: 10px; border: 1px solid #856404; border-radius: 5px; margin: 10px 0;'>
         <strong>⚠️ Optimizer Compatibility Notes:</strong><br>
         • <strong>AdamW:</strong> Safe, reliable, works everywhere (recommended)<br>
         • <strong>AdamW8bit:</strong> May have compatibility issues with some environments<br>
@@ -189,10 +194,27 @@ class TrainingWidget:
         self.cache_latents_to_disk = widgets.Checkbox(value=True, description="Cache Latents to Disk (uses disk space, saves more memory)", indent=False)
         self.cache_text_encoder_outputs = widgets.Checkbox(value=False, description="Cache Text Encoder Outputs (disables text encoder training)", indent=False)
         self.v_parameterization = widgets.Checkbox(value=False, description="V-Parameterization (enable for SDXL v-pred models)", indent=False)
-        training_options_box = widgets.VBox([
-            train_opt_desc, self.optimizer, self.cross_attention, self.precision, 
+        
+        # Saving options (moved from separate section)
+        self.save_every_n_epochs = widgets.IntText(value=1, description='Save Every N Epochs:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.keep_only_last_n_epochs = widgets.IntText(value=5, description='Keep Last N Epochs:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        
+        # Create unified training configuration box (combines basic, learning rate, and training options)
+        training_config_box = widgets.VBox([
+            training_config_desc, 
+            # Dataset and basic settings
+            self.dataset_size, self.resolution, self.num_repeats, self.epochs, self.train_batch_size, self.step_calculator,
+            self.flip_aug, self.shuffle_caption, self.keep_tokens, self.clip_skip,
+            # Learning rate settings  
+            self.unet_lr, self.text_encoder_lr, self.lr_scheduler, self.lr_scheduler_number, self.lr_warmup_ratio,
+            self.min_snr_gamma_enabled, self.min_snr_gamma, self.ip_noise_gamma_enabled, self.ip_noise_gamma, 
+            self.multinoise, self.noise_offset,
+            # Training options
+            self.optimizer, self.cross_attention, self.precision, 
             self.cache_latents, self.cache_latents_to_disk, self.cache_text_encoder_outputs,
-            self.v_parameterization
+            self.v_parameterization, self.save_every_n_epochs, self.keep_only_last_n_epochs,
+            # Config warnings at the end
+            self.config_warnings
         ])
 
         # --- Advanced Training Options ---
@@ -200,7 +222,7 @@ class TrainingWidget:
         <h3>▶️ Advanced Training Options</h3>
         <p>Fine-tune caption handling, noise settings, and training stability options. These control how the model learns from your dataset.</p>
         
-        <div style='background: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 10px 0;'>
         <h4>📚 Caption Controls Explained:</h4>
         <ul>
         <li><strong>Caption Dropout:</strong> Randomly removes entire captions to improve unconditional generation</li>
@@ -232,20 +254,7 @@ class TrainingWidget:
             continuous_update=False
         )
         
-        self.keep_tokens = widgets.IntSlider(
-            value=0, min=0, max=5, step=1,
-            description='Keep Tokens (preserve first N):',
-            style={'description_width': 'initial'},
-            continuous_update=False
-        )
-        
-        # Noise and stability controls
-        self.noise_offset = widgets.FloatSlider(
-            value=0.0, min=0.0, max=0.2, step=0.01,
-            description='Noise Offset:',
-            style={'description_width': 'initial'},
-            continuous_update=False
-        )
+        # Noise and stability controls (keep tokens and noise offset moved to basic settings)
         
         self.adaptive_noise_scale = widgets.FloatSlider(
             value=0.0, min=0.0, max=0.02, step=0.001,
@@ -260,12 +269,7 @@ class TrainingWidget:
             indent=False
         )
         
-        self.clip_skip = widgets.IntSlider(
-            value=2, min=1, max=12, step=1,
-            description='Clip Skip (1-2 anime, 2 realistic):',
-            style={'description_width': 'initial'},
-            continuous_update=False
-        )
+        # Clip skip moved to basic settings
         
         # VAE and performance options
         self.vae_batch_size = widgets.IntSlider(
@@ -330,40 +334,25 @@ class TrainingWidget:
             self.bucket_no_upscale
         ])
 
-        # --- Saving Options ---
-        saving_desc = widgets.HTML("<h3>▶️ Saving Options</h3><p>Control how often your LoRA is saved during training and how many recent epochs to keep. Saving more frequently allows for better progress tracking.</p>")
-        self.save_every_n_epochs = widgets.IntSlider(value=1, min=1, max=10, description='Save Every N Epochs:', style={'description_width': 'initial'}, continuous_update=False)
-        self.keep_only_last_n_epochs = widgets.IntSlider(value=5, min=1, max=10, description='Keep Last N Epochs:', style={'description_width': 'initial'}, continuous_update=False)
-        saving_box = widgets.VBox([saving_desc, self.save_every_n_epochs, self.keep_only_last_n_epochs])
+        # Saving options moved to Training Options section
 
-        # --- Advanced Mode Section ---
-        advanced_box = self._create_advanced_section()
+        # --- Advanced Options (merged: Advanced Training + Advanced Mode) ---
+        advanced_combined_box = self._create_combined_advanced_section(advanced_training_box)
 
         # --- Accordion ---
         accordion = widgets.Accordion(children=[
             project_box,
-            basic_box,
-            learning_box,
+            training_config_box,
             lora_box,
-            training_options_box,
-            advanced_training_box,
-            saving_box,
-            advanced_box
+            advanced_combined_box
         ])
         accordion.set_title(0, "▶️ Project Settings")
-        accordion.set_title(1, "▶️ Basic Settings")
-        accordion.set_title(2, "▶️ Learning Rate")
-        accordion.set_title(3, "▶️ LoRA Structure")
-        accordion.set_title(4, "▶️ Training Options")
-        accordion.set_title(5, "▶️ Advanced Training Options")
-        accordion.set_title(6, "▶️ Saving Options")
-        accordion.set_title(7, "🧪 Advanced Mode (Experimental)")
+        accordion.set_title(1, "▶️ Training Configuration")
+        accordion.set_title(2, "▶️ LoRA Structure")
+        accordion.set_title(3, "🧪 Advanced Options")
 
-        # --- Training Button ---
-        self.start_button = widgets.Button(description="Start Training", button_style='success')
-        
         # --- Status Summary (stays visible) ---
-        self.status_bar = widgets.HTML(value="<div style='background: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>📊 Status:</strong> Ready to start training</div>")
+        self.status_bar = widgets.HTML(value="<div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px;'><strong>📊 Status:</strong> Ready to configure training. Use the Training Progress section below to start training.</div>")
         
         # --- Detailed Training Log (scrollable) ---
         self.training_output = widgets.Output(layout=widgets.Layout(height='400px', overflow='scroll', border='1px solid #ddd', margin='10px 0'))
@@ -371,7 +360,7 @@ class TrainingWidget:
         # --- Progress Summary ---
         progress_desc = widgets.HTML("<h3>📊 Training Progress</h3><p>Status updates appear above, detailed logs below.</p>")
         
-        self.start_button.on_click(self.run_training)
+        # Start training button moved to the Training Progress Monitor widget
 
         # Attach observers for real-time validation (after all widgets are created)
         self.cache_text_encoder_outputs.observe(check_config_conflicts, names='value')
@@ -381,7 +370,6 @@ class TrainingWidget:
         self.widget_box = widgets.VBox([
             header_main, 
             accordion, 
-            self.start_button,
             progress_desc,
             self.status_bar,
             self.training_output
@@ -398,14 +386,24 @@ class TrainingWidget:
         }
         color = status_colors.get(status_type, "#007acc")
         
-        self.status_bar.value = f"<div style='background: #f8f9fa; padding: 10px; border-radius: 5px; border-left: 4px solid {color};'><strong>📊 Status:</strong> {message}</div>"
+        self.status_bar.value = f"<div style='padding: 10px; border: 1px solid {color}; border-radius: 5px;'><strong>📊 Status:</strong> {message}</div>"
 
     def run_training(self, b):
-        self._update_status("Preparing training configuration...", "info")
+        self._update_status("Preparing training configuration... Check the Training Progress Monitor section below for live updates!", "info")
         
-        # Create and display monitor widget
-        monitor = TrainingMonitorWidget()
-        display(monitor.widget_box)
+        # Use the dedicated training progress section if available
+        try:
+            import __main__
+            if hasattr(__main__, 'show_training_monitor'):
+                monitor = __main__.show_training_monitor()
+            else:
+                # Fallback: create and display monitor inline if dedicated section not available
+                monitor = TrainingMonitorWidget()
+                display(monitor.widget_box)
+        except:
+            # Fallback: create and display monitor inline
+            monitor = TrainingMonitorWidget()
+            display(monitor.widget_box)
         
         with self.training_output:
             self.training_output.clear_output()
@@ -469,6 +467,17 @@ class TrainingWidget:
                 'experimental_features': self._get_experimental_features(),
             }
             self.manager.start_training(config, monitor_widget=monitor)
+
+    def _create_combined_advanced_section(self, advanced_training_box):
+        """Create combined advanced section merging Advanced Training Options with Advanced Mode"""
+        combined_desc = widgets.HTML("""<h3>🧪 Advanced Options</h3>
+        <p>Advanced training controls, experimental features, and optimization settings. Use with caution - these can significantly impact training behavior.</p>""")
+        
+        # Get the original advanced mode content
+        original_advanced = self._create_advanced_section()
+        
+        # Combine with advanced training options
+        return widgets.VBox([combined_desc, advanced_training_box, original_advanced])
 
     def _create_advanced_section(self):
         """Creates the Advanced Mode section with educational explanations"""
@@ -539,14 +548,14 @@ class TrainingWidget:
         def update_optimizer_explanation(change):
             explanations = {
                 'standard': """
-                <div style='background: #f0f8ff; padding: 10px; border-left: 4px solid #007acc;'>
+                <div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px;'>
                 <strong>Standard Mode:</strong> Uses your basic optimizer selection above.<br>
                 ✅ Safe and well-tested<br>
                 ✅ Good for beginners
                 </div>
                 """,
                 'came': """
-                <div style='background: #f0fff0; padding: 10px; border-left: 4px solid #28a745;'>
+                <div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px;'>
                 <strong>CAME (Derrian's Advanced):</strong> Memory-efficient optimizer from Derrian Distro.<br>
                 ✅ Uses 30-40% less VRAM than AdamW<br>
                 ✅ Often produces high-quality results<br>
@@ -556,7 +565,7 @@ class TrainingWidget:
                 </div>
                 """,
                 'prodigy_plus': """
-                <div style='background: #fff8dc; padding: 10px; border-left: 4px solid #ffc107;'>
+                <div style='padding: 10px; border: 1px solid #ffc107; border-radius: 5px;'>
                 <strong>Prodigy Plus (OneTrainer):</strong> Learning rate AND schedule free!<br>
                 ✅ No learning rate tuning needed<br>
                 ✅ No scheduler needed<br>
@@ -566,7 +575,7 @@ class TrainingWidget:
                 </div>
                 """,
                 'stable_adamw': """
-                <div style='background: #fff3cd; padding: 10px; border-left: 4px solid #856404;'>
+                <div style='padding: 10px; border: 1px solid #856404; border-radius: 5px;'>
                 <strong>StableAdamW (Experimental):</strong> Research-grade stability improvements.<br>
                 ✅ Better convergence stability<br>
                 ✅ Handles difficult datasets better<br>
@@ -576,7 +585,7 @@ class TrainingWidget:
                 </div>
                 """,
                 'adopt': """
-                <div style='background: #f8d7da; padding: 10px; border-left: 4px solid #dc3545;'>
+                <div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px;'>
                 <strong>ADOPT (Bleeding Edge):</strong> Adaptive gradient clipping research.<br>
                 ✅ Potential for breakthrough results<br>
                 ❌ Highly experimental<br>
@@ -621,7 +630,7 @@ class TrainingWidget:
         )
         
         fused_explanation = widgets.HTML("""
-        <div style='background: #fff3cd; padding: 10px; border-left: 4px solid #856404;'>
+        <div style='padding: 10px; border: 1px solid #856404; border-radius: 5px;'>
         <strong>🚧 Fused Back Pass - OneTrainer Integration Required</strong><br><br>
         <strong>What it would do:</strong><br>
         📊 Calculate gradient → ⚡ Update immediately → 🗑️ Free VRAM → 🔄 Next layer<br><br>
@@ -667,7 +676,7 @@ class TrainingWidget:
         def update_lycoris_explanation(change):
             explanations = {
                 'none': """
-                <div style='background: #f0f8ff; padding: 10px; border-left: 4px solid #007acc;'>
+                <div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px;'>
                 <strong>Standard LoRA:</strong> The classic, reliable choice.<br>
                 ✅ Well-tested and stable<br>
                 ✅ Fast training<br>
@@ -675,7 +684,7 @@ class TrainingWidget:
                 </div>
                 """,
                 'dora': """
-                <div style='background: #f0fff0; padding: 10px; border-left: 4px solid #28a745;'>
+                <div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px;'>
                 <strong>DoRA (Weight Decomposition):</strong> Trains like full fine-tune!<br>
                 ✅ Much higher quality than standard LoRA<br>
                 ✅ Better coherency and detail preservation<br>
@@ -686,7 +695,7 @@ class TrainingWidget:
                 </div>
                 """,
                 'lokr': """
-                <div style='background: #fff8dc; padding: 10px; border-left: 4px solid #ffc107;'>
+                <div style='padding: 10px; border: 1px solid #ffc107; border-radius: 5px;'>
                 <strong>LoKr (Kronecker Product):</strong> Mathematical efficiency master.<br>
                 ✅ Better parameter efficiency than standard LoRA<br>
                 ✅ Can achieve same quality with smaller file sizes<br>
@@ -696,7 +705,7 @@ class TrainingWidget:
                 </div>
                 """,
                 'ia3': """
-                <div style='background: #fff3cd; padding: 10px; border-left: 4px solid #856404;'>
+                <div style='padding: 10px; border: 1px solid #856404; border-radius: 5px;'>
                 <strong>(IA)³ (Implicit Attention):</strong> Attention-focused adaptation.<br>
                 ✅ Very parameter efficient<br>
                 ✅ Good for style and lighting changes<br>
@@ -743,7 +752,7 @@ class TrainingWidget:
                 style={'description_width': 'initial'}
             ),
             widgets.HTML("""
-            <div style='background: #fff3cd; padding: 8px; border-left: 4px solid #856404;'>
+            <div style='padding: 8px; border: 1px solid #856404; border-radius: 5px;'>
             <strong>🚧 Work in Progress:</strong><br>
             • EQ-VAE: HakuLatent's advanced latent regularization<br>
             • Adversarial Loss: GAN-style training improvements<br>
@@ -774,7 +783,7 @@ class TrainingWidget:
     def _show_advanced_warning(self):
         """Show warning when advanced mode is enabled"""
         warning = widgets.HTML("""
-        <div style='background: #f8d7da; padding: 15px; border-left: 4px solid #dc3545; margin: 10px 0;'>
+        <div style='padding: 15px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'>
         <strong>⚠️ ADVANCED MODE ACTIVATED!</strong><br><br>
         You've entered the experimental zone! These features are:
         <ul>
@@ -804,3 +813,7 @@ class TrainingWidget:
 
     def display(self):
         display(self.widget_box)
+        
+        # Make this training widget globally available for the monitor widget
+        import __main__
+        __main__.training_widget = self

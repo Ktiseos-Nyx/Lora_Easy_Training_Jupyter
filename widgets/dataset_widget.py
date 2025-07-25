@@ -56,6 +56,66 @@ class DatasetWidget:
         self.upload_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
         upload_box = widgets.VBox([upload_desc, self.upload_path, self.extract_dir, self.upload_button, self.upload_status, self.upload_output])
 
+        # --- Bulk Image Upload Section ---
+        bulk_upload_desc = widgets.HTML("""<h3>▶️ Bulk Image Upload</h3>
+        <p><strong>📁 Upload images directly!</strong> Create a new folder and upload multiple images at once - perfect for quick prototyping and small datasets.</p>
+        <div style='background: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <strong>📋 Workflow:</strong><br>
+        1. <strong>Create Folder:</strong> Enter folder name and create directory<br>
+        2. <strong>Upload Images:</strong> Select multiple images (.jpg, .png, .webp, etc.)<br>
+        3. <strong>Ready to Tag:</strong> Use the tagging section below<br>
+        <em>💡 Perfect for workspace environments and manual dataset curation!</em>
+        </div>""")
+        
+        # Folder creation
+        self.new_folder_name = widgets.Text(
+            description="Folder Name:",
+            placeholder="e.g., my_character_dataset",
+            layout=widgets.Layout(width='70%')
+        )
+        
+        self.create_folder_button = widgets.Button(
+            description="📁 Create Folder", 
+            button_style='info',
+            layout=widgets.Layout(width='25%')
+        )
+        
+        folder_creation_box = widgets.HBox([self.new_folder_name, self.create_folder_button])
+        
+        # File upload
+        self.bulk_file_upload = widgets.FileUpload(
+            accept='.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif',
+            multiple=True,
+            description='Select Images:',
+            layout=widgets.Layout(width='99%')
+        )
+        
+        self.upload_to_folder = widgets.Text(
+            description="Upload to:",
+            placeholder="Select or create a folder first",
+            layout=widgets.Layout(width='99%'),
+            disabled=True
+        )
+        
+        self.bulk_upload_button = widgets.Button(
+            description="🚀 Upload Images", 
+            button_style='success',
+            disabled=True
+        )
+        
+        self.bulk_upload_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>Status:</strong> Create a folder first, then select images</div>")
+        self.bulk_upload_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
+        
+        bulk_upload_box = widgets.VBox([
+            bulk_upload_desc,
+            folder_creation_box,
+            self.bulk_file_upload,
+            self.upload_to_folder,
+            self.bulk_upload_button,
+            self.bulk_upload_status,
+            self.bulk_upload_output
+        ])
+
         # --- Tagging Section ---
         tagging_desc = widgets.HTML("""<h3>▶️ Image Tagging</h3>
         <p>Automatically generate captions for your images using AI taggers. <strong>Anime method uses SmilingWolf's WD14 taggers</strong>, Photo method uses BLIP captioning.</p>
@@ -263,21 +323,25 @@ class DatasetWidget:
         self.accordion = widgets.Accordion(children=[
             project_box,
             upload_box,
+            bulk_upload_box,
             tagging_box,
             cleanup_box,
             caption_box
         ])
         self.accordion.set_title(0, "🚀 Project Setup")
         self.accordion.set_title(1, "▶️ Manual Upload & Extract")
-        self.accordion.set_title(2, "▶️ Image Tagging")
-        self.accordion.set_title(3, "🧹 Dataset Cleanup")
-        self.accordion.set_title(4, "▶️ Caption Management")
+        self.accordion.set_title(2, "📁 Bulk Image Upload")
+        self.accordion.set_title(3, "▶️ Image Tagging")
+        self.accordion.set_title(4, "🧹 Dataset Cleanup")
+        self.accordion.set_title(5, "▶️ Caption Management")
 
         self.widget_box = widgets.VBox([header_main, self.accordion])
 
         # --- Button Events ---
         self.create_project_button.on_click(self.run_create_project)
         self.upload_button.on_click(self.run_upload)
+        self.create_folder_button.on_click(self.run_create_folder)
+        self.bulk_upload_button.on_click(self.run_bulk_upload)
         self.tagging_button.on_click(self.run_tagging)
         self.cleanup_button.on_click(self.run_cleanup)
         self.add_trigger_button.on_click(self.run_add_trigger)
@@ -292,6 +356,108 @@ class DatasetWidget:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Upload and extraction complete.</div>"
             else:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Upload and extraction failed. Check logs.</div>"
+
+    def run_create_folder(self, b):
+        """Create a new folder for bulk image upload"""
+        self.bulk_upload_output.clear_output()
+        folder_name = self.new_folder_name.value.strip()
+        
+        if not folder_name:
+            self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a folder name.</div>"
+            return
+        
+        # Sanitize folder name
+        import re
+        import os
+        clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', folder_name)
+        if clean_name != folder_name:
+            folder_name = clean_name
+        
+        # Create folder in datasets directory
+        folder_path = f"datasets/{folder_name}"
+        
+        with self.bulk_upload_output:
+            try:
+                os.makedirs(folder_path, exist_ok=True)
+                print(f"✅ Created folder: {folder_path}")
+                
+                # Update UI to show folder is ready
+                self.upload_to_folder.value = folder_path
+                self.upload_to_folder.disabled = False
+                self.bulk_upload_button.disabled = False
+                
+                self.bulk_upload_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! Now select images to upload.</div>"
+                
+                # Auto-populate tagging directory
+                self.tagging_dataset_dir.value = folder_path
+                self.caption_dataset_dir.value = folder_path
+                self.cleanup_dataset_dir.value = folder_path
+                
+            except Exception as e:
+                print(f"❌ Failed to create folder: {e}")
+                self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create folder.</div>"
+
+    def run_bulk_upload(self, b):
+        """Upload multiple images to the created folder"""
+        self.bulk_upload_output.clear_output()
+        
+        if not self.upload_to_folder.value:
+            self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
+            return
+        
+        if not self.bulk_file_upload.value:
+            self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please select images to upload.</div>"
+            return
+        
+        upload_folder = self.upload_to_folder.value
+        uploaded_files = self.bulk_file_upload.value
+        
+        self.bulk_upload_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Uploading {len(uploaded_files)} images...</div>"
+        
+        with self.bulk_upload_output:
+            import os
+            uploaded_count = 0
+            total_size = 0
+            
+            print(f"📁 Uploading {len(uploaded_files)} images to: {upload_folder}")
+            print("="*60)
+            
+            for file_info in uploaded_files:
+                try:
+                    filename = file_info['name']
+                    content = file_info['content']
+                    file_path = os.path.join(upload_folder, filename)
+                    
+                    # Write file content
+                    with open(file_path, 'wb') as f:
+                        f.write(content)
+                    
+                    file_size = len(content)
+                    total_size += file_size
+                    uploaded_count += 1
+                    
+                    print(f"✅ {filename} ({file_size/1024:.1f} KB)")
+                    
+                except Exception as e:
+                    print(f"❌ Failed to upload {filename}: {e}")
+            
+            total_size_mb = total_size / (1024 * 1024)
+            print(f"\n🎉 Upload complete!")
+            print(f"📊 Uploaded: {uploaded_count}/{len(uploaded_files)} images")
+            print(f"💾 Total size: {total_size_mb:.2f} MB")
+            print(f"📁 Location: {upload_folder}")
+            print(f"\n💡 Next steps:")
+            print(f"   1. Use the Image Tagging section to auto-generate captions")
+            print(f"   2. Add trigger words in Caption Management")
+            print(f"   3. Ready for training!")
+            
+            if uploaded_count > 0:
+                self.bulk_upload_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
+                
+                # Clear the file upload widget for next use
+                self.bulk_file_upload.value = ()
+            else:
+                self.bulk_upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
 
     def run_tagging(self, b):
         self.tagging_output.clear_output()

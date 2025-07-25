@@ -42,12 +42,12 @@ class SetupWidget:
     def _get_environment_status_html(self):
         """Creates HTML status display for current environment"""
         if self.container_info['is_vastai']:
-            return "<div style='background-color: #e8f5e8; padding: 10px; border-radius: 5px; margin: 10px 0;'><strong>☁️ VastAI Container Detected</strong><br>Optimized settings will be applied automatically.</div>"
+            return "<div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px; margin: 10px 0;'><strong>☁️ VastAI Container Detected</strong><br>Optimized settings will be applied automatically.</div>"
         elif self.container_info['is_container']:
-            return "<div style='background-color: #cce5ff; padding: 10px; border-radius: 5px; margin: 10px 0;'><strong>📦 Docker Container Detected</strong><br>Container environment active.</div>"
+            return "<div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px; margin: 10px 0;'><strong>📦 Docker Container Detected</strong><br>Container environment active.</div>"
         else:
             gpu_status = "🟢 GPU Available" if self.container_info['has_gpu'] else "🔴 No GPU Detected"
-            return f"<div style='background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin: 10px 0;'><strong>💻 Local Environment</strong> | {gpu_status}</div>"
+            return f"<div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 10px 0;'><strong>💻 Local Environment</strong> | {gpu_status}</div>"
 
     def create_widgets(self):
         """Creates all the UI components for the widget."""
@@ -64,7 +64,7 @@ class SetupWidget:
         self.env_button = widgets.Button(description="🚩 Setup Environment", button_style='primary', layout=button_layout)
         
         button_box = widgets.HBox([self.validate_button, self.env_button])
-        self.env_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>📊 Status:</strong> Ready for setup</div>")
+        self.env_status = widgets.HTML("<div style='padding: 8px; border: 1px solid #007acc;'><strong>📊 Status:</strong> Ready for setup</div>")
         self.env_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
         env_box = widgets.VBox([env_desc, button_box, self.env_status, self.env_output])
 
@@ -93,7 +93,7 @@ class SetupWidget:
         )
         
         self.model_button = widgets.Button(description="📥 Download Model", button_style='success')
-        self.model_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>📊 Status:</strong> Ready to download</div>")
+        self.model_status = widgets.HTML("<div style='padding: 8px; border: 1px solid #007acc;'><strong>📊 Status:</strong> Ready to download</div>")
         self.model_output = widgets.Output(layout=widgets.Layout(height='250px', overflow='scroll', border='1px solid #ddd'))
         
         # Update URL when preset changes
@@ -140,7 +140,7 @@ class SetupWidget:
         )
         
         self.vae_button = widgets.Button(description="📥 Download VAE", button_style='success')
-        self.vae_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>📊 Status:</strong> Ready to download</div>")
+        self.vae_status = widgets.HTML("<div style='padding: 8px; border: 1px solid #007acc;'><strong>📊 Status:</strong> Ready to download</div>")
         self.vae_output = widgets.Output(layout=widgets.Layout(height='250px', overflow='scroll', border='1px solid #ddd'))
         
         # Update VAE URL when preset changes
@@ -234,7 +234,7 @@ class SetupWidget:
     def run_setup_environment(self, b):
         """Sets up the training environment"""
         self.env_output.clear_output()
-        self.env_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Setting up environment...</div>"
+        self.env_status.value = "<div style='padding: 8px; border: 1px solid #6c757d;'><strong>⚙️ Status:</strong> Setting up environment...</div>"
         with self.env_output:
             if self.container_info['environment'] != 'local':
                 print(f"🔧 Setting up training environment for {self.container_info['environment']}...")
@@ -246,14 +246,14 @@ class SetupWidget:
                 status_msg = "Environment setup complete! You can now download models and prepare datasets."
                 if self.container_info['is_vastai']:
                     status_msg += "<br>📝 VastAI optimizations applied automatically."
-                self.env_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {status_msg}</div>"
+                self.env_status.value = f"<div style='padding: 8px; border: 1px solid #28a745;'><strong>✅ Status:</strong> {status_msg}</div>"
             else:
-                self.env_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Environment setup failed. Check logs.</div>"
+                self.env_status.value = "<div style='padding: 8px; border: 1px solid #dc3545;'><strong>❌ Status:</strong> Environment setup failed. Check logs.</div>"
     
     def run_validate_environment(self, b):
         """Validates the current environment without installing anything"""
         self.env_output.clear_output()
-        self.env_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Validating environment...</div>"
+        self.env_status.value = "<div style='padding: 8px; border: 1px solid #6c757d;'><strong>⚙️ Status:</strong> Validating environment...</div>"
         with self.env_output:
             print("🔍 Running comprehensive environment validation...\n")
             
@@ -388,12 +388,12 @@ class SetupWidget:
             # Summary
             print("\n" + "="*50)
             if missing:
-                self.env_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> Validation complete - {len(missing)} missing dependencies</div>"
+                self.env_status.value = f"<div style='padding: 8px; border: 1px solid #ffc107;'><strong>⚠️ Status:</strong> Validation complete - {len(missing)} missing dependencies</div>"
                 print("\n📝 Missing commands can be installed during setup:")
                 for cmd in missing:
                     print(f"   • {cmd}")
             else:
-                self.env_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Validation complete - Environment ready for setup!</div>"
+                self.env_status.value = "<div style='padding: 8px; border: 1px solid #28a745;'><strong>✅ Status:</strong> Validation complete - Environment ready for setup!</div>"
             
             # Container detection info
             if self.container_info['environment'] != 'local':
@@ -403,11 +403,11 @@ class SetupWidget:
     def run_download_model(self, b):
         """Downloads the selected model"""
         self.model_output.clear_output()
-        self.model_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Downloading model...</div>"
+        self.model_status.value = "<div style='padding: 8px; border: 1px solid #6c757d;'><strong>⚙️ Status:</strong> Downloading model...</div>"
         with self.model_output:
             model_url = self.model_url.value.strip()
             if not model_url:
-                self.model_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a model URL or select a preset.</div>"
+                self.model_status.value = "<div style='padding: 8px; border: 1px solid #dc3545;'><strong>❌ Status:</strong> Please enter a model URL or select a preset.</div>"
                 print("❌ Please enter a model URL or select a preset.")
                 return
             
@@ -427,18 +427,18 @@ class SetupWidget:
             )
             
             if result:
-                self.model_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Model downloaded: {os.path.basename(result)}</div>"
+                self.model_status.value = f"<div style='padding: 8px; border: 1px solid #28a745;'><strong>✅ Status:</strong> Model downloaded: {os.path.basename(result)}</div>"
             else:
-                self.model_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Model download failed. Check logs.</div>"
+                self.model_status.value = "<div style='padding: 8px; border: 1px solid #dc3545;'><strong>❌ Status:</strong> Model download failed. Check logs.</div>"
 
     def run_download_vae(self, b):
         """Downloads the selected VAE"""
         self.vae_output.clear_output()
-        self.vae_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Downloading VAE...</div>"
+        self.vae_status.value = "<div style='padding: 8px; border: 1px solid #6c757d;'><strong>⚙️ Status:</strong> Downloading VAE...</div>"
         with self.vae_output:
             vae_url = self.vae_url.value.strip()
             if not vae_url:
-                self.vae_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>ℹ️ Status:</strong> No VAE URL provided, skipping.</div>"
+                self.vae_status.value = "<div style='padding: 8px; border: 1px solid #17a2b8;'><strong>ℹ️ Status:</strong> No VAE URL provided, skipping.</div>"
                 print("ℹ️ No VAE URL provided, skipping VAE download.")
                 return
             
@@ -458,9 +458,9 @@ class SetupWidget:
             )
             
             if result:
-                self.vae_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> VAE downloaded: {os.path.basename(result)}</div>"
+                self.vae_status.value = f"<div style='padding: 8px; border: 1px solid #28a745;'><strong>✅ Status:</strong> VAE downloaded: {os.path.basename(result)}</div>"
             else:
-                self.vae_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> VAE download failed. Check logs.</div>"
+                self.vae_status.value = "<div style='padding: 8px; border: 1px solid #dc3545;'><strong>❌ Status:</strong> VAE download failed. Check logs.</div>"
 
     def display(self):
         """Displays the widget."""

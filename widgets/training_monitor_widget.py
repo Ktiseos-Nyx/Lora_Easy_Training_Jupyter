@@ -15,14 +15,69 @@ class TrainingMonitorWidget:
         self.training_phase = "Initializing..."
         
     def create_widgets(self):
-        """Create the training monitor interface"""
+        """Create the training monitor interface with accordion structure"""
         
-        # Header
-        header = widgets.HTML("<h2>🎛️ Training Monitor</h2>")
+        # Header for the entire widget
+        main_header = widgets.HTML("<h2>📈 Training Progress & Control</h2>")
         
-        # Training Phase Status
+        # Create accordion sections
+        self.create_training_control_section()
+        self.create_progress_monitoring_section()
+        
+        # Create accordion
+        self.accordion = widgets.Accordion(children=[
+            self.training_control_box,
+            self.progress_monitoring_box
+        ])
+        self.accordion.set_title(0, "🚀 Start Training")
+        self.accordion.set_title(1, "📊 Live Progress Monitor")
+        
+        # Main widget container
+        self.widget_box = widgets.VBox([main_header, self.accordion])
+    
+    def create_training_control_section(self):
+        """Create the training control section with start button"""
+        control_desc = widgets.HTML("""<h3>🚀 Training Control</h3>
+        <p>Start your LoRA training here. Configure your settings in the Training Configuration section above first!</p>
+        <div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px; margin: 10px 0;'>
+        <strong>📋 Before Starting:</strong><br>
+        • Configure your training parameters in the <strong>Training Configuration</strong> section above<br>
+        • Verify your dataset directory and model paths are correct<br>
+        • Check your learning rates and training steps look reasonable<br>
+        • Make sure you have enough disk space and VRAM
+        </div>""")
+        
+        # Start training button
+        self.start_training_button = widgets.Button(
+            description="🚀 Start LoRA Training", 
+            button_style='success',
+            layout=widgets.Layout(width='300px', height='50px')
+        )
+        
+        # Training status
+        self.control_status = widgets.HTML(
+            value="<div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 10px 0;'>"
+                  "<strong>Status:</strong> Ready to start training. Click the button above when you're ready!</div>"
+        )
+        
+        # Hook up the button (we'll connect this to the training widget later)
+        self.start_training_button.on_click(self.start_training_clicked)
+        
+        self.training_control_box = widgets.VBox([
+            control_desc,
+            self.start_training_button, 
+            self.control_status
+        ])
+    
+    def create_progress_monitoring_section(self):
+        """Create the progress monitoring section"""
+        
+        # Progress header
+        progress_desc = widgets.HTML("<h3>📊 Live Training Progress</h3><p>Real-time monitoring will appear here when training starts.</p>")
+        
+        # Training Phase Status (fix theme colors)
         self.phase_status = widgets.HTML(
-            value="<div style='background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid #007acc;'>"
+            value="<div style='padding: 15px; border: 1px solid #007acc; border-radius: 8px;'>"
                   "<strong>📊 Phase:</strong> Waiting to start...</div>"
         )
         
@@ -63,36 +118,46 @@ class TrainingMonitorWidget:
             )
         )
         
-        # Auto-save status
+        # Auto-save status (fix theme colors)
         self.autosave_status = widgets.HTML(
-            value="<div style='background: #d4edda; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'>"
+            value="<div style='padding: 8px; border: 1px solid #28a745; border-radius: 5px;'>"
                   "<strong>💾 Auto-save:</strong> Enabled - checkpoints saved each epoch</div>"
         )
         
-        # Progress section
-        progress_section = widgets.VBox([
-            widgets.HTML("<h3>📊 Training Progress</h3>"),
+        # Create the progress monitoring box
+        self.progress_monitoring_box = widgets.VBox([
+            progress_desc,
+            self.phase_status,
             self.epoch_label,
             self.epoch_progress,
             self.step_label, 
             self.step_progress,
-            self.resource_info
+            self.resource_info,
+            widgets.HTML("<h4>📋 Training Log</h4>"),
+            self.training_log,
+            self.autosave_status
         ])
-        
-        # Log section
-        log_section = widgets.VBox([
-            widgets.HTML("<h3>📋 Training Log</h3>"),
-            self.training_log
-        ])
-        
-        # Main widget container
-        self.widget_box = widgets.VBox([
-            header,
-            self.phase_status,
-            progress_section,
-            self.autosave_status,
-            log_section
-        ])
+    
+    def start_training_clicked(self, b):
+        """Handle start training button click"""
+        # This will be connected to the actual training widget's run_training method
+        try:
+            import __main__
+            if hasattr(__main__, 'training_widget'):
+                # Update status and switch to progress monitoring
+                self.control_status.value = "<div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px; margin: 10px 0;'><strong>Status:</strong> Training started! Check the Live Progress Monitor tab below.</div>"
+                self.accordion.selected_index = 1  # Switch to progress tab
+                # Call the training widget's run_training method
+                __main__.training_widget.run_training(b)
+            else:
+                self.control_status.value = "<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>Error:</strong> Training widget not found. Make sure to run the Training Configuration cell first.</div>"
+        except Exception as e:
+            self.control_status.value = f"<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>Error:</strong> {str(e)}</div>"
+    
+    def display(self):
+        """Display the training monitor widget"""
+        from IPython.display import display
+        display(self.widget_box)
     
     def update_phase(self, phase_text, phase_type="info"):
         """Update the current training phase"""
