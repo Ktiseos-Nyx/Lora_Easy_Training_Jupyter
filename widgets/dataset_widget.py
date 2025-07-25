@@ -690,7 +690,7 @@ class DatasetWidget:
                 # Step 3: Run personal calculator
                 print(f"🧮 Running personal LoRA calculator...")
                 try:
-                    from personal_lora_calculator import count_images_in_directory
+                    from core.image_utils import count_images_in_directory
                     image_count = count_images_in_directory(project_dir)
                     
                     if image_count > 0:

@@ -130,15 +130,6 @@ class SetupManager:
                 # Try pip install in editable mode first (more reliable)
                 subprocess.run(["pip", "install", "-e", "."], check=True, cwd=custom_scheduler_dir)
                 print("✅ Custom optimizers installed successfully via pip!")
-                
-                # Verify installation
-                try:
-                    import LoraEasyCustomOptimizer.came
-                    import LoraEasyCustomOptimizer.RexAnnealingWarmRestarts
-                    print("✅ Custom optimizers verified - CAME and REX ready!")
-                except ImportError as verify_e:
-                    print(f"⚠️ Installation succeeded but import failed: {verify_e}")
-                    print("🔧 This might be a Python path issue...")
                     
             except subprocess.CalledProcessError as e:
                 print(f"⚠️ pip install failed, trying setup.py: {e}")
@@ -247,39 +238,8 @@ class SetupManager:
                 print(f"⚠️ Python installer failed: {e}")
                 print("🔧 Continuing with manual requirements installation...")
         
-        # Install critical missing packages
-        print("📦 Installing critical packages (bitsandbytes, triton, onnx)...")
-        # Determine the correct venv python path
-        venv_python = os.path.join(self.trainer_dir, "sd_scripts", "venv", "bin", "python")
-        if not os.path.exists(venv_python):
-            # Fallback if venv not found (e.g., if Derrian's installer didn't create it as expected)
-            print("⚠️ Virtual environment Python not found. Falling back to system Python for package install.")
-            venv_python = "python"
-
-        bnb_wheel_url = "https://github.com/bitsandbytes-foundation/bitsandbytes/releases/download/continuous-release_main/bitsandbytes-1.33.7.preview-py3-none-manylinux_2_24_x86_64.whl"
-        try:
-            print(f"Attempting to install bitsandbytes from: {bnb_wheel_url}")
-            subprocess.run([venv_python, "-m", "pip", "install", "--force-reinstall", bnb_wheel_url], check=True)
-            print("✅ bitsandbytes installed successfully from wheel.")
-            
-            # Also try to install triton and onnx, as they're common dependency issues
-            print("Attempting to install triton...")
-            subprocess.run([venv_python, "-m", "pip", "install", "triton"], check=True)
-            print("✅ Triton installed successfully.")
-            
-            print("Attempting to install onnx and onnxruntime...")
-            subprocess.run([venv_python, "-m", "pip", "install", "onnx", "onnxruntime"], check=True)
-            print("✅ ONNX packages installed successfully.")
-            
-        except subprocess.CalledProcessError as e:
-            print(f"⚠️ Failed to install packages from wheel: {e}")
-            print("🔧 Attempting generic pip install for all packages...")
-            try:
-                subprocess.run([venv_python, "-m", "pip", "install", "bitsandbytes", "triton", "onnx", "onnxruntime"], check=True)
-                print("✅ All packages installed successfully via generic pip.")
-            except subprocess.CalledProcessError as e2:
-                print(f"❌ Failed to install some packages even with generic pip: {e2}")
-                print("💡 You may need to manually install missing packages for your specific setup.")
+        # The backend installer already handles all necessary packages.
+        # This section is removed to prevent it from breaking the pre-configured environment.
         
         # Install requirements with smart filtering
         requirements_file = os.path.join(self.trainer_dir, "requirements.txt")
