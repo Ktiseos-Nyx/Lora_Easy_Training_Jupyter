@@ -7,8 +7,11 @@ import cv2
 import numpy as np
 import torch
 from huggingface_hub import hf_hub_download
-from PIL import Image
+from PIL import Image, ImageFile
 from tqdm import tqdm
+
+# Fix for truncated JPEG images - allows PIL to handle corrupted/truncated files gracefully
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 import library.train_util as train_util
 

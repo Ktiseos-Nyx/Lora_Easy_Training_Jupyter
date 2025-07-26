@@ -144,6 +144,23 @@ class TrainingMonitorWidget:
     def set_training_config(self, config):
         """Set the training configuration received from TrainingWidget"""
         self.training_config = config
+        
+        # Calculate steps per epoch for accurate progress tracking
+        if config:
+            try:
+                # Get dataset info
+                dataset_size = config.get('dataset_size', 100)  # fallback
+                num_repeats = config.get('num_repeats', 1)
+                batch_size = config.get('train_batch_size', 1)
+                
+                # Calculate steps per epoch: (images * repeats) / batch_size
+                self.steps_per_epoch = max(1, (dataset_size * num_repeats) // batch_size)
+                self.total_epochs = config.get('epochs', 1)
+                
+                print(f"📊 Calculated: {self.steps_per_epoch} steps per epoch for {dataset_size} images")
+            except Exception as e:
+                print(f"⚠️ Could not calculate steps per epoch: {e}")
+                self.steps_per_epoch = 100  # Safe fallback
 
     def start_training_clicked(self, b):
         """Handle start training button click - DEAD SIMPLE FILE HUNTING APPROACH"""
@@ -270,8 +287,13 @@ class TrainingMonitorWidget:
             
             if step_match:
                 current_step = int(step_match.group(1))
-                # Could extract total steps if available in output
-                self.update_step_progress(current_step, 100)  # Placeholder
+                # Calculate total steps from training config if available
+                if self.total_epochs > 0 and hasattr(self, 'steps_per_epoch'):
+                    total_steps = self.total_epochs * self.steps_per_epoch
+                else:
+                    # Try to extract from line or fall back to current_step * 2 as minimum
+                    total_steps = max(current_step * 2, 100)
+                self.update_step_progress(current_step, total_steps)
         
         elif "saving checkpoint" in line.lower() or "saved" in line.lower():
             self.update_phase("Saving checkpoint...", "warning")

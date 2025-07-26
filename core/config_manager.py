@@ -171,7 +171,7 @@ class ConfigManager:
         except:
             return "Unknown"
     
-    def _get_file_modified(self) -> str:
+    def _get_file_modified(self, file_path: str) -> str:
         """Get human-readable file modification time"""
         try:
             import datetime

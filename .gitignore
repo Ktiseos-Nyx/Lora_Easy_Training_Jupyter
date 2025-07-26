@@ -47,6 +47,12 @@ venv.bak/
 # Development documentation (private)
 docs/development/
 
+# Work-in-progress documentation (private)
+wip_documentation/
+
+# Reference materials (private)
+kohya-colab-main/
+
 # IDEs
 .vscode/
 .idea/

@@ -22,5 +22,10 @@ numpy>=1.21.0                 # Array operations (required by custom tagger)
 # Optional: Enhanced features (uncomment if needed)
 huggingface-hub>=0.10.0       # HuggingFace model uploads (required by utilities)
 
+# Tagger dependencies (for auto-captioning functionality)
+onnx>=1.14.0                  # ONNX model format support
+onnxruntime-gpu>=1.15.0       # GPU-accelerated ONNX runtime (falls back to CPU)
+# tensorflow>=2.12.0,<2.16.0 # TensorFlow for tagger (commented - prefer ONNX)
+
 # Note: Training dependencies (PyTorch, transformers, etc.) are installed
 # by the LoRA training backend during environment setup, not here

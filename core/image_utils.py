@@ -1,6 +1,10 @@
 # core/image_utils.py
 import os
 import glob
+from PIL import Image, ImageFile
+
+# Fix for truncated JPEG images - allows PIL to handle corrupted/truncated files gracefully
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 def count_images_in_directory(directory_path):
     """Count image files in a directory (recursive and non-recursive search)."""

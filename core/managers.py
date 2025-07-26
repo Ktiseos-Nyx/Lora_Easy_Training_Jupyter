@@ -12,7 +12,31 @@ class SetupManager:
         # Use current working directory instead of hardcoded paths
         self.project_root = os.getcwd()  # This will be wherever the notebook is running
         self.trainer_dir = os.path.join(self.project_root, "trainer")
-        self.repo_url = "https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend.git"
+        
+        # Clean submodule architecture
+        self.sd_scripts_dir = os.path.join(self.trainer_dir, "sd_scripts")
+        self.lycoris_dir = os.path.join(self.trainer_dir, "lycoris") 
+        self.derrian_dir = os.path.join(self.trainer_dir, "derrian_backend")
+        
+        # Submodule URLs
+        self.submodules = {
+            'sd_scripts': {
+                'url': 'https://github.com/kohya-ss/sd-scripts.git',
+                'path': self.sd_scripts_dir,
+                'description': 'Official Kohya SD training scripts'
+            },
+            'lycoris': {
+                'url': 'https://github.com/67372a/LyCORIS.git', 
+                'path': self.lycoris_dir,
+                'commit': 'ca9f47d238bb67266acd7354ce31a72eea37bdd2',  # v3.1.1
+                'description': 'Official LyCORIS parameter-efficient fine-tuning'
+            },
+            'derrian_backend': {
+                'url': 'https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend.git',
+                'path': self.derrian_dir,
+                'description': 'Derrian\'s custom optimizers (CAME, REX)'
+            }
+        }
 
     def _check_and_install_packages(self):
         packages = ["git", "aria2c"]
@@ -27,6 +51,104 @@ class SetupManager:
                     print(f"Failed to install {pkg}. Please install it manually. Error: {e}")
                     return False
         return True
+
+    def _setup_submodule(self, name, config):
+        """Clone and setup a single submodule"""
+        path = config['path']
+        url = config['url']
+        
+        if os.path.exists(path) and os.listdir(path):
+            print(f"✅ {config['description']} already exists")
+            return True
+            
+        print(f"📥 Cloning {config['description']}...")
+        print(f"   URL: {url}")
+        
+        try:
+            # Remove if exists but empty
+            if os.path.exists(path):
+                shutil.rmtree(path)
+                
+            # Clone the repository
+            subprocess.run(["git", "clone", url, path], check=True)
+            
+            # Pin to specific commit if specified
+            if 'commit' in config:
+                print(f"📌 Pinning to commit: {config['commit'][:8]}...")
+                subprocess.run(["git", "checkout", config['commit']], cwd=path, check=True)
+                
+            print(f"✅ {config['description']} setup complete")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to setup {name}: {e}")
+            return False
+            
+    def _setup_all_submodules(self):
+        """Setup all required submodules"""
+        print("🏗️ Setting up training backend submodules...")
+        
+        # Ensure trainer directory exists
+        os.makedirs(self.trainer_dir, exist_ok=True)
+        
+        success_count = 0
+        for name, config in self.submodules.items():
+            if self._setup_submodule(name, config):
+                success_count += 1
+                
+        if success_count == len(self.submodules):
+            print(f"🎉 All {len(self.submodules)} submodules setup successfully!")
+            return True
+        else:
+            print(f"⚠️ Only {success_count}/{len(self.submodules)} submodules setup successfully")
+            return False
+            
+    def _setup_custom_optimizers(self):
+        """Setup Derrian's custom optimizers with proper attribution"""
+        print("🧪 Setting up custom optimizers (CAME, REX)...")
+        
+        custom_scheduler_dir = os.path.join(self.derrian_dir, "custom_scheduler")
+        
+        if not os.path.exists(custom_scheduler_dir):
+            print("❌ Derrian's custom_scheduler directory not found")
+            return False
+            
+        # Add to Python path for imports
+        import sys
+        if custom_scheduler_dir not in sys.path:
+            sys.path.insert(0, custom_scheduler_dir)
+            print(f"📂 Added to Python path: {custom_scheduler_dir}")
+        
+        # Find and install the custom optimizer package
+        setup_py = None
+        for root, dirs, files in os.walk(custom_scheduler_dir):
+            if 'setup.py' in files:
+                setup_py = root
+                break
+                
+        if setup_py:
+            print("📦 Installing Derrian's custom optimizers...")
+            try:
+                # Install in editable mode
+                subprocess.run(["pip", "install", "-e", "."], check=True, cwd=setup_py)
+                print("✅ Custom optimizers installed successfully")
+                
+                # Test imports
+                try:
+                    import LoraEasyCustomOptimizer.came
+                    import LoraEasyCustomOptimizer.RexAnnealingWarmRestarts
+                    print("✅ Custom optimizers verified working")
+                    return True
+                except ImportError as e:
+                    print(f"⚠️ Custom optimizers installed but import failed: {e}")
+                    return False
+                    
+            except subprocess.CalledProcessError as e:
+                print(f"❌ Failed to install custom optimizers: {e}")
+                return False
+        else:
+            print("❌ setup.py not found in custom_scheduler")
+            return False
 
 
     def _get_python_version(self):
@@ -75,251 +197,74 @@ class SetupManager:
         return sd_scripts_found
 
     def setup_environment(self):
-        """Downloads Derrian's backend and SD scripts, sets up training environment."""
-        if self._is_environment_setup():
-            print("✅ Environment already set up. Skipping installation.")
-            return True
-
-        print("🔧 Environment not fully set up. Starting installation process...")
+        """Clean submodule-based setup: Official Kohya + LyCORIS + Derrian's optimizers"""
+        print("🏗️ Setting up training environment with clean submodule architecture...")
+        
+        # Check for system dependencies
         if not self._check_and_install_packages():
             return False
-
-        # Clone Derrian's backend repository (for custom optimizers)
-        # The original is_valid_backend() helper is now part of _is_environment_setup()
-        # So we directly proceed with cloning if not already valid.
-        if os.path.exists(self.trainer_dir):
-            print(f"🔄 Trainer directory exists but appears empty/invalid - re-downloading...")
-            import shutil
-            shutil.rmtree(self.trainer_dir)
-        else:
-            print(f"📥 Downloading Derrian's backend from {self.repo_url}...")
             
-        try:
-            subprocess.run(["git", "clone", self.repo_url, self.trainer_dir], check=True)
-            print("✅ Derrian's backend downloaded successfully.")
-            print("ℹ️ Submodules will be handled by Derrian's installer")
+        # Setup all submodules
+        if not self._setup_all_submodules():
+            print("❌ Failed to setup required submodules")
+            return False
             
-        except subprocess.CalledProcessError as e:
-            print(f"❌ Error downloading Derrian's backend: {e}")
-            return False # Changed from 'return' to 'return False' for explicit failure
-
-        # Install Derrian's custom optimizers from custom_scheduler directory
-        custom_scheduler_dir = os.path.join(self.trainer_dir, "custom_scheduler")
+        # Setup custom optimizers from Derrian's backend
+        if not self._setup_custom_optimizers():
+            print("⚠️ Custom optimizers not available, continuing with standard optimizers")
+            
+        # Install requirements for SD scripts
+        self._install_sd_scripts_requirements()
         
-        # Check for setup.py in multiple possible locations
-        possible_setup_locations = [
-            os.path.join(custom_scheduler_dir, "setup.py"),  # Direct in custom_scheduler
-            os.path.join(custom_scheduler_dir, "LoraEasyCustomOptimizer", "setup.py"),  # In subdirectory
-        ]
+        # Final verification
+        print("\n🔍 Verifying installation...")
+        self._verify_installation()
         
-        print(f"🔍 Checking for custom scheduler at: {custom_scheduler_dir}")
+        print("🎉 Clean submodule setup complete!")
+        return True
         
-        setup_py = None
-        install_dir = None
+    def _install_sd_scripts_requirements(self):
+        """Install requirements for SD scripts"""
+        requirements_file = os.path.join(self.sd_scripts_dir, "requirements.txt")
         
-        for location in possible_setup_locations:
-            if os.path.exists(location):
-                setup_py = location
-                install_dir = os.path.dirname(location)
-                print(f"✅ Found setup.py at: {location}")
-                break
-        
-        if setup_py:
-            print("📦 Installing Derrian's custom optimizers (CAME, REX)...")
-            try:
-                # Try pip install in editable mode first (more reliable)
-                subprocess.run(["pip", "install", "-e", "."], check=True, cwd=custom_scheduler_dir)
-                print("✅ Custom optimizers installed successfully via pip!")
-                    
-            except subprocess.CalledProcessError as e:
-                print(f"⚠️ pip install failed, trying setup.py: {e}")
-                try:
-                    subprocess.run(["python", "setup.py", "install"], check=True, cwd=custom_scheduler_dir)
-                    print("✅ Custom optimizers installed via setup.py!")
-                except subprocess.CalledProcessError as e2:
-                    print(f"⚠️ Custom optimizer installation failed: {e2}")
-                    print("🔧 Continuing without custom optimizers...")
-        else:
-            print("ℹ️ No setup.py found in custom_scheduler - checking directory contents...")
-            if os.path.exists(custom_scheduler_dir):
-                try:
-                    contents = os.listdir(custom_scheduler_dir)
-                    print(f"📁 custom_scheduler contents: {contents}")
-                except Exception as e:
-                    print(f"❌ Could not list custom_scheduler directory: {e}")
-            else:
-                print("❌ custom_scheduler directory does not exist")
-
-        # Check the actual structure of Derrian's backend
-        print("🔍 Analyzing Derrian's backend structure...")
-        if os.path.exists(self.trainer_dir):
-            try:
-                contents = os.listdir(self.trainer_dir)
-                print(f"📁 Trainer directory contents: {contents}")
-                
-                # Look for SD scripts in various locations
-                possible_sd_locations = [
-                    os.path.join(self.trainer_dir, "sd_scripts"),
-                    os.path.join(self.trainer_dir, "sd-scripts"), 
-                    os.path.join(self.trainer_dir, "scripts"),
-                    self.trainer_dir  # Scripts might be in root
-                ]
-                
-                sd_scripts_found = False
-                for location in possible_sd_locations:
-                    if os.path.exists(location):
-                        # Check for training scripts
-                        train_scripts = [f for f in os.listdir(location) if f.endswith('train_network.py')]
-                        if train_scripts:
-                            print(f"✅ Training scripts found at: {location}")
-                            print(f"   Scripts: {train_scripts}")
-                            sd_scripts_found = True
-                            break
-                
-                if not sd_scripts_found:
-                    print("ℹ️ No training scripts found - training manager will handle download when needed")
-                    
-            except Exception as e:
-                print(f"⚠️ Error analyzing directory: {e}")
-        else:
-            print("❌ Trainer directory not found")
-
-        # Check for and run SD scripts installation
-        print("🔧 Setting up SD scripts...")
-        
-        # Detect Python version and choose the right Derrian installer
-        python_version = self._get_python_version()
-        print(f"🐍 Detected Python version: {python_version}")
-        
-        # Choose installer based on Python version
-        version_to_installer = {
-            "3.10": "install_310.sh",
-            "3.11": "install_311.sh", 
-            "3.12": "install_312.sh"
-        }
-        
-        preferred_installer = version_to_installer.get(python_version, "install_312.sh")  # Default to 3.12
-        
-        # Look for installers in order of preference
-        install_scripts = [preferred_installer] + ["install_312.sh", "install_311.sh", "install_310.sh", "install.sh", "installer.py"]
-        # Remove duplicates while preserving order
-        install_scripts = list(dict.fromkeys(install_scripts))
-        
-        found_installer = None
-        for script in install_scripts:
-            script_path = os.path.join(self.trainer_dir, script)
-            if os.path.exists(script_path):
-                found_installer = script_path
-                if script == preferred_installer:
-                    print(f"✅ Found matching Derrian's installer for Python {python_version}: {script}")
-                else:
-                    print(f"✅ Found Derrian's installer: {script} (fallback)")
-                break
-        
-        if found_installer and found_installer.endswith('.sh'):
-            print(f"🔧 Running Derrian's installer: {found_installer}...")
-            try:
-                subprocess.run(['chmod', '+x', found_installer], check=True)
-                # The .sh script calls installer.py internally, but we need to ensure non-interactive mode
-                # Let's run the installer.py directly with 'local' argument for non-interactive install
-                print("🔧 Running non-interactive installation...")
-                subprocess.run(['python', 'installer.py', 'local'], check=True, cwd=self.trainer_dir)
-                print("✅ Derrian's backend installation completed!")
-            except subprocess.CalledProcessError as e:
-                print(f"⚠️ Derrian's installer failed: {e}")
-                print("🔧 Continuing with manual requirements installation...")
-        elif found_installer and found_installer.endswith('.py'):
-            print(f"🔧 Running Python installer: {found_installer}...")
-            try:
-                # Use 'local' argument for non-interactive installation
-                subprocess.run(['python', found_installer, 'local'], check=True, cwd=self.trainer_dir)
-                print("✅ Derrian's backend installation completed!")
-            except subprocess.CalledProcessError as e:
-                print(f"⚠️ Python installer failed: {e}")
-                print("🔧 Continuing with manual requirements installation...")
-        
-        # The backend installer already handles all necessary packages.
-        # This section is removed to prevent it from breaking the pre-configured environment.
-        
-        # Install requirements with smart filtering
-        requirements_file = os.path.join(self.trainer_dir, "requirements.txt")
         if os.path.exists(requirements_file):
-            print("📦 Installing SD scripts requirements (filtering local packages)...")
-            
-            # Create a filtered requirements file
-            filtered_requirements = os.path.join(self.trainer_dir, "requirements_filtered.txt")
-            
+            print("📦 Installing SD scripts requirements...")
             try:
-                with open(requirements_file, 'r') as f:
-                    lines = f.readlines()
-                
-                # Filter out local package references and problematic lines
-                filtered_lines = []
-                for line in lines:
-                    line = line.strip()
-                    if (line and 
-                        not line.startswith('#') and 
-                        not line.startswith('-e .') and
-                        not line.startswith('file:///') and
-                        not 'workspace' in line.lower()):
-                        filtered_lines.append(line)
-                
-                # Write filtered requirements
-                with open(filtered_requirements, 'w') as f:
-                    f.write('\n'.join(filtered_lines))
-                
-                # Install filtered requirements
-                subprocess.run(["pip", "install", "-r", filtered_requirements], check=True)
-                print("✅ Requirements installed successfully")
-                
-                # Clean up temp file
-                os.remove(filtered_requirements)
-                
+                subprocess.run(['pip', 'install', '-r', requirements_file], check=True)
+                print("✅ SD scripts requirements installed")
             except subprocess.CalledProcessError as e:
-                print(f"⚠️ Some packages failed to install: {e}")
-                print("🔧 Most packages probably installed successfully!")
-            except Exception as e:
-                print(f"⚠️ Requirements processing failed: {e}")
-                print("🔧 Continuing anyway - VastAI likely has most packages already")
-
-        # Final status report - be honest about what we actually have
-        print("🎉 Setup process complete! Status report:")
+                print(f"⚠️ Some requirements failed to install: {e}")
+        else:
+            print("⚠️ SD scripts requirements.txt not found")
+            
+    def _verify_installation(self):
+        """Verify all components are working"""
         
-        # Check what we actually have
-        custom_scheduler_dir = os.path.join(self.trainer_dir, "custom_scheduler")
-        sd_scripts_dir = os.path.join(self.trainer_dir, "sd_scripts")
-        
-        # Test custom optimizers actually work
+        # Check SD scripts
+        train_script = os.path.join(self.sd_scripts_dir, "train_network.py")
+        if os.path.exists(train_script):
+            print("   ✅ Kohya SD training scripts")
+        else:
+            print("   ❌ Kohya SD training scripts missing")
+            
+        # Check LyCORIS
+        try:
+            import sys
+            sys.path.insert(0, self.lycoris_dir)
+            import lycoris
+            print("   ✅ LyCORIS (DoRA, LoHa, LoKr, etc.)")
+        except ImportError as e:
+            print(f"   ❌ LyCORIS import failed: {e}")
+            
+        # Check custom optimizers
         try:
             import LoraEasyCustomOptimizer.came
             import LoraEasyCustomOptimizer.RexAnnealingWarmRestarts
-            print("   ✅ Derrian's custom optimizers (CAME, REX) - VERIFIED WORKING")
+            print("   ✅ Derrian's custom optimizers (CAME, REX)")
         except ImportError as e:
-            print(f"   ❌ Custom optimizers import failed: {e}")
-            if os.path.exists(custom_scheduler_dir):
-                print("   📁 custom_scheduler directory exists but optimizers not importable")
-                print("   💡 This might be a Python path or installation issue")
-            else:
-                print("   📁 custom_scheduler directory missing entirely")
+            print(f"   ❌ Custom optimizers: {e}")
             
-        if os.path.exists(sd_scripts_dir):
-            # Check for actual training scripts
-            train_scripts = [f for f in os.listdir(sd_scripts_dir) if f.endswith('train_network.py')]
-            if train_scripts:
-                print("   ✅ SD scripts (training engine)")
-            else:
-                print("   ⚠️ SD scripts directory exists but no training scripts found")
-        else:
-            print("   ❌ SD scripts not found - will be downloaded by training manager")
-            
-        # Check if we have a functional backend
-        if os.path.exists(self.trainer_dir) and len([f for f in os.listdir(self.trainer_dir) if f != '.ipynb_checkpoints']) > 0:
-            print("   ✅ Derrian's backend repository")
-        else:
-            print("   ❌ Derrian's backend is empty or missing")
-            
-        print("🚀 Training manager will download missing components when needed!")
-        return True
+        print("   🏁 Setup verification complete!")
 
 class ModelManager:
     def __init__(self):
