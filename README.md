@@ -1,15 +1,54 @@
 # LoRA Easy Training - Jupyter Widget Edition 🚀
 
-**A comprehensive, educational LoRA training system with advanced features**
+**A comprehensive, easy to use guided LoRA training system with advanced features**
+
+Welcome to Lora Easy Training Jupyter! We've distilled the brilliant, accessible LoRA training methods pioneered by AndroidXXL, Holostrawberry, Jelosus2, and Linaqruf in their Google Colab Notebooks, and brought them to a more open environment. While not as simple as a 'drag-and-drop to Google Drive' solution, this system runs directly on your machine or rented GPU platforms, offering unparalleled control and flexibility. Lora Easy Training Jupyter aims to democratize advanced LoRA training, making powerful GPU resources available for anything from an 8GB consumer card all the way up to H100s (if your budget allows!). It's designed to be as straightforward as possible, empowering you with direct access to your training environment!
+
+| Python Version | License | Discord | Twitch | Support |
+|---|---|---|---|---|
+| ![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/badge/discord/1024442483750490222?logo=discord&style=for-the-badge&color=5865F2)](https://discord.gg/HhBSM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a> |
+
+## Table of Contents
+- [LoRA Easy Training - Jupyter Widget Edition 🚀](#lora-easy-training---jupyter-widget-edition-)
+  - [Table of Contents](#table-of-contents)
+  - [About](#about)
+  - [✨ Features](#-features)
+    - [🎓 **Educational Interface**](#-educational-interface)
+    - [🧪 **Advanced Training Options**](#-advanced-training-options)
+    - [🛠️ **Professional Tools**](#️-professional-tools)
+    - [📊 **Dataset Management**](#-dataset-management)
+  - [🚀 Quick Start](#-quick-start)
+    - [Prerequisites](#prerequisites)
+    - [Installation](#installation)
+    - [🧮 Quick Training Calculator](#-quick-training-calculator)
+    - [Launch Jupyter](#launch-jupyter)
+  - [📖 Usage Guide](#-usage-guide)
+    - [1. Dataset Preparation (`Dataset_Maker_Widget.ipynb`)](#1-dataset-preparation-dataset_maker_widgetipynb)
+    - [How to Get Model/VAE Links](#how-to-get-modelvae-links)
+      - [From Civitai](#from-civitai)
+      - [From Hugging Face](#from-hugging-face)
+    - [2. Training Setup (`Lora_Trainer_Widget.ipynb`)](#2-training-setup-lora_trainer_widgetipynb)
+    - [3. Advanced Mode](#3-advanced-mode)
+  - [🔧 Architecture](#-architecture)
+    - [Core Components](#core-components)
+    - [Widget Interface](#widget-interface)
+  - [🐛 Troubleshooting](#-troubleshooting)
+    - [Support](#support)
+  - [🏆 Credits \& Acknowledgments](#-credits--acknowledgments)
+    - [🎯 **Primary Inspirations**](#-primary-inspirations)
+    - [🚀 **Technical Foundations**](#-technical-foundations)
+    - [🧪 **Research \& Innovation**](#-research--innovation)
+  - [🔒 Security](#-security)
+  - [📄 License](#-license)
+  - [🤝 Contributing](#-contributing)
+
+## About
 
 - Widget-based interface designed for both beginners and advanced users
 - Please note this is STILL a work in progress.
 - Testing was only done on a singular RTX 4090 on a Vast AI Docker Container with pre installed SD WEB UI FORGE.
 - Results MAY vary, please feel free to report issues as you see fit.
 - The system has been recently streamlined with improved widget organization and calculator accuracy.
-
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/discord/1024442483750490222?logo=discord&style=for-the-badge&color=5865F2)](https://discord.gg/HhBSvM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a>
-
 
 ## ✨ Features
 
@@ -222,7 +261,7 @@ Enable advanced features by checking **"🧪 Enable Advanced Training Options"**
 This project builds upon the incredible work of many contributors in the AI training community:
 
 ### 🎯 **Primary Inspirations**
-- **[Holostrawberry](https://civitai.com/user/holostrawberry)** - Educational training guides and proven parameter recommendations
+- **[Holostrawberry](https://github.com/hollowstrawberry)** - Educational training guides and proven parameter recommendations
 - **[Derrian Distro](https://github.com/derrian-distro)** - LoRA_Easy_Training_Scripts_Backend, CAME optimizer integration
 - **[Kohya-ss](https://github.com/kohya-ss)** - sd-scripts foundation and training infrastructure
 - **[Kohaku-BlueLeaf](https://github.com/KohakuBlueleaf)** - LyCORIS advanced adaptation methods and HakuLatent research
@@ -232,6 +271,8 @@ This project builds upon the incredible work of many contributors in the AI trai
 - **[OneTrainer](https://github.com/Nerogar/OneTrainer)** - Advanced training research and future integration
 - **[Jelosus2](https://github.com/Jelosus2)** - Colab notebook adaptations
 - **[AndroidXXL](https://github.com/AndroidXXL)** - Colab notebook adaptations
+- **[ArcEnCiel](https://arcenciel.io/)** Continued Cabal & Peer Support
+- **[Civitai](https://civitai.com/)** Scarily for the platform to exist on.
 
 ### 🧪 **Research & Innovation**
 - **LyCORIS Team** - DoRA, LoKr, LoHa, BOFT, GLoRA and advanced adaptation research
