@@ -1,8 +1,8 @@
 # LoRA Easy Training - Jupyter Widget Edition 🚀
 
-**A comprehensive, easy to use guided LoRA training system with advanced features**
+**Train LoRAs with guided notebooks instead of confusing command lines**
 
-Welcome to Lora Easy Training Jupyter! We've distilled the brilliant, accessible LoRA training methods pioneered by AndroidXXL, Holostrawberry, Jelosus2, and Linaqruf in their Google Colab Notebooks, and brought them to a more open environment. While not as simple as a 'drag-and-drop to Google Drive' solution, this system runs directly on your machine or rented GPU platforms, offering unparalleled control and flexibility. Lora Easy Training Jupyter aims to democratize advanced LoRA training, making powerful GPU resources available for anything from an 8GB consumer card all the way up to H100s (if your budget allows!). It's designed to be as straightforward as possible, empowering you with direct access to your training environment!
+This is a user-friendly LoRA training system based on proven methods from popular Colab notebooks. Instead of typing scary commands, you get helpful widgets that walk you through each step. Works on your own computer or rented GPU servers.
 
 | Python Version | License | Discord | Twitch | Support |
 |---|---|---|---|---|
@@ -20,7 +20,6 @@ Welcome to Lora Easy Training Jupyter! We've distilled the brilliant, accessible
   - [🚀 Quick Start](#-quick-start)
     - [Prerequisites](#prerequisites)
     - [Installation](#installation)
-    - [🧮 Quick Training Calculator](#-quick-training-calculator)
     - [Launch Jupyter](#launch-jupyter)
   - [📖 Usage Guide](#-usage-guide)
     - [1. Dataset Preparation (`Dataset_Maker_Widget.ipynb`)](#1-dataset-preparation-dataset_maker_widgetipynb)
@@ -28,7 +27,8 @@ Welcome to Lora Easy Training Jupyter! We've distilled the brilliant, accessible
       - [From Civitai](#from-civitai)
       - [From Hugging Face](#from-hugging-face)
     - [2. Training Setup (`Lora_Trainer_Widget.ipynb`)](#2-training-setup-lora_trainer_widgetipynb)
-    - [3. Advanced Mode](#3-advanced-mode)
+  - [3. Extras](#3-extras)
+    - [🧮 Quick Training Calculator](#-quick-training-calculator)
   - [🔧 Architecture](#-architecture)
     - [Core Components](#core-components)
     - [Widget Interface](#widget-interface)
@@ -50,118 +50,102 @@ Welcome to Lora Easy Training Jupyter! We've distilled the brilliant, accessible
 - Results MAY vary, please feel free to report issues as you see fit.
 - The system has been recently streamlined with improved widget organization and calculator accuracy.
 
-## ✨ Features
+## ✨ What You Get
 
-### 🎓 **Educational Interface**
-- **Real-time explanations** for every training parameter
-- **Live step calculator** with visual feedback (target 250-1000 steps)
-- **Smart recommendations** (e.g., CAME optimizer → REX scheduler)
-- **Visual warnings** for incompatible settings
+### 🎓 **Beginner-Friendly**
+- Helpful explanations for every setting (no more guessing!)
+- Step calculator shows you exactly how long training will take
+- Warnings when settings don't work together
 
-### 🧪 **Advanced Training Options**
-- **Advanced optimizers**: CAME (memory efficient), Prodigy Plus (adaptive learning)
-- **LyCORIS methods**: DoRA, LoKr, LoHa, IA³, BOFT, GLoRA
-- **Memory optimizations**: Gradient checkpointing and 8-bit variants
-- **Advanced schedulers**: REX Annealing, cosine with restarts
+### 🧪 **Advanced Options** (If You Want Them)
+- Memory-efficient optimizers (CAME, Prodigy Plus)
+- Special LoRA types (DoRA, LoKr, LoHa, IA³, BOFT, GLoRA)
+- Memory-saving options for smaller GPUs
 
-### 🛠️ **Professional Tools**
-- **Two-notebook architecture**: Separate dataset prep and training workflows
-- **Modular backend system**: Easy to extend and maintain
-- **VastAI optimization**: Container detection and automatic optimizations
-- **Comprehensive validation**: Environment, GPU, and dependency checking
+### 🛠️ **Easy Setup**
+- Two simple notebooks: one for datasets, one for training
+- Works with VastAI and other GPU rental services
+- Checks your system automatically
 
-### 📊 **Dataset Management**
-- **WD14 v3 taggers** with ONNX runtime optimization
-- **Advanced tag management**: blacklisting, removal, trigger words
-- **Multiple captioning methods**: WD14 for anime, BLIP for photos
-- **Dataset upload and extraction** from local files or HuggingFace
+### 📊 **Dataset Tools**
+- Auto-tag your images (WD14 for anime, BLIP for photos)
+- Add/remove tags easily
+- Upload ZIP files or folders
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- **Operating System**: Windows, macOS, or Linux.
-- **Python**: Version 3.10 or newer.
-- **GPU**: An NVIDIA GPU with at least 8GB of VRAM is strongly recommended for a smooth experience.
-- **Git**: Required to download the repository.
+### What You Need
+- **Computer**: Windows, macOS, or Linux
+- **Python**: Version 3.10 or newer 
+- **GPU**: NVIDIA GPU with 8GB+ VRAM recommended (can work with less)
+- **Git**: For downloading this project (explained below)
 
 ### Installation
 
-1.  **Install Git**
+1.  **Get Git** (if you don't have it)
 
-    If you don't have Git installed, you can get it here:
-    -   **Windows**: Download and install from [git-scm.com](https://git-scm.com/download/win).
-    -   **macOS**: Open your terminal and run `xcode-select --install`.
-    -   **Linux**: Use your distribution's package manager (e.g., `sudo apt-get install git` for Debian/Ubuntu).
+    Git is a tool for downloading code projects. Don't worry - you just need to install it once and you're done!
+    
+    **Check if you already have Git:** Open your terminal/command prompt and type `git --version`. If you see a version number, you're good to go!
+    
+    **If you need to install Git:**
+    -   **Windows**: Download from [git-scm.com](https://git-scm.com/download/win) and run the installer
+    -   **Mac**: Open Terminal and type `xcode-select --install` 
+    -   **Linux**: Type `sudo apt-get install git` (Ubuntu/Debian) or use your system's package manager
 
-2.  **Clone the Repository**
+2.  **Download This Project**
 
-    Open your terminal or command prompt, navigate to where you want to store the project, and run:
+    Open your terminal/command prompt and navigate to where you want the project folder. Then run:
     ```bash
     git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git
     cd Lora_Easy_Training_Jupyter
     ```
 
-3.  **Run the Setup Script**
+3.  **Run Setup**
 
-    This script will prepare the environment and install all necessary dependencies.
-    -   **On macOS and Linux**:
-        ```bash
-        chmod +x ./jupyter.sh
-        ./jupyter.sh
-        ```
-    -   **On Windows (or as an alternative for other platforms)**:
-        ```bash
-        python ./installer.py
-        ```
-    > **Note:** All other requirements are automatically installed by the setup script.
+    This automatically installs everything you need:
+    
+    **Mac/Linux:**
+    ```bash
+    chmod +x ./jupyter.sh
+    ./jupyter.sh
+    ```
+    
+    **Windows (or if the above doesn't work):**
+    ```bash
+    python ./installer.py
+    ```
+    
+    Just wait for it to finish - it downloads the training tools and sets everything up.
 
+### Start Training
 
-### 🧮 Quick Training Calculator
+**If using VastAI or similar:** Jupyter is probably already running - just open the notebooks in your browser.
 
-Not sure about your dataset size or settings? Use our personal calculator:
-
+**If on your own computer:** Start Jupyter like this:
 ```bash
-python3 personal_lora_calculator.py
-```
-
-This tool helps you:
-- Calculate optimal repeats and epochs for your dataset size
-- Get personalized learning rate recommendations
-- Estimate total training steps
-- Build confidence for any dataset size (no more guesswork!) 🎯
-
-### Launch Jupyter
-
-- Please note this is only if you're using this on a barebones rental OR a local machine, most rented setups have Jupyter already running.
-
-```bash
-# Start Jupyter notebook
 jupyter notebook
-
-# Open the training notebooks:
-# 1. Dataset_Maker_Widget.ipynb - for dataset preparation
-# 2. Lora_Trainer_Widget.ipynb - for training configuration
-# 3. LoRA_Calculator_Widget.ipynb - for step calculations
 ```
 
-## 📖 Usage Guide
+**Then open these notebooks:**
+1. `Dataset_Maker_Widget.ipynb` - Prepare your images and captions
+2. `Lora_Trainer_Widget.ipynb` - Set up and run training  
+3. `LoRA_Calculator_Widget.ipynb` - Calculate training steps (optional)
 
-### 1. Dataset Preparation (`Dataset_Maker_Widget.ipynb`)
+## 📖 How to Use
+
+### Step 1: Prepare Your Images
+
+Open `Dataset_Maker_Widget.ipynb` and run the first cell:
 
 ```python
-# Run this cell to start the dataset widget
+# This starts the dataset preparation tool
 from widgets.dataset_widget import DatasetWidget
-
 dataset_widget = DatasetWidget()
 dataset_widget.display()
 ```
 
-**Features:**
-- **Unified Dataset Setup**: Choose between URL/ZIP download or direct image upload
-- **WD14 v3 Taggers**: Advanced anime tagging with ONNX optimization
-- **BLIP Captioning**: Professional photo captioning support
-- **Caption Management**: Add trigger words and remove unwanted tags
-- **Dataset Cleanup**: Smart cleanup tools for re-tagging workflows
+Upload your images (ZIP files work great!) and the system will auto-tag them for you.
 
 ### How to Get Model/VAE Links
 
@@ -206,34 +190,44 @@ Use this method if the model has only one version or if a version has multiple f
 
 ![How to get a link from Hugging Face by copying the direct file address](./assets/model_url_hf_2.png)
 
-### 2. Training Setup (`Lora_Trainer_Widget.ipynb`)
+### Step 2: Train Your LoRA
+
+Open `Lora_Trainer_Widget.ipynb` and run the cells to start training:
 
 ```python
-# Environment setup
+# First, set up your environment
 from widgets.setup_widget import SetupWidget
 setup_widget = SetupWidget()
 setup_widget.display()
 
-# Training configuration
-from widgets.training_widget import TrainingWidget
+# Then configure training
+from widgets.training_widget import TrainingWidget  
 training_widget = TrainingWidget()
 training_widget.display()
 ```
 
-**Key Settings (Following Holostrawberry's Guide):**
-- **Learning Rate**: UNet `5e-4`, Text Encoder `1e-4`
-- **LoRA Structure**: `8 dim / 4 alpha` (great for characters, ~50MB)
-- **Scheduler**: Cosine (with optional restarts)
-- **Target Steps**: 250-1000 (calculated automatically)
+**Good Starting Settings:**
+- Learning Rate: UNet `5e-4`, Text Encoder `1e-4`
+- LoRA: `8 dim / 4 alpha` (works for most characters)
+- Target: 250-1000 training steps (the calculator helps you figure this out)
 
-### 3. Advanced Mode
+## 3. Extras
 
-Enable advanced features by checking **"🧪 Enable Advanced Training Options"**:
 
-- **🚀 Advanced Optimizers**: CAME (memory efficient), Prodigy Plus (learning rate free)
-- **🦄 LyCORIS Methods**: DoRA, LoKr, LoHa, BOFT, GLoRA for advanced adaptation
-- **💾 Memory Optimizations**: Gradient checkpointing and efficient training
-- **🔬 Experimental Features**: REX scheduler, Huber loss, and more
+### 🧮 Quick Training Calculator
+
+Not sure about your dataset size or settings? Use our personal calculator:
+
+```bash
+python3 personal_lora_calculator.py
+```
+
+This tool helps you:
+- Calculate optimal repeats and epochs for your dataset size
+- Get personalized learning rate recommendations
+- Estimate total training steps
+- Build confidence for any dataset size (no more guesswork!) 🎯
+
 
 ## 🔧 Architecture
 
@@ -256,31 +250,26 @@ Enable advanced features by checking **"🧪 Enable Advanced Training Options"**
 - **Documentation**: Check tooltips and explanations in widgets
 - **Community**: Share your LoRAs and experiences!
 
-## 🏆 Credits & Acknowledgments
+## 🏆 Credits
 
-This project builds upon the incredible work of many contributors in the AI training community:
+This project is built on the work of many awesome people:
 
-### 🎯 **Primary Inspirations**
-- **[Holostrawberry](https://github.com/hollowstrawberry)** - Educational training guides and proven parameter recommendations
-- **[Derrian Distro](https://github.com/derrian-distro)** - LoRA_Easy_Training_Scripts_Backend, CAME optimizer integration
-- **[Kohya-ss](https://github.com/kohya-ss)** - sd-scripts foundation and training infrastructure
-- **[Kohaku-BlueLeaf](https://github.com/KohakuBlueleaf)** - LyCORIS advanced adaptation methods and HakuLatent research
+**Training Methods:**
+- **[Holostrawberry](https://github.com/hollowstrawberry)** - Training guides and recommended settings
+- **[Kohya-ss](https://github.com/kohya-ss)** - Core training scripts
+- **[LyCORIS Team](https://github.com/67372a/LyCORIS)** - Advanced LoRA methods (DoRA, LoKr, etc.)
+- **[Derrian Distro](https://github.com/derrian-distro)** - Custom optimizers
 
-### 🚀 **Technical Foundations**
-- **[kohya_ss](https://github.com/kohya-ss/sd-scripts/)** - Core training scripts and infrastructure
-- **[OneTrainer](https://github.com/Nerogar/OneTrainer)** - Advanced training research and future integration
-- **[Jelosus2](https://github.com/Jelosus2)** - Colab notebook adaptations
-- **[AndroidXXL](https://github.com/AndroidXXL)** - Colab notebook adaptations
-- **[ArcEnCiel](https://arcenciel.io/)** Continued Cabal & Peer Support
-- **[Civitai](https://civitai.com/)** Scarily for the platform to exist on.
+**Notebook Inspirations:**
+- **AndroidXXL, Jelosus2, Linaqruf** - Original Colab notebooks that made LoRA training accessible
 
-### 🧪 **Research & Innovation**
-- **LyCORIS Team** - DoRA, LoKr, LoHa, BOFT, GLoRA and advanced adaptation research
-- **Training Research Community** - Memory optimization and efficiency improvements
-- **Stable Diffusion Community** - Continuous innovation and knowledge sharing
+**Community:**
+- **[ArcEnCiel](https://arcenciel.io/)** - Ongoing support and testing
+- **[Civitai](https://civitai.com/)** - Platform for sharing LoRAs
+
 ---
 
-**"Either gonna work or blow up!" - Built with curiosity, tested with courage! 😄**
+*"Either gonna work or blow up!" - Made with curiosity! 😄*
 
 ## 🔒 Security
 

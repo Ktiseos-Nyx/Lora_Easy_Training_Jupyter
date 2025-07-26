@@ -61,7 +61,6 @@ kohya-colab-main/
 *~
 
 # Training artifacts
-trainer/
 pretrained_model/
 vae/
 tagger_models/
