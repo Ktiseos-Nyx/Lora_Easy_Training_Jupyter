@@ -272,4 +272,319 @@ class DatasetManager:
                 
             except Exception as download_error:
                 print(f"⚠️ Model download failed: {download_error}")
+    
+    def scrape_from_gelbooru(self, tags, dataset_dir, limit=100, confirm_callback=None):
+        """
+        Scrape and download images from Gelbooru based on tags
+        
+        Args:
+            tags (str): Gelbooru tags (e.g., "1girl, blue_hair, -solo")
+            dataset_dir (str): Directory to save images
+            limit (int): Maximum number of images to download
+            confirm_callback (callable): Function to call for confirmation before download
+        """
+        import requests
+        import os
+        from urllib.parse import urlparse
+        
+        print(f"🔍 Searching Gelbooru for: {tags}")
+        print(f"📁 Will save to: {dataset_dir}")
+        print(f"📊 Max images: {limit}")
+        
+        # Ask for confirmation if callback provided
+        if confirm_callback and not confirm_callback():
+            print("❌ Download cancelled by user")
+            return False
+            
+        try:
+            # Create directory if it doesn't exist
+            os.makedirs(dataset_dir, exist_ok=True)
+            
+            # Build Gelbooru API URL
+            api_url = "https://gelbooru.com/index.php"
+            params = {
+                "page": "dapi",
+                "s": "post", 
+                "q": "index",
+                "json": "1",
+                "tags": tags,
+                "limit": min(limit, 1000)  # Gelbooru max is 1000
+            }
+            
+            print("📡 Fetching image URLs from Gelbooru...")
+            response = requests.get(api_url, params=params, timeout=30)
+            response.raise_for_status()
+            
+            data = response.json()
+            if not data or not isinstance(data, list):
+                print("❌ No images found or invalid response from Gelbooru")
+                return False
+                
+            print(f"✅ Found {len(data)} images matching your tags")
+            
+            # Extract image URLs
+            image_urls = []
+            for post in data:
+                if 'file_url' in post and post['file_url']:
+                    # Filter for common image formats
+                    file_url = post['file_url']
+                    if any(file_url.lower().endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.webp']):
+                        image_urls.append(file_url)
+            
+            if not image_urls:
+                print("❌ No valid image URLs found")
+                return False
+                
+            print(f"📥 Starting download of {len(image_urls)} images...")
+            
+            # Download images using aria2c (if available) or fallback to requests
+            downloaded_count = 0
+            
+            # Try using aria2c first (faster for multiple files)
+            try:
+                # Create temporary URL list file for aria2c
+                url_file = os.path.join(dataset_dir, "temp_urls.txt")
+                with open(url_file, 'w') as f:
+                    for url in image_urls:
+                        f.write(f"{url}\n")
+                
+                # Use aria2c for fast parallel downloads
+                import subprocess
+                cmd = [
+                    'aria2c',
+                    '-i', url_file,
+                    '-d', dataset_dir,
+                    '-j', '4',  # 4 parallel downloads
+                    '-x', '2',  # 2 connections per download
+                    '--auto-file-renaming=false',
+                    '--allow-overwrite=true'
+                ]
+                
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                
+                # Clean up temp file
+                os.remove(url_file)
+                
+                if result.returncode == 0:
+                    downloaded_count = len([f for f in os.listdir(dataset_dir) 
+                                          if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))])
+                    print(f"✅ Downloaded {downloaded_count} images using aria2c")
+                else:
+                    raise Exception("aria2c failed, falling back to requests")
+                    
+            except Exception as e:
+                print(f"⚠️ aria2c not available or failed: {e}")
+                print("📥 Falling back to slower direct downloads...")
+                
+                # Fallback: download using requests
+                for i, url in enumerate(image_urls):
+                    try:
+                        # Get filename from URL
+                        parsed_url = urlparse(url)
+                        filename = os.path.basename(parsed_url.path)
+                        if not filename or '.' not in filename:
+                            filename = f"gelbooru_image_{i+1}.jpg"
+                            
+                        filepath = os.path.join(dataset_dir, filename)
+                        
+                        # Skip if file already exists
+                        if os.path.exists(filepath):
+                            downloaded_count += 1
+                            continue
+                            
+                        # Download the image
+                        img_response = requests.get(url, timeout=30, stream=True)
+                        img_response.raise_for_status()
+                        
+                        with open(filepath, 'wb') as f:
+                            for chunk in img_response.iter_content(chunk_size=8192):
+                                f.write(chunk)
+                                
+                        downloaded_count += 1
+                        if downloaded_count % 10 == 0:
+                            print(f"📥 Downloaded {downloaded_count}/{len(image_urls)} images...")
+                            
+                    except Exception as img_error:
+                        print(f"⚠️ Failed to download {url}: {img_error}")
+                        continue
+            
+            print(f"🎉 Successfully downloaded {downloaded_count} images to {dataset_dir}")
+            return downloaded_count > 0
+            
+        except Exception as e:
+            print(f"❌ Gelbooru scraping failed: {e}")
+            return False
                 print("💡 The tagger script will attempt to download automatically during tagging")
+    
+    def search_and_replace_tags(self, dataset_dir, search_tags, replace_with="", search_mode="AND"):
+        """
+        Search and replace tags across all caption files in dataset
+        
+        Args:
+            dataset_dir (str): Dataset directory path
+            search_tags (str): Tags to search for (comma or space separated)
+            replace_with (str): What to replace with (empty string to remove)
+            search_mode (str): "AND" or "OR" - how to match multiple search tags
+        """
+        dataset_path = os.path.join(self.project_root, dataset_dir)
+        if not os.path.exists(dataset_path):
+            print(f"❌ Error: Dataset directory not found at {dataset_path}")
+            return False
+
+        if not search_tags.strip():
+            print("❌ Error: Please specify tags to search for.")
+            return False
+        
+        # Parse search tags
+        search_list = [tag.strip() for tag in search_tags.replace(',', ' ').split() if tag.strip()]
+        replace_text = replace_with.strip() if replace_with else ""
+        
+        print(f"🔍 Searching for tags: {', '.join(search_list)} (mode: {search_mode})")
+        if replace_text:
+            print(f"🔄 Will replace with: '{replace_text}'")
+        else:
+            print("🗑️ Will remove matching tags")
+        
+        files_processed = 0
+        total_replacements = 0
+        
+        for item in os.listdir(dataset_path):
+            if item.endswith((".txt", ".caption")):
+                file_path = os.path.join(dataset_path, item)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                    
+                    original_content = content
+                    
+                    # Split content into tags
+                    tags = [tag.strip() for tag in content.split(',') if tag.strip()]
+                    
+                    # Apply search and replace logic
+                    new_tags = []
+                    file_replacements = 0
+                    
+                    for tag in tags:
+                        tag_matches = []
+                        for search_tag in search_list:
+                            if search_tag.lower() in tag.lower():
+                                tag_matches.append(True)
+                            else:
+                                tag_matches.append(False)
+                        
+                        # Check if tag should be replaced based on search mode
+                        should_replace = False
+                        if search_mode.upper() == "AND":
+                            should_replace = all(tag_matches)
+                        else:  # OR mode
+                            should_replace = any(tag_matches)
+                        
+                        if should_replace:
+                            if replace_text:
+                                new_tags.append(replace_text)
+                            # If replace_text is empty, tag is removed (not added to new_tags)
+                            file_replacements += 1
+                        else:
+                            new_tags.append(tag)
+                    
+                    # Remove duplicates while preserving order
+                    seen = set()
+                    unique_tags = []
+                    for tag in new_tags:
+                        if tag not in seen:
+                            unique_tags.append(tag)
+                            seen.add(tag)
+                    
+                    new_content = ', '.join(unique_tags)
+                    
+                    if new_content != original_content:
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(new_content + "\n")
+                        files_processed += 1
+                        total_replacements += file_replacements
+                        print(f"  ✓ Updated {item}: {file_replacements} replacements")
+                        
+                except Exception as e:
+                    print(f"⚠️ Error processing {item}: {e}")
+        
+        print(f"✅ Search and replace complete. {files_processed} files updated, {total_replacements} total replacements.")
+        return True
+    
+    def sort_and_deduplicate_tags(self, dataset_dir, sort_alphabetically=True, remove_duplicates=True):
+        """
+        Sort tags alphabetically and/or remove duplicate tags within each caption file
+        
+        Args:
+            dataset_dir (str): Dataset directory path
+            sort_alphabetically (bool): Whether to sort tags alphabetically
+            remove_duplicates (bool): Whether to remove duplicate tags
+        """
+        dataset_path = os.path.join(self.project_root, dataset_dir)
+        if not os.path.exists(dataset_path):
+            print(f"❌ Error: Dataset directory not found at {dataset_path}")
+            return False
+
+        print(f"🔧 Processing caption files...")
+        if sort_alphabetically:
+            print("   📝 Sorting tags alphabetically")
+        if remove_duplicates:
+            print("   🗑️ Removing duplicate tags")
+        
+        files_processed = 0
+        total_duplicates_removed = 0
+        
+        for item in os.listdir(dataset_path):
+            if item.endswith((".txt", ".caption")):
+                file_path = os.path.join(dataset_path, item)
+                try:
+                    with open(file_path, 'r', encoding='utf-8') as f:
+                        content = f.read().strip()
+                    
+                    if not content:
+                        continue
+                    
+                    # Split content into tags
+                    tags = [tag.strip() for tag in content.split(',') if tag.strip()]
+                    original_count = len(tags)
+                    
+                    # Remove duplicates if requested
+                    if remove_duplicates:
+                        # Use dict.fromkeys() to preserve order while removing duplicates
+                        # Convert to lowercase for comparison but keep original case
+                        seen = {}
+                        unique_tags = []
+                        for tag in tags:
+                            tag_lower = tag.lower()
+                            if tag_lower not in seen:
+                                seen[tag_lower] = True
+                                unique_tags.append(tag)
+                        tags = unique_tags
+                    
+                    # Sort alphabetically if requested
+                    if sort_alphabetically:
+                        tags.sort(key=str.lower)
+                    
+                    new_content = ', '.join(tags)
+                    
+                    # Write back if content changed
+                    if new_content != content:
+                        with open(file_path, 'w', encoding='utf-8') as f:
+                            f.write(new_content + "\n")
+                        
+                        duplicates_removed = original_count - len(tags)
+                        total_duplicates_removed += duplicates_removed
+                        files_processed += 1
+                        
+                        if duplicates_removed > 0:
+                            print(f"  ✓ {item}: removed {duplicates_removed} duplicate(s)")
+                        else:
+                            print(f"  ✓ {item}: sorted")
+                        
+                except Exception as e:
+                    print(f"⚠️ Error processing {item}: {e}")
+        
+        if total_duplicates_removed > 0:
+            print(f"✅ Processing complete. {files_processed} files updated, {total_duplicates_removed} duplicates removed.")
+        else:
+            print(f"✅ Processing complete. {files_processed} files updated.")
+        return True

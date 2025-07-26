@@ -5,8 +5,12 @@ from core.training_manager import TrainingManager
 from .training_monitor_widget import TrainingMonitorWidget
 
 class TrainingWidget:
-    def __init__(self):
-        self.manager = TrainingManager()
+    def __init__(self, training_manager=None):
+        # Use dependency injection - accept manager instance or create default
+        if training_manager is None:
+            training_manager = TrainingManager()
+            
+        self.manager = training_manager
         self.create_widgets()
     
     def _parse_learning_rate(self, lr_text):

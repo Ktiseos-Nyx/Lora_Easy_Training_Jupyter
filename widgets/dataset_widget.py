@@ -5,11 +5,13 @@ from core.dataset_manager import DatasetManager
 from core.managers import ModelManager
 
 class DatasetWidget:
-    def __init__(self):
-        # Note: This is not ideal, but for now we'll instantiate a ModelManager
-        # to pass to the DatasetManager. A better approach would be to use a single
-        # manager instance for the whole application.
-        self.manager = DatasetManager(ModelManager())
+    def __init__(self, dataset_manager=None):
+        # Use dependency injection - accept manager instance or create default
+        if dataset_manager is None:
+            from core.managers import ModelManager
+            dataset_manager = DatasetManager(ModelManager())
+        
+        self.manager = dataset_manager
         self.create_widgets()
 
     def create_widgets(self):
@@ -24,11 +26,12 @@ class DatasetWidget:
         <strong>📋 Available Methods:</strong><br>
         • <strong>URL/ZIP Download:</strong> Download and extract from URLs or file paths<br>
         • <strong>Direct Image Upload:</strong> Upload individual images directly (perfect for small datasets)<br>
+        • <strong>Gelbooru Scraper:</strong> Download images from Gelbooru using tags (anime/character datasets)<br>
         </div>""")
         
         # Dataset method selection
         self.dataset_method = widgets.RadioButtons(
-            options=[('📥 URL/ZIP Download', 'url'), ('📁 Direct Image Upload', 'upload')],
+            options=[('📥 URL/ZIP Download', 'url'), ('📁 Direct Image Upload', 'upload'), ('🔍 Gelbooru Scraper', 'gelbooru')],
             description='Method:',
             style={'description_width': 'initial'},
             layout=widgets.Layout(width='99%')
@@ -102,6 +105,53 @@ class DatasetWidget:
             self.upload_images_button
         ])
         
+        # Gelbooru Scraper Section
+        gelbooru_method_desc = widgets.HTML("""<h4>🔍 Gelbooru Image Scraper</h4>
+        <div style='background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #856404;'>
+        <strong>⚠️ Important Notes:</strong><br>
+        • Use appropriate tags like "1girl, character_name, blue_hair" - check Gelbooru first<br>
+        • Use minus tags to exclude content: "-nsfw, -explicit"<br>
+        • Downloads may take time depending on number of images<br>
+        • Images are filtered to common formats (jpg, png, webp)<br>
+        </div>""")
+        
+        self.gelbooru_tags = widgets.Text(
+            description="Gelbooru Tags:",
+            placeholder="e.g., 1girl, blue_hair, long_hair, -solo",
+            layout=widgets.Layout(width='99%'),
+            style={'description_width': 'initial'}
+        )
+        
+        self.gelbooru_limit = widgets.IntSlider(
+            value=100,
+            min=10,
+            max=1000,
+            step=10,
+            description='Max Images:',
+            style={'description_width': 'initial'}
+        )
+        
+        self.gelbooru_folder = widgets.Text(
+            description="Folder Name:",
+            placeholder="e.g., character_name_dataset",
+            layout=widgets.Layout(width='70%')
+        )
+        
+        self.gelbooru_button = widgets.Button(
+            description="🔍 Scrape from Gelbooru",
+            button_style='info',
+            layout=widgets.Layout(width='25%')
+        )
+        
+        gelbooru_action_box = widgets.HBox([self.gelbooru_folder, self.gelbooru_button])
+        
+        self.gelbooru_method_box = widgets.VBox([
+            gelbooru_method_desc,
+            self.gelbooru_tags,
+            self.gelbooru_limit,
+            gelbooru_action_box
+        ])
+        
         # Status and output (shared)
         self.dataset_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>Status:</strong> Select a method to begin</div>")
         self.dataset_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
@@ -111,13 +161,20 @@ class DatasetWidget:
             if change['new'] == 'url':
                 self.url_method_box.layout.display = 'block'
                 self.upload_method_box.layout.display = 'none'
-            else:
+                self.gelbooru_method_box.layout.display = 'none'
+            elif change['new'] == 'upload':
                 self.url_method_box.layout.display = 'none'
                 self.upload_method_box.layout.display = 'block'
+                self.gelbooru_method_box.layout.display = 'none'
+            else:  # gelbooru
+                self.url_method_box.layout.display = 'none'
+                self.upload_method_box.layout.display = 'none'
+                self.gelbooru_method_box.layout.display = 'block'
         
         self.dataset_method.observe(on_method_change, names='value')
         # Initialize with URL method visible
         self.upload_method_box.layout.display = 'none'
+        self.gelbooru_method_box.layout.display = 'none'
         
         dataset_setup_box = widgets.VBox([
             dataset_setup_desc,
@@ -125,6 +182,7 @@ class DatasetWidget:
             self.dataset_directory,
             self.url_method_box,
             self.upload_method_box,
+            self.gelbooru_method_box,
             self.dataset_status,
             self.dataset_output
         ])
@@ -281,12 +339,20 @@ class DatasetWidget:
             self.cleanup_output
         ])
 
-        # --- Caption Management ---
-        caption_desc = widgets.HTML("<h3>▶️ Caption Management</h3><p>Add trigger words to activate your LoRA, or clean up captions by removing unwanted tags.</p>")
+        # --- Advanced Caption Management ---
+        caption_desc = widgets.HTML("""<h3>▶️ Advanced Caption Management</h3>
+        <p>Professional tag curation tools for cleaning and organizing your caption files.</p>
+        <div style='background: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <strong>🎯 Available Tools:</strong><br>
+        • <strong>Trigger Words:</strong> Add activation tags to all captions<br>
+        • <strong>Tag Removal:</strong> Remove unwanted tags from all captions<br>
+        • <strong>Search & Replace:</strong> Advanced bulk tag replacement with AND/OR logic<br>
+        • <strong>Sort & Deduplicate:</strong> Organize tags alphabetically and remove duplicates<br>
+        </div>""")
         
-        # Dataset directory will be auto-populated from setup section
+        # Basic trigger word management
+        basic_management_desc = widgets.HTML("<h4>🎯 Basic Tag Management</h4>")
         
-        # Trigger word management
         self.trigger_word = widgets.Text(
             description="Trigger Word:", 
             placeholder="e.g., my_character, myart_style", 
@@ -295,7 +361,6 @@ class DatasetWidget:
         
         self.add_trigger_button = widgets.Button(description="➕ Add Trigger Word", button_style='success')
         
-        # Tag removal
         self.remove_tags = widgets.Text(
             description="Remove Tags:",
             placeholder="e.g., 1girl,solo (comma separated)",
@@ -304,15 +369,68 @@ class DatasetWidget:
         
         self.remove_tags_button = widgets.Button(description="➖ Remove Tags", button_style='warning')
         
+        # Advanced search and replace
+        advanced_management_desc = widgets.HTML("<h4>🔍 Advanced Search & Replace</h4>")
+        
+        self.search_tags = widgets.Text(
+            description="Search Tags:",
+            placeholder="e.g., 1girl solo standing (space or comma separated)",
+            layout=widgets.Layout(width='99%'),
+            style={'description_width': 'initial'}
+        )
+        
+        self.replace_with = widgets.Text(
+            description="Replace With:",
+            placeholder="e.g., woman alone (leave empty to remove)",
+            layout=widgets.Layout(width='99%'),
+            style={'description_width': 'initial'}
+        )
+        
+        self.search_mode = widgets.Dropdown(
+            options=[('AND - all search tags must match', 'AND'), ('OR - any search tag matches', 'OR')],
+            value='OR',
+            description='Search Mode:',
+            style={'description_width': 'initial'}
+        )
+        
+        self.search_replace_button = widgets.Button(description="🔄 Search & Replace", button_style='info')
+        
+        # Sort and deduplicate
+        organization_desc = widgets.HTML("<h4>📝 Tag Organization</h4>")
+        
+        self.sort_alphabetically = widgets.Checkbox(
+            value=True,
+            description="Sort tags alphabetically",
+            indent=False
+        )
+        
+        self.remove_duplicates = widgets.Checkbox(
+            value=True,
+            description="Remove duplicate tags",
+            indent=False
+        )
+        
+        self.organize_tags_button = widgets.Button(description="📋 Organize Tags", button_style='info')
+        
         self.caption_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>Status:</strong> Ready</div>")
         self.caption_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
         
         caption_box = widgets.VBox([
             caption_desc,
+            basic_management_desc,
             self.trigger_word, 
             self.add_trigger_button,
             self.remove_tags,
             self.remove_tags_button,
+            advanced_management_desc,
+            self.search_tags,
+            self.replace_with,
+            self.search_mode,
+            self.search_replace_button,
+            organization_desc,
+            self.sort_alphabetically,
+            self.remove_duplicates,
+            self.organize_tags_button,
             self.caption_status,
             self.caption_output
         ])
@@ -326,7 +444,7 @@ class DatasetWidget:
         ])
         self.accordion.set_title(0, "📁 Dataset Setup")
         self.accordion.set_title(1, "🏷️ Image Tagging")
-        self.accordion.set_title(2, "📝 Caption Management")
+        self.accordion.set_title(2, "📝 Advanced Caption Management")
         self.accordion.set_title(3, "🧹 Dataset Cleanup")
 
         self.widget_box = widgets.VBox([header_main, self.accordion])
@@ -335,10 +453,13 @@ class DatasetWidget:
         self.url_download_button.on_click(self.run_url_download)
         self.create_folder_button.on_click(self.run_create_folder)
         self.upload_images_button.on_click(self.run_upload_images)
+        self.gelbooru_button.on_click(self.run_gelbooru_scraper)
         self.tagging_button.on_click(self.run_tagging)
         self.cleanup_button.on_click(self.run_cleanup)
         self.add_trigger_button.on_click(self.run_add_trigger)
         self.remove_tags_button.on_click(self.run_remove_tags)
+        self.search_replace_button.on_click(self.run_search_replace)
+        self.organize_tags_button.on_click(self.run_organize_tags)
 
     def run_url_download(self, b):
         """Handle URL/ZIP download method"""
@@ -435,13 +556,13 @@ class DatasetWidget:
             return
         
         if not self.file_upload.value:
-            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please select images to upload.</div>"
+            self.dataset_status.value = "❌ Status: Please select images to upload."
             return
         
         upload_folder = self.dataset_directory.value
         uploaded_files = self.file_upload.value
         
-        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Uploading {len(uploaded_files)} images...</div>"
+        self.dataset_status.value = f"⚙️ Status: Uploading {len(uploaded_files)} images..."
         
         with self.dataset_output:
             import os
@@ -454,7 +575,15 @@ class DatasetWidget:
             for file_info in uploaded_files:
                 try:
                     filename = file_info['name']
-                    content = file_info['content']
+                    content_memview = file_info['content']
+                    
+                    # Convert memory view to bytes
+                    content = content_memview.tobytes()
+                    
+                    if not content:
+                        print(f"⚠️ Warning: {filename} has no content, skipping")
+                        continue
+                    
                     file_path = os.path.join(upload_folder, filename)
                     
                     # Write file content
@@ -468,7 +597,7 @@ class DatasetWidget:
                     print(f"✅ {filename} ({file_size/1024:.1f} KB)")
                     
                 except Exception as e:
-                    print(f"❌ Failed to upload {filename}: {e}")
+                    print(f"❌ Failed to upload {filename if 'filename' in locals() else 'unknown file'}: {e}")
             
             total_size_mb = total_size / (1024 * 1024)
             print(f"\n🎉 Upload complete!")
@@ -483,6 +612,83 @@ class DatasetWidget:
                 self.file_upload.value = ()
             else:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
+
+    def run_gelbooru_scraper(self, b):
+        """Handle Gelbooru image scraping"""
+        self.dataset_output.clear_output()
+        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Preparing Gelbooru scraper...</div>"
+        
+        with self.dataset_output:
+            tags = self.gelbooru_tags.value.strip()
+            folder_name = self.gelbooru_folder.value.strip()
+            limit = self.gelbooru_limit.value
+            
+            if not tags:
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter Gelbooru tags.</div>"
+                print("❌ Please enter tags to search for on Gelbooru.")
+                return
+                
+            if not folder_name:
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a folder name.</div>"
+                print("❌ Please enter a folder name.")
+                return
+            
+            # Sanitize folder name
+            import re
+            import os
+            clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', folder_name)
+            if clean_name != folder_name:
+                print(f"📝 Cleaned folder name: '{folder_name}' → '{clean_name}'")
+                folder_name = clean_name
+            
+            # Create folder in datasets directory
+            dataset_dir = f"datasets/{folder_name}"
+            
+            # Ask for user confirmation
+            def confirm_download():
+                print(f"\n🔍 About to search Gelbooru for: {tags}")
+                print(f"📁 Images will be saved to: {dataset_dir}")
+                print(f"📊 Maximum images: {limit}")
+                print(f"\n⚠️ This will download images from the internet.")
+                
+                # For now, we'll proceed automatically in the widget
+                # In a real implementation, you might want a confirmation dialog
+                return True
+            
+            try:
+                os.makedirs(dataset_dir, exist_ok=True)
+                
+                # Update shared dataset directory immediately
+                self.dataset_directory.value = dataset_dir
+                
+                self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Scraping Gelbooru... ({limit} max images)</div>"
+                
+                # Run the scraper
+                success = self.manager.scrape_from_gelbooru(
+                    tags=tags,
+                    dataset_dir=dataset_dir,
+                    limit=limit,
+                    confirm_callback=confirm_download
+                )
+                
+                if success:
+                    # Count images after download
+                    try:
+                        from core.image_utils import count_images_in_directory
+                        image_count = count_images_in_directory(dataset_dir)
+                        print(f"\n📁 Total images in dataset: {image_count}")
+                        print(f"📝 Dataset directory set: {dataset_dir}")
+                        
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Downloaded {image_count} images from Gelbooru</div>"
+                    except Exception as e:
+                        print(f"⚠️ Image counting error: {e}")
+                        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Gelbooru scraping complete.</div>"
+                else:
+                    self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Gelbooru scraping failed. Check logs.</div>"
+                    
+            except Exception as e:
+                print(f"❌ Failed to create dataset directory: {e}")
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create dataset directory.</div>"
 
     def run_tagging(self, b):
         self.tagging_output.clear_output()
@@ -677,6 +883,74 @@ class DatasetWidget:
             else:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to remove tags. Check logs.</div>"
 
+    def run_search_replace(self, b):
+        """Advanced search and replace functionality for tags"""
+        self.caption_output.clear_output()
+        self.caption_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Processing search and replace...</div>"
+        with self.caption_output:
+            if not self.dataset_directory.value:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
+                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                return
+                
+            if not self.search_tags.value.strip():
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify tags to search for.</div>"
+                print("❌ Please specify tags to search for.")
+                return
+                
+            print(f"🔍 Search and replace operation:")
+            print(f"📁 Dataset: {self.dataset_directory.value}")
+            print(f"🔍 Search tags: {self.search_tags.value}")
+            print(f"🔄 Replace with: '{self.replace_with.value}' (empty = remove)")
+            print(f"🎯 Search mode: {self.search_mode.value}")
+            
+            success = self.manager.search_and_replace_tags(
+                dataset_dir=self.dataset_directory.value,
+                search_tags=self.search_tags.value,
+                replace_with=self.replace_with.value,
+                search_mode=self.search_mode.value
+            )
+            
+            if success:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Search and replace complete.</div>"
+            else:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Search and replace failed. Check logs.</div>"
+
+    def run_organize_tags(self, b):
+        """Sort tags alphabetically and remove duplicates"""
+        self.caption_output.clear_output()
+        self.caption_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Organizing tags...</div>"
+        with self.caption_output:
+            if not self.dataset_directory.value:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
+                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                return
+                
+            operations = []
+            if self.sort_alphabetically.value:
+                operations.append("sort alphabetically")
+            if self.remove_duplicates.value:
+                operations.append("remove duplicates")
+                
+            if not operations:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> No operations selected.</div>"
+                print("⚠️ Please select at least one operation (sort or remove duplicates).")
+                return
+                
+            print(f"📋 Tag organization:")
+            print(f"📁 Dataset: {self.dataset_directory.value}")
+            print(f"🔧 Operations: {', '.join(operations)}")
+            
+            success = self.manager.sort_and_deduplicate_tags(
+                dataset_dir=self.dataset_directory.value,
+                sort_alphabetically=self.sort_alphabetically.value,
+                remove_duplicates=self.remove_duplicates.value
+            )
+            
+            if success:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Tag organization complete.</div>"
+            else:
+                self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Tag organization failed. Check logs.</div>"
 
     def display(self):
         display(self.widget_box)

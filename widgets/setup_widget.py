@@ -7,9 +7,15 @@ import subprocess
 import shutil
 
 class SetupWidget:
-    def __init__(self):
-        self.setup_manager = SetupManager()
-        self.model_manager = ModelManager()
+    def __init__(self, setup_manager=None, model_manager=None):
+        # Use dependency injection - accept manager instances or create defaults
+        if setup_manager is None:
+            setup_manager = SetupManager()
+        if model_manager is None:
+            model_manager = ModelManager()
+            
+        self.setup_manager = setup_manager
+        self.model_manager = model_manager
         self.container_info = self._detect_container_environment()
         self.create_widgets()
     
