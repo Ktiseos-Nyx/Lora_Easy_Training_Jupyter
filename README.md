@@ -42,6 +42,7 @@ This is a user-friendly LoRA training system based on proven methods from popula
 - Memory-saving options for smaller GPUs
 
 ### 🛠️ **Easy Setup**
+- **Prerequisites**: This installation assumes you already have Jupyter Lab or Jupyter Notebook running
 - Two simple notebooks: one for datasets, one for training
 - Works with VastAI and other GPU rental services
 - Checks your system automatically

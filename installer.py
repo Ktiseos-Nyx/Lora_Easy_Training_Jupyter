@@ -140,14 +140,12 @@ class LoRATrainingInstaller:
         
         # Core packages for the widget system
         packages = [
-            'jupyter',
             'ipywidgets',
-            'notebook>=6.4.12',
             'ipython',
             'toml',
             'requests',
             'tqdm',
-            'Pillow',
+            'Pillow<10.0.0',
         ]
         
         cmd = [self.python_cmd, '-m', 'pip', 'install', '--upgrade'] + packages

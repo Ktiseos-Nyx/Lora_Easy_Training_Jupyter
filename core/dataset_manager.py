@@ -414,7 +414,6 @@ class DatasetManager:
         except Exception as e:
             print(f"❌ Gelbooru scraping failed: {e}")
             return False
-                print("💡 The tagger script will attempt to download automatically during tagging")
     
     def search_and_replace_tags(self, dataset_dir, search_tags, replace_with="", search_mode="AND"):
         """
