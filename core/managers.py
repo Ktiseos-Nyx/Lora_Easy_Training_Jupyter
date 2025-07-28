@@ -76,12 +76,17 @@ class SetupManager:
                     subprocess.run(["git", "submodule", "update"], cwd=path, check=True)
                     print("✅ Nested submodules initialized")
                     
-                    # Run Derrian's installer to set up dependencies
+                    # Run Derrian's installer to set up dependencies (non-interactive mode)
                     print("📦 Running Derrian's installer for dependencies...")
                     installer_path = os.path.join(path, "installer.py")
                     if os.path.exists(installer_path):
-                        subprocess.run([sys.executable, installer_path], cwd=path, check=True)
-                        print("✅ Derrian's dependencies installed")
+                        try:
+                            # Use 'local' argument to skip interactive prompts
+                            subprocess.run([sys.executable, installer_path, "local"], cwd=path, check=True)
+                            print("✅ Derrian's dependencies installed")
+                        except subprocess.CalledProcessError as e:
+                            print(f"⚠️ Derrian's installer failed: {e}")
+                            print("💡 Will continue with manual dependency installation")
                     else:
                         print("⚠️ Derrian's installer not found, skipping dependency setup")
                     
@@ -264,10 +269,30 @@ class SetupManager:
         if os.path.exists(requirements_file):
             print("📦 Installing SD scripts requirements...")
             try:
+                # First try the normal install
                 subprocess.run(['pip', 'install', '-r', requirements_file], check=True)
                 print("✅ SD scripts requirements installed")
             except subprocess.CalledProcessError as e:
-                print(f"⚠️ Some requirements failed to install: {e}")
+                print(f"⚠️ Requirements install failed: {e}")
+                print("🔧 Attempting to install requirements individually (skipping problematic ones)...")
+                
+                # Try to install line by line, skipping problematic ones
+                try:
+                    with open(requirements_file, 'r') as f:
+                        lines = f.readlines()
+                    
+                    for line in lines:
+                        line = line.strip()
+                        if line and not line.startswith('#') and not line.startswith('file://'):
+                            try:
+                                subprocess.run(['pip', 'install', line], check=True, capture_output=True)
+                                print(f"  ✅ {line}")
+                            except subprocess.CalledProcessError:
+                                print(f"  ⚠️ Skipped: {line} (problematic)")
+                    
+                    print("✅ Requirements installed (with some skipped)")
+                except Exception as read_error:
+                    print(f"⚠️ Could not process requirements file: {read_error}")
         
         # Install additional optimizers that might be missing
         print("📦 Installing additional optimizers...")
