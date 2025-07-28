@@ -94,6 +94,18 @@ class SetupManager:
                         print("✅ Custom scheduler optimizers (LoraEasyCustomOptimizer) installed")
                     else:
                         print("⚠️ Custom scheduler setup.py not found")
+                    
+                    # Run PyTorch fix for Windows users (just in case)
+                    print("🔧 Running PyTorch fix (Windows compatibility)...")
+                    fix_torch_path = os.path.join(path, "fix_torch.py")
+                    if os.path.exists(fix_torch_path):
+                        try:
+                            subprocess.run([sys.executable, fix_torch_path], cwd=path, check=True)
+                            print("✅ PyTorch Windows compatibility fix applied")
+                        except subprocess.CalledProcessError:
+                            print("⚠️ PyTorch fix failed (likely not needed on this system)")
+                    else:
+                        print("⚠️ PyTorch fix script not found")
                         
                 except subprocess.CalledProcessError as e:
                     print(f"⚠️ Nested submodule setup failed: {e}")
