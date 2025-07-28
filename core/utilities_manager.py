@@ -1,6 +1,7 @@
 # core/utilities_manager.py
 import subprocess
 import os
+import sys
 from huggingface_hub import HfApi, login
 
 class UtilitiesManager:
@@ -69,8 +70,12 @@ class UtilitiesManager:
             print("Error: Please specify new dim and alpha values.")
             return False
 
-        # Check for venv python first, fall back to system python
-        venv_python_path = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        # Check for venv python first, fall back to system python (cross-platform)
+        if sys.platform == "win32":
+            venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
+        else:
+            venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
+            
         if os.path.exists(venv_python_path):
             venv_python = venv_python_path
         else:

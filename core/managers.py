@@ -8,6 +8,15 @@ import toml
 import shutil
 from huggingface_hub import HfApi, login
 
+def get_venv_python_path(base_dir):
+    """Get cross-platform virtual environment Python path"""
+    if sys.platform == "win32":
+        # Windows: venv/Scripts/python.exe
+        return os.path.join(base_dir, "venv", "Scripts", "python.exe")
+    else:
+        # Unix/Linux/Mac: venv/bin/python
+        return os.path.join(base_dir, "venv", "bin", "python")
+
 class SetupManager:
     def __init__(self):
         # Use current working directory instead of hardcoded paths
@@ -95,8 +104,13 @@ class SetupManager:
                     custom_scheduler_path = os.path.join(path, "custom_scheduler")
                     setup_py_path = os.path.join(custom_scheduler_path, "setup.py")
                     if os.path.exists(setup_py_path):
-                        subprocess.run([sys.executable, setup_py_path, "install"], cwd=custom_scheduler_path, check=True)
-                        print("✅ Custom scheduler optimizers (LoraEasyCustomOptimizer) installed")
+                        try:
+                            # Proper setup.py install command
+                            subprocess.run([sys.executable, "setup.py", "install"], cwd=custom_scheduler_path, check=True)
+                            print("✅ Custom scheduler optimizers (LoraEasyCustomOptimizer) installed")
+                        except subprocess.CalledProcessError as e:
+                            print(f"⚠️ Custom scheduler installation failed: {e}")
+                            print("💡 Optimizers exist but may need manual installation")
                     else:
                         print("⚠️ Custom scheduler setup.py not found")
                     
@@ -351,6 +365,7 @@ class SetupManager:
         if os.path.exists(derrian_utils_dir):
             try:
                 # Add derrian_backend to path for utility imports
+                # NOTE: Using os.path.join for cross-platform compatibility (Windows/Mac/Linux)
                 if self.derrian_dir not in sys.path:
                     sys.path.insert(0, self.derrian_dir)
                 

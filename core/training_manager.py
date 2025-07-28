@@ -745,6 +745,7 @@ class HybridTrainingManager:
         
         try:
             # Add derrian_backend to path if not already there
+            # NOTE: Using relative paths for cross-platform compatibility (Windows/Mac/Linux)
             derrian_dir = os.path.join(self.trainer_dir, "derrian_backend")
             if derrian_dir not in sys.path:
                 sys.path.insert(0, derrian_dir)
@@ -869,7 +870,11 @@ class HybridTrainingManager:
             return False
         
         # Check for venv python
-        venv_python_path = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        # Cross-platform venv path
+        if sys.platform == "win32":
+            venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
+        else:
+            venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
         if os.path.exists(venv_python_path):
             venv_python = venv_python_path
         else:
@@ -980,8 +985,12 @@ class HybridTrainingManager:
         dataset_toml_path = self._create_dataset_toml(config)
         config_toml_path = self._create_config_toml(config)
 
-        # Check for venv python first, fall back to system python
-        venv_python_path = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        # Check for venv python first, fall back to system python (cross-platform)
+        if sys.platform == "win32":
+            venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
+        else:
+            venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
+            
         if os.path.exists(venv_python_path):
             venv_python = venv_python_path
         else:

@@ -1,6 +1,7 @@
 # core/dataset_manager.py
 import subprocess
 import os
+import sys
 import zipfile
 
 class DatasetManager:
@@ -68,11 +69,14 @@ class DatasetManager:
         # First ensure the tagger model is available
         self._ensure_tagger_model_available(tagger_model)
         
-        # Try to find appropriate Python executable
-        venv_python = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        # Try to find appropriate Python executable (cross-platform)
+        if sys.platform == "win32":
+            venv_python = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
+        else:
+            venv_python = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
+            
         if not os.path.exists(venv_python):
             # Fallback to system python if venv doesn't exist
-            import sys
             venv_python = sys.executable
             print(f"⚠️ Kohya venv not found, using system Python: {venv_python}")
         
@@ -119,11 +123,14 @@ class DatasetManager:
     
     def _tag_images_blip(self, dataset_path, caption_extension):
         """Tag images using BLIP captioning"""
-        # Try to find appropriate Python executable
-        venv_python = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        # Try to find appropriate Python executable (cross-platform)
+        if sys.platform == "win32":
+            venv_python = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
+        else:
+            venv_python = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
+            
         if not os.path.exists(venv_python):
             # Fallback to system python if venv doesn't exist
-            import sys
             venv_python = sys.executable
             print(f"⚠️ Kohya venv not found, using system Python: {venv_python}")
         
