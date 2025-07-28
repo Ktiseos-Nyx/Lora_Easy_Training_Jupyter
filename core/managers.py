@@ -1,6 +1,7 @@
 # core/managers.py
 import subprocess
 import os
+import sys
 import re
 import zipfile
 import toml
@@ -65,6 +66,28 @@ class SetupManager:
             if 'commit' in config:
                 print(f"📌 Pinning to commit: {config['commit'][:8]}...")
                 subprocess.run(["git", "checkout", config['commit']], cwd=path, check=True)
+            
+            # Special handling for derrian_backend - initialize its nested submodules
+            if name == 'derrian_backend':
+                print("🔗 Initializing nested submodules (sd_scripts, lycoris)...")
+                try:
+                    # Initialize and update nested submodules
+                    subprocess.run(["git", "submodule", "init"], cwd=path, check=True)
+                    subprocess.run(["git", "submodule", "update"], cwd=path, check=True)
+                    print("✅ Nested submodules initialized")
+                    
+                    # Run Derrian's installer to set up dependencies
+                    print("📦 Running Derrian's installer for dependencies...")
+                    installer_path = os.path.join(path, "installer.py")
+                    if os.path.exists(installer_path):
+                        subprocess.run([sys.executable, installer_path], cwd=path, check=True)
+                        print("✅ Derrian's dependencies installed")
+                    else:
+                        print("⚠️ Derrian's installer not found, skipping dependency setup")
+                        
+                except subprocess.CalledProcessError as e:
+                    print(f"⚠️ Nested submodule setup failed: {e}")
+                    print("💡 You may need to run setup again or manually initialize submodules")
                 
             print(f"✅ {config['description']} setup complete")
             return True
@@ -213,7 +236,7 @@ class SetupManager:
         return True
         
     def _install_sd_scripts_requirements(self):
-        """Install requirements for SD scripts"""
+        """Install requirements for SD scripts and additional optimizers"""
         requirements_file = os.path.join(self.sd_scripts_dir, "requirements.txt")
         
         if os.path.exists(requirements_file):
@@ -223,7 +246,23 @@ class SetupManager:
                 print("✅ SD scripts requirements installed")
             except subprocess.CalledProcessError as e:
                 print(f"⚠️ Some requirements failed to install: {e}")
-        else:
+        
+        # Install additional optimizers that might be missing
+        print("📦 Installing additional optimizers...")
+        additional_packages = [
+            "pytorch_optimizer>=3.1.0",  # For CAME, Prodigy, etc.
+            "schedulefree",  # For schedule-free optimizers
+            "prodigy-plus-schedule-free"  # For Prodigy Plus
+        ]
+        
+        for package in additional_packages:
+            try:
+                subprocess.run(['pip', 'install', package], check=True)
+                print(f"✅ {package} installed")
+            except subprocess.CalledProcessError as e:
+                print(f"⚠️ Failed to install {package}: {e}")
+        
+        if not os.path.exists(requirements_file):
             print("⚠️ SD scripts requirements.txt not found")
             
     def _verify_installation(self):
@@ -244,6 +283,13 @@ class SetupManager:
             print("   ✅ LyCORIS (DoRA, LoHa, LoKr, etc.)")
         except ImportError as e:
             print(f"   ❌ LyCORIS import failed: {e}")
+            
+        # Check pytorch_optimizer
+        try:
+            import pytorch_optimizer
+            print("   ✅ PyTorch Optimizer (CAME, Prodigy, etc.)")
+        except ImportError as e:
+            print(f"   ❌ PyTorch Optimizer: {e}")
             
         # Check custom optimizers
         try:
