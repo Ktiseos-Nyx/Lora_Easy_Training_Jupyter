@@ -84,6 +84,16 @@ class SetupManager:
                         print("✅ Derrian's dependencies installed")
                     else:
                         print("⚠️ Derrian's installer not found, skipping dependency setup")
+                    
+                    # Install custom scheduler optimizers (CAME, REX, etc.)
+                    print("📦 Installing custom scheduler optimizers...")
+                    custom_scheduler_path = os.path.join(path, "custom_scheduler")
+                    setup_py_path = os.path.join(custom_scheduler_path, "setup.py")
+                    if os.path.exists(setup_py_path):
+                        subprocess.run([sys.executable, setup_py_path, "install"], cwd=custom_scheduler_path, check=True)
+                        print("✅ Custom scheduler optimizers (LoraEasyCustomOptimizer) installed")
+                    else:
+                        print("⚠️ Custom scheduler setup.py not found")
                         
                 except subprocess.CalledProcessError as e:
                     print(f"⚠️ Nested submodule setup failed: {e}")
