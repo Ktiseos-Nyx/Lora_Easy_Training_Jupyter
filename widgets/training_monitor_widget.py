@@ -57,6 +57,14 @@ class TrainingMonitorWidget:
             layout=widgets.Layout(width='300px', height='50px')
         )
         
+        self.stop_training_button = widgets.Button(
+            description="🛑 Emergency Stop",
+            button_style='danger',
+            layout=widgets.Layout(width='300px', height='50px')
+        )
+        self.stop_training_button.on_click(self.stop_training_clicked)
+        self.stop_training_button.disabled = True
+
         # Training status
         self.control_status = widgets.HTML(
             value="<div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 10px 0;'>"
@@ -68,7 +76,7 @@ class TrainingMonitorWidget:
         
         self.training_control_box = widgets.VBox([
             control_desc,
-            self.start_training_button, 
+            widgets.HBox([self.start_training_button, self.stop_training_button]), 
             self.control_status
         ])
     
@@ -183,10 +191,19 @@ class TrainingMonitorWidget:
             
             # Launch training using the file paths
             self.training_manager.launch_from_files(config_paths, monitor_widget=self)
+            self.start_training_button.disabled = True
+            self.stop_training_button.disabled = False
             
         except Exception as e:
             self.control_status.value = f"<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>💥 Error:</strong> {str(e)}</div>"
             print(f"💥 Training start error: {e}")
+
+    def stop_training_clicked(self, b):
+        """Handle stop training button click"""
+        self.control_status.value = "<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>Status:</strong> 🛑 Terminating training...</div>"
+        self.training_manager.stop_training()
+        self.start_training_button.disabled = False
+        self.stop_training_button.disabled = True
     
     def display(self):
         """Display the training monitor widget"""

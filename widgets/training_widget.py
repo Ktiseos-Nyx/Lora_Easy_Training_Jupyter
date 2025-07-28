@@ -115,10 +115,11 @@ class TrainingWidget:
             # Check text encoder caching vs shuffle caption conflict
             if self.cache_text_encoder_outputs.value and self.shuffle_caption.value:
                 warnings.append("⚠️ Cannot use Caption Shuffling with Text Encoder Caching")
-            
+
             # Check text encoder caching vs text encoder training conflict  
             if self.cache_text_encoder_outputs.value and float(self.text_encoder_lr.value) > 0:
                 warnings.append("⚠️ Cannot cache Text Encoder while training it (set Text LR to 0)")
+                self.text_encoder_lr.value = '0'
             
             # Check random crop vs latent caching conflict
             if self.random_crop.value and self.cache_latents.value:
@@ -345,20 +346,9 @@ class TrainingWidget:
             advanced_train_desc,
             widgets.HTML("<h4>📚 Caption Controls</h4>"),
             self.caption_dropout_rate,
-            self.caption_tag_dropout_rate, 
-            self.keep_tokens,
+            self.caption_tag_dropout_rate,
             widgets.HTML("<h4>🔊 Noise & Stability</h4>"),
-            self.noise_offset,
             self.adaptive_noise_scale,
-            self.clip_skip,
-            widgets.HTML("<h4>🎨 VAE & Performance</h4>"),
-            self.vae_batch_size,
-            self.no_half_vae,
-            widgets.HTML("<h4>📐 Dataset Bucketing</h4>"),
-            self.bucket_reso_steps,
-            self.min_bucket_reso,
-            self.max_bucket_reso,
-            self.bucket_no_upscale
         ])
 
         # Saving options moved to Training Options section
@@ -520,8 +510,6 @@ class TrainingWidget:
             'bucket_no_upscale': self.bucket_no_upscale.value,
             'vae_batch_size': self.vae_batch_size.value,
             'no_half_vae': self.no_half_vae.value,
-            'max_bucket_reso': self.max_bucket_reso.value,
-            'bucket_no_upscale': self.bucket_no_upscale.value,
             # Advanced options
             'advanced_mode_enabled': getattr(self, 'advanced_mode', widgets.Checkbox(value=False)).value,
             'advanced_optimizer': getattr(self, 'advanced_optimizer', type('obj', (object,), {'value': 'standard'})).value,
@@ -686,12 +674,6 @@ class TrainingWidget:
             disabled=True  # Disable until OneTrainer integration
         )
         
-        self.gradient_checkpointing = widgets.Checkbox(
-            value=False,
-            description="Aggressive Gradient Checkpointing",
-            style={'description_width': 'initial'}
-        )
-        
         fused_explanation = widgets.HTML("""
         <div style='padding: 10px; border: 1px solid #856404; border-radius: 5px;'>
         <strong>🚧 Fused Back Pass - OneTrainer Integration Required</strong><br><br>
@@ -712,7 +694,6 @@ class TrainingWidget:
         return widgets.VBox([
             memory_info,
             self.fused_back_pass,
-            self.gradient_checkpointing,
             fused_explanation
         ])
     

@@ -28,6 +28,7 @@ class HybridTrainingManager:
         os.makedirs(self.config_dir, exist_ok=True)
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.logging_dir, exist_ok=True)
+        self.process = None
         
         # 🔧 Setup Python path for Derrian's custom optimizers
         self._setup_custom_optimizers()
@@ -898,7 +899,7 @@ class HybridTrainingManager:
             scripts_dir = self.sd_scripts_dir if os.path.exists(self.sd_scripts_dir) else self.trainer_dir
             os.chdir(scripts_dir)
             
-            process = subprocess.Popen(
+            self.process = subprocess.Popen(
                 [venv_python, train_script,
                  "--config_file", config_toml_path,
                  "--dataset_config", dataset_toml_path],
@@ -909,15 +910,15 @@ class HybridTrainingManager:
                 env=env
             )
 
-            for line in iter(process.stdout.readline, ''):
+            for line in iter(self.process.stdout.readline, ''):
                 print(line, end='')
                 
                 # Update monitor widget if provided
                 if monitor_widget:
                     monitor_widget.parse_training_output(line)
             
-            process.stdout.close()
-            return_code = process.wait()
+            self.process.stdout.close()
+            return_code = self.process.wait()
 
             if return_code:
                 raise subprocess.CalledProcessError(return_code, [venv_python, train_script])
@@ -934,6 +935,15 @@ class HybridTrainingManager:
         finally:
             # Restore original working directory
             os.chdir(original_cwd)
+            self.process = None
+
+    def stop_training():
+        """🛑 Terminate the training process"""
+        if self.process and self.process.poll() is None:
+            self.process.terminate()
+            self.process.wait()
+            print("🛑 Training process terminated.")
+            self.process = None
 
     def prepare_config_only(self, config):
         """🛠️ Generate TOML files without starting training"""
@@ -1024,7 +1034,7 @@ class HybridTrainingManager:
             scripts_dir = self.sd_scripts_dir if os.path.exists(self.sd_scripts_dir) else self.trainer_dir
             os.chdir(scripts_dir)
             
-            process = subprocess.Popen(
+            self.process = subprocess.Popen(
                 [venv_python, train_script,
                  "--config_file", config_toml_path,
                  "--dataset_config", dataset_toml_path],
@@ -1035,15 +1045,15 @@ class HybridTrainingManager:
                 env=env
             )
 
-            for line in iter(process.stdout.readline, ''):
+            for line in iter(self.process.stdout.readline, ''):
                 print(line, end='')  # Still print to console
                 
                 # Update monitor widget if provided
                 if monitor_widget:
                     monitor_widget.parse_training_output(line)
             
-            process.stdout.close()
-            return_code = process.wait()
+            self.process.stdout.close()
+            return_code = self.process.wait()
 
             if return_code:
                 raise subprocess.CalledProcessError(return_code, [venv_python, train_script])
@@ -1077,6 +1087,7 @@ class HybridTrainingManager:
         finally:
             # Restore original working directory
             os.chdir(original_cwd)
+            self.process = None
     
     def _print_advanced_features_summary(self, config):
         """📊 Print summary of active advanced features"""
