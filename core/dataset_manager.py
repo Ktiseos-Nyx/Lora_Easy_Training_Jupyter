@@ -66,6 +66,13 @@ class DatasetManager:
     
     def _tag_images_wd14(self, dataset_path, tagger_model, threshold, blacklist_tags, caption_extension):
         """Tag images using WD14 tagger"""
+        # Known working tagger models (fallback list)
+        working_models = [
+            tagger_model,  # User's choice first
+            "SmilingWolf/wd-vit-large-tagger-v3",  # Reliable fallback
+            "SmilingWolf/wd-v1-4-swinv2-tagger-v2"  # Stable older model
+        ]
+        
         # First ensure the tagger model is available
         self._ensure_tagger_model_available(tagger_model)
         
@@ -89,37 +96,52 @@ class DatasetManager:
             print("💡 Try running the setup widget first to install the training backend")
             return False
 
-        # Build command with enhanced options
-        command = [
-            venv_python, tagger_script,
-            dataset_path,
-            "--repo_id", tagger_model,
-            "--thresh", str(threshold),
-            "--batch_size", "8" if "v3" in tagger_model or "swinv2" in tagger_model else "1",
-            "--max_data_loader_n_workers", "2",
-            "--caption_extension", caption_extension,
-            "--remove_underscore"  # Convert underscores to spaces
-        ]
-        
-        # Try to add ONNX flag if ONNX is available
-        try:
-            # Test if ONNX is available in the venv
-            test_onnx_cmd = [venv_python, "-c", "import onnx"]
-            subprocess.run(test_onnx_cmd, check=True, capture_output=True)
-            command.append("--onnx")  # Use ONNX for faster inference
-            print("✅ ONNX available - using accelerated inference")
-        except subprocess.CalledProcessError:
-            print("⚠️ ONNX not available - using standard PyTorch inference (slower but works)")
-        
-        # Add blacklisted tags if provided
-        if blacklist_tags:
-            command.extend(["--undesired_tags", blacklist_tags.replace(" ", "")])
-
-        print(f"🏷️ Tagging images with {tagger_model.split('/')[-1]} (threshold: {threshold})...")
-        if blacklist_tags:
-            print(f"🚫 Blacklisted tags: {blacklist_tags}")
+        # Try each model until one works
+        for attempt, model_to_try in enumerate(working_models):
+            print(f"🏷️ Attempting tagging with {model_to_try.split('/')[-1]} (threshold: {threshold})...")
             
-        return self._run_subprocess(command, "Image tagging")
+            # Build command with enhanced options
+            command = [
+                venv_python, tagger_script,
+                dataset_path,
+                "--repo_id", model_to_try,
+                "--thresh", str(threshold),
+                "--batch_size", "8" if "v3" in model_to_try or "swinv2" in model_to_try else "1",
+                "--max_data_loader_n_workers", "2",
+                "--caption_extension", caption_extension,
+                "--remove_underscore"  # Convert underscores to spaces
+            ]
+            
+            # Force ONNX usage for modern models
+            if "v3" in model_to_try:
+                command.append("--onnx")
+                print("🚀 Using ONNX for v3 model (faster inference)")
+            else:
+                # Try to add ONNX flag if available for older models
+                try:
+                    test_onnx_cmd = [venv_python, "-c", "import onnxruntime"]
+                    subprocess.run(test_onnx_cmd, check=True, capture_output=True)
+                    command.append("--onnx")
+                    print("✅ ONNX available - using accelerated inference")
+                except subprocess.CalledProcessError:
+                    print("⚠️ ONNX not available - using standard PyTorch inference")
+            
+            # Add blacklisted tags if provided
+            if blacklist_tags:
+                command.extend(["--undesired_tags", blacklist_tags.replace(" ", "")])
+                print(f"🚫 Blacklisted tags: {blacklist_tags}")
+            
+            # Try running the command
+            if self._run_subprocess(command, f"Image tagging (attempt {attempt + 1})"):
+                print(f"✅ Successfully tagged with {model_to_try.split('/')[-1]}")
+                return True
+            else:
+                print(f"❌ Failed with {model_to_try.split('/')[-1]}")
+                if attempt < len(working_models) - 1:
+                    print(f"🔄 Trying fallback model...")
+                    
+        print("❌ All tagger models failed")
+        return False
     
     def _tag_images_blip(self, dataset_path, caption_extension):
         """Tag images using BLIP captioning"""

@@ -308,12 +308,14 @@ class SetupManager:
                 except Exception as read_error:
                     print(f"⚠️ Could not process requirements file: {read_error}")
         
-        # Install additional optimizers that might be missing
-        print("📦 Installing additional optimizers...")
+        # Install additional optimizers and dependencies that might be missing
+        print("📦 Installing additional optimizers and dependencies...")
         additional_packages = [
             "pytorch_optimizer>=3.1.0",  # For CAME, Prodigy, etc.
             "schedulefree",  # For schedule-free optimizers
-            "prodigy-plus-schedule-free"  # For Prodigy Plus
+            "prodigy-plus-schedule-free",  # For Prodigy Plus
+            "onnx>=1.14.0",  # For ONNX model format support
+            "onnxruntime>=1.17.0"  # For ONNX runtime (required for WD14 taggers)
         ]
         
         for package in additional_packages:
