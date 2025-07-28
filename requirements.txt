@@ -22,7 +22,7 @@ huggingface-hub>=0.10.0       # HuggingFace model uploads (required by utilities
 
 # Tagger dependencies (for auto-captioning functionality)
 onnx>=1.14.0                  # ONNX model format support
-onnxruntime-gpu>=1.15.0       # GPU-accelerated ONNX runtime (falls back to CPU)
+# onnxruntime-gpu>=1.15.0       # GPU-accelerated ONNX runtime (falls back to CPU) - Disabled due to protobuf conflict with open-clip-torch
 # tensorflow>=2.12.0,<2.16.0 # TensorFlow for tagger (commented - prefer ONNX)
 
 # Advanced optimizers (for training)
