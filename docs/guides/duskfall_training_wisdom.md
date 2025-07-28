@@ -6,221 +6,184 @@
 
 ## 🚨 Important Disclaimer
 
-**This guide is NOT a bible!** These are opinions, observations, and personal experiences. LoRA training is as much art as science, so use this as a starting point, not gospel. Your mileage may vary, and experimentation is key!
+**This guide is NOT a bible!** This is DuskFall's neurodivergent approach to LoRA training based on personal experimentation and collaboration with the AI art community. These are opinions, observations, and findings that work for them - your mileage may vary!
 
-*"Either gonna work or blow up!" - DuskFall*
+*Training is as much art as science - embrace the experimentation!*
 
 ---
 
-## 🎯 The Philosophy: Quality Over Everything
+## 🎯 DuskFall's 2025 Training Philosophy
 
-### The 10-Image Miracle
-Forget what you've heard about needing hundreds of images. **Even 10 high-quality images can yield excellent results** if they're:
-- Above 512 pixels (ideally 1024px)
-- Consistent in resolution  
-- Diverse in poses/expressions
-- Clean and well-composed
+### Quality Over Quantity
+- **Focus on curation**: Better to have fewer high-quality images than tons of mediocre ones
+- **Resolution matters**: Aim for images above 512 pixels, ideally 1024px for SDXL
+- **Remove duplicates**: Similar poses waste precious training steps
+- **Synthetic data is valid**: Nijijourney and Midjourney outputs work great as training data
 
-### Dataset Curation Mindset
-Think like a museum curator, not a data hoarder:
-- **Remove duplicates religiously** - Similar poses waste training steps
-- **Consistency matters more than variety** - 20 perfect images > 100 mediocre ones
-- **Resolution uniformity** - Mix of sizes confuses training
+### The Art of Experimentation
+DuskFall emphasizes that LoRA training is constantly evolving. What worked for SD 1.5 in 2023 may not apply to SDXL models in 2025. Stay flexible and test everything!
 
-## 🎨 Base Model Selection (2025 Recommendations)
+## 🎨 DuskFall's 2025 Model Recommendations
 
-### Current Champions
-Based on community feedback and results:
+### Primary Models (Actually Used)
+**Main Go-To Models:**
+- **Pony XL**: DuskFall's frequent choice for versatile training
+- **Illustrious**: High-quality artistic outputs
+- **NoobAI XL**: Currently experimenting with this
+- **Animagine SDXL**: Reliable for anime-style content
 
-**For Anime/Art:**
-- **Pony XL**: Excellent for characters and styles
-- **Illustrious**: High-quality artistic output
-- **NoobAI XL**: Great general-purpose model
-- **Animagine SDXL**: Anime specialist
-
-**For Realistic:**
-- **SDXL Base**: Still solid foundation
-- **Various fine-tuned realistic models**: Check Civitai for latest
+**Occasional Experiments:**
+- **Flux models**: Testing newer architectures
+- **SD 1.5 variants**: Still useful for specific cases
 
 ### Model Selection Strategy
-- **Character LoRAs**: Use models that already handle your character's style well
-- **Style LoRAs**: Choose models with complementary aesthetics
-- **Test first**: Generate a few images with your trigger concept before training
+**Don't blindly follow old guides!** Test your concept with the base model first - if it already knows your character/style somewhat, training will be easier.
 
-## ⚙️ DuskFall's Recommended Settings
+## ⚙️ DuskFall's Current Parameter Setup
 
-*These are starting points, not absolute truths!*
+*These reflect DuskFall's actual 2025 experiments, not generic advice*
 
 ### Learning Rates (The Critical Setting)
 ```
-UNet Learning Rate: 5e-4
-Text Encoder Learning Rate: 1e-4 (10x lower than UNet)
+Base Learning Rate: 5e4 (5e-4)
+Text Encoder: Around 1e4 (1e-4)
 ```
 
-**Why these rates:**
-- 5e-4 for UNet is aggressive enough for good learning
-- 1e-4 for text encoder prevents prompt contamination
-- **Lower if unstable**, higher if training too slowly
+**DuskFall's reasoning:**
+- These rates work well with current SDXL models
+- Text encoder should be lower to prevent prompt contamination
+- Adjust based on your specific model and dataset
 
 ### Network Architecture
 ```
-Network Dimension: 32 (more detail than traditional 8-16)
-Network Alpha: 16 (half of dimension typically)
+Network Dimension: 32
+Network Alpha: 16-32 (experimenting with different ratios)
 ```
 
-**Rationale:**
-- Higher dimensions capture more nuance
-- Larger files but better quality
-- Adjust down for simple concepts
+**Why 32 dim:**
+- Higher than traditional 8-16 recommendations
+- Captures more detail for complex styles
+- File size trade-off worth it for quality
 
-### Optimizer Choices
-**Primary Recommendations:**
-- **Adafactor**: Memory efficient, stable
-- **AdamW8Bit**: Quantized version, less VRAM
-- **Prodigy**: Auto-adjusting learning rate (experimental but promising)
+### Optimizer Experiments
+**Current Favorites:**
+- **Adafactor**: Memory efficient, stable results
+- **AdamW8Bit**: Good balance of performance and VRAM usage
+- **Prodigy**: Experimenting with learning-rate-free training
 
-**Avoid if possible:**
-- Standard AdamW on large datasets (memory hungry)
+**Batch Size Strategy:**
+- **2-4 for most training**: Cost optimization on Civitai
+- Higher batch sizes when VRAM allows
 
-### Training Schedule
+### Training Schedule Insights
 ```
-Batch Size: 2-4 (depending on VRAM)
-Clip Skip: 1-2 (model dependent)
-Noise Offset: 0.03-0.1 (for contrast/lighting variety)
+Clip Skip: 1-2 (depends on base model)
+Steps: Above 3600 for style consistency
 ```
 
-### Advanced Options
-- **Bucketing**: Enable for mixed resolutions
-- **Gradient Checkpointing**: Essential for <12GB VRAM
-- **Mixed Precision**: fp16 or bf16 for memory savings
+**DuskFall's Step Philosophy:**
+Going above 3600 steps often improves style consistency, contrary to "quick and dirty" approaches.
 
-## 📊 Dataset Size Strategy
+## 📊 DuskFall's Dataset Approach
 
-### Small Datasets (10-50 images)
-- **Perfect for**: Characters, specific concepts
-- **Batch Size**: 1-2
-- **Epochs**: 10-15
-- **Focus**: Quality curation, consistent tagging
+### Dataset Quality Focus
+- **Check for duplicates**: Wastes training on repeated content
+- **Resolution consistency**: Mixed sizes can confuse training
+- **Content variety**: But not at the expense of quality
+- **Source diversity**: Synthetic data (Midjourney/Nijijourney) is perfectly valid
 
-### Medium Datasets (50-300 images)
-- **Perfect for**: Styles, broader concepts
-- **Batch Size**: 2-4
-- **Epochs**: 5-8
-- **Focus**: Variety within consistency
+### Training Time Considerations
+DuskFall optimizes for cost-effectiveness on platforms like Civitai while maintaining quality. This means finding the sweet spot between training time and results.
 
-### Large Datasets (300+ images)
-- **Perfect for**: Complex styles, multi-concept LoRAs
-- **Batch Size**: 4+
-- **Epochs**: 3-5
-- **Focus**: Preventing overfitting, validation sets
+## 🔬 DuskFall's Experimental Mindset
 
-## 🔬 The Art of Experimentation
+### Neurodivergent Approach to Training
+DuskFall's approach embraces the chaotic nature of LoRA training. Rather than following rigid rules, they emphasize:
 
-### What to Adjust First
-1. **Learning Rate**: Most impactful parameter
-2. **Training Length**: Stop before overfitting
-3. **Network Size**: Bigger ≠ always better
-4. **Optimizer**: Try different approaches
+- **Constant experimentation**: What works today might not work tomorrow
+- **Community collaboration**: Learning from peers in the AI art space
+- **Adaptation over adherence**: Updating methods based on new findings
+- **Personal documentation**: Tracking what works for specific use cases
 
-### Warning Signs
-- **Loss goes NaN**: Learning rate too high
-- **No improvement**: Learning rate too low or bad data
-- **Overfit results**: Always same pose/style
-- **Washed out colors**: Wrong v-prediction setting or overtrained
+### 2025 Reality Check
+**Don't blindly follow 2023 guides!** The landscape has changed significantly:
+- SDXL models behave differently than SD 1.5
+- New optimizers and techniques are available
+- Hardware and software have evolved
+- Community knowledge has expanded
 
-### Success Indicators
-- **Steady loss decrease**: Healthy learning curve
-- **Variety in output**: Not memorizing specific images
-- **Trigger word responsiveness**: Works reliably in prompts
-- **Style consistency**: Maintains your intended aesthetic
+## 🎨 Practical Application in Jupyter System
 
-## 🎨 Practical Workflow for Jupyter System
+### DuskFall's Workflow Adaptation
+These settings translate to the Jupyter training system:
 
-### Step 1: Planning (Calculator Widget)
-- Input your dataset size
-- Aim for reasonable training time (1-3 hours max for testing)
-- Check VRAM requirements
+**Dataset Preparation:**
+- Use the dataset widget for curation
+- Focus on quality over quantity
+- Leverage WD14 tagging for anime content
+- Manual review of captions is crucial
 
-### Step 2: Dataset Prep (Dataset Widget)
-- Upload your curated images
-- Use WD14 for anime, BLIP for realistic
-- **Threshold 0.35-0.4** for balanced tagging
-- Add your unique trigger word
-- **Review every caption manually** for quality
+**Training Configuration:**
+- Set network dimension to 32 (higher than traditional)
+- Use Adafactor or AdamW8Bit optimizers
+- Target 3600+ steps for style consistency
+- Batch size 2-4 for cost optimization
 
-### Step 3: Training (Training Widget)
-- Start with DuskFall's recommended settings above
-- Enable advanced options if you have <12GB VRAM
-- **Monitor loss curves religiously**
-- Stop when loss plateaus or starts increasing
+**Monitoring Approach:**
+- Watch loss curves closely
+- Generate test samples during training
+- Iterate based on results, not rigid schedules
 
-### Step 4: Testing
-- Generate test images with various prompts
-- Try different LoRA strengths (0.7-1.2)
-- Test with different base models
-- Share with community for feedback
+## 🎯 DuskFall's Training Philosophy
 
-## 🧠 Advanced Wisdom
+### Embrace the Experimental Nature
+"Training is as much art as science" - DuskFall approaches each project as an experiment:
 
-### The Trigger Word Art
-- **Make it unique**: "saria_zelda" not just "saria"
-- **Keep it memorable**: You'll type it a lot
-- **Avoid conflicts**: Don't use existing style terms
-- **Consistency**: Same word in every caption
+- **No universal solutions**: Each dataset and concept is unique
+- **Iterative improvement**: Build on previous successes and failures
+- **Community wisdom**: Learn from others but adapt to your needs
+- **Cost-effectiveness**: Balance quality with practical constraints
 
-### Resolution Strategy
-- **1024px is the sweet spot** for SDXL models
-- **768px works well** for most purposes
-- **512px for testing** or limited VRAM
-- **Consistent resolution** within dataset
+### Quality Over Speed
+Rather than rushing to quick results, DuskFall emphasizes:
+- **Thorough dataset curation**
+- **Proper parameter testing**
+- **Adequate training time** (above 3600 steps when needed)
+- **Post-training evaluation**
 
-### Memory Management
-- **CAME optimizer**: Often uses 2-3GB less VRAM
-- **Batch size 1**: When desperate for memory
-- **Gradient checkpointing**: Speed vs memory trade-off
-- **Lower resolution**: Last resort for compatibility
+## 🚀 Key Takeaways for Your Training
 
-## 🎯 Philosophical Approach
+### What Makes DuskFall's Approach Work:
+1. **Neurodivergent perspective**: Embracing non-linear experimentation
+2. **2025 model focus**: Adapting to current SDXL landscape
+3. **Cost optimization**: Practical training on platforms like Civitai
+4. **Community collaboration**: Learning from and sharing with others
+5. **Quality focus**: Better datasets > perfect parameters
 
-### Embrace the Chaos
-LoRA training is part science, part art, part luck. What works for one dataset might fail for another. **The key is methodical experimentation:**
-
-1. **Start conservative**: Use proven settings first
-2. **Change one thing**: Don't adjust everything at once  
-3. **Document everything**: What worked, what didn't
-4. **Share knowledge**: Community learns together
-
-### Quality Philosophy
-- **Better to undertrain than overtrain**: You can always train more
-- **Dataset quality beats parameter tweaking**: Good data > perfect settings
-- **Community wisdom**: Learn from others' successes and failures
-- **Have fun**: If it's not enjoyable, you're doing it wrong
-
-## 🚀 Adaptation for Your System
-
-These recommendations work with the LoRA Easy Training Jupyter system:
-
-- **Use the Calculator**: Plan your training time
-- **Dataset Widget**: Perfect for implementing the curation philosophy
-- **Training Widget**: All these parameters are available in advanced mode
-- **Monitor Widget**: Watch those loss curves!
+### Adaptation Strategy:
+- **Start with DuskFall's parameters** as a baseline
+- **Adapt based on your specific model and dataset**
+- **Document your results** for future reference
+- **Share findings** with the community
+- **Stay flexible** as techniques evolve
 
 ## 🎉 Final Thoughts
 
-Remember, this is **DuskFall's opinionated guide** - not divine law! The best LoRA trainers:
+This guide reflects DuskFall's personal journey through LoRA training in 2025. It's not a universal solution but rather one person's documented approach to navigating the evolving landscape of AI model training.
 
-- **Experiment constantly**
-- **Document their process**
-- **Share their knowledge**
-- **Learn from failures**
-- **Have realistic expectations**
+**Remember:**
+- Your results may vary (and that's normal!)
+- Experimentation is key to finding what works for you
+- The community learns together through shared experiences
+- Training techniques will continue to evolve
 
-### The Real Secret
-The "secret sauce" isn't in perfect parameters - it's in:
-1. **Quality dataset curation**
-2. **Understanding your specific use case**
-3. **Patience with the learning process**
-4. **Community collaboration**
+### The Real Wisdom
+Success in LoRA training comes from:
+1. **Quality dataset curation** (DuskFall's #1 priority)
+2. **Methodical experimentation** with parameters
+3. **Community learning** and knowledge sharing
+4. **Adaptation** to new models and techniques
+5. **Patience** with the inherently chaotic process
 
 ---
 
