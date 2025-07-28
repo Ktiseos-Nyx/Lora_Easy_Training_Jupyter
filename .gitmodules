@@ -1,9 +1,3 @@
-[submodule "trainer/sd_scripts"]
-	path = trainer/sd_scripts
-	url = https://github.com/kohya-ss/sd-scripts.git
-[submodule "trainer/lycoris"]
-	path = trainer/lycoris
-	url = https://github.com/67372a/LyCORIS.git
 [submodule "trainer/derrian_backend"]
 	path = trainer/derrian_backend
 	url = https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend.git

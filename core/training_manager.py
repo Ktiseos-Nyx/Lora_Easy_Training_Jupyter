@@ -22,7 +22,7 @@ class HybridTrainingManager:
         self.project_root = os.getcwd()
         self.trainer_dir = os.path.join(self.project_root, "trainer")
         self.config_dir = os.path.join(self.project_root, "training_configs")  # Much better name!
-        self.sd_scripts_dir = os.path.join(self.trainer_dir, "sd_scripts")
+        self.sd_scripts_dir = os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts")
         self.output_dir = os.path.join(self.project_root, "output")
         self.logging_dir = os.path.join(self.project_root, "logs")
         os.makedirs(self.config_dir, exist_ok=True)
@@ -44,8 +44,8 @@ class HybridTrainingManager:
         """Find the training script in various possible locations"""
         possible_scripts = [
             # Derrian's backend might have scripts in different locations
-            os.path.join(self.trainer_dir, "sd_scripts", "sdxl_train_network.py"),
-            os.path.join(self.trainer_dir, "sd_scripts", "train_network.py"), 
+            os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts", "sdxl_train_network.py"),
+            os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts", "train_network.py"), 
             os.path.join(self.trainer_dir, "sdxl_train_network.py"),
             os.path.join(self.trainer_dir, "train_network.py"),
             # Also check for kohya scripts structure
@@ -64,7 +64,7 @@ class HybridTrainingManager:
     def _setup_custom_optimizers(self):
         """Add paths for submodule components (silent mode)"""
         # Add LyCORIS to Python path
-        lycoris_dir = os.path.join(self.trainer_dir, "lycoris")
+        lycoris_dir = os.path.join(self.trainer_dir, "derrian_backend", "lycoris")
         if os.path.exists(lycoris_dir) and lycoris_dir not in sys.path:
             sys.path.insert(0, lycoris_dir)
             

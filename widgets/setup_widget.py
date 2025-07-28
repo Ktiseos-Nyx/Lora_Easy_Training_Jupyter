@@ -363,7 +363,7 @@ class SetupWidget:
             # Check SD Scripts installation
             print("\n📂 Checking SD Scripts installation...")
             trainer_dir = os.path.join(os.path.dirname(__file__), '..', 'trainer')
-            sd_scripts_dir = os.path.join(trainer_dir, 'sd_scripts')
+            sd_scripts_dir = os.path.join(trainer_dir, 'derrian_backend', 'sd_scripts')
             
             if os.path.exists(trainer_dir):
                 print("   ✅ Trainer directory exists")

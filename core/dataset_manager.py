@@ -8,7 +8,7 @@ class DatasetManager:
         self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         self.model_manager = model_manager
         self.trainer_dir = os.path.join(self.project_root, "trainer")
-        self.sd_scripts_dir = os.path.join(self.trainer_dir, "sd_scripts")
+        self.sd_scripts_dir = os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts")
 
     def extract_dataset(self, zip_path, extract_to_dir, hf_token=""):
         if not extract_to_dir:

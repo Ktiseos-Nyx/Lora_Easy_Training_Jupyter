@@ -7,7 +7,7 @@ class UtilitiesManager:
     def __init__(self):
         self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         self.trainer_dir = os.path.join(self.project_root, "trainer")
-        self.sd_scripts_dir = os.path.join(self.trainer_dir, "sd_scripts")
+        self.sd_scripts_dir = os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts")
 
     def upload_to_huggingface(self, hf_token, model_path, repo_name):
         if not hf_token or not hf_token.strip():

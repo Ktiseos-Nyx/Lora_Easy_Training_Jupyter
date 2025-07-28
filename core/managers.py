@@ -13,28 +13,17 @@ class SetupManager:
         self.project_root = os.getcwd()  # This will be wherever the notebook is running
         self.trainer_dir = os.path.join(self.project_root, "trainer")
         
-        # Clean submodule architecture
-        self.sd_scripts_dir = os.path.join(self.trainer_dir, "sd_scripts")
-        self.lycoris_dir = os.path.join(self.trainer_dir, "lycoris") 
+        # Use Derrian's backend which includes sd_scripts and lycoris as submodules
         self.derrian_dir = os.path.join(self.trainer_dir, "derrian_backend")
+        self.sd_scripts_dir = os.path.join(self.derrian_dir, "sd_scripts")
+        self.lycoris_dir = os.path.join(self.derrian_dir, "lycoris")
         
-        # Submodule URLs
+        # Submodule URLs - Only need derrian_backend which includes sd_scripts and lycoris
         self.submodules = {
-            'sd_scripts': {
-                'url': 'https://github.com/kohya-ss/sd-scripts.git',
-                'path': self.sd_scripts_dir,
-                'description': 'Official Kohya SD training scripts'
-            },
-            'lycoris': {
-                'url': 'https://github.com/67372a/LyCORIS.git', 
-                'path': self.lycoris_dir,
-                'commit': 'ca9f47d238bb67266acd7354ce31a72eea37bdd2',  # v3.1.1
-                'description': 'Official LyCORIS parameter-efficient fine-tuning'
-            },
             'derrian_backend': {
                 'url': 'https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend.git',
                 'path': self.derrian_dir,
-                'description': 'Derrian\'s custom optimizers (CAME, REX)'
+                'description': 'Derrian\'s backend with Kohya scripts, LyCORIS, and custom optimizers'
             }
         }
 
