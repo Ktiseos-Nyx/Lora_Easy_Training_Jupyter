@@ -76,10 +76,20 @@ class UtilitiesManager:
         else:
             venv_python = "python"  # Use system python (common in containers)
         
-        resize_script = os.path.join(self.sd_scripts_dir, "networks/resize_lora.py")
-
-        if not os.path.exists(resize_script):
-            print(f"Error: LoRA resize script not found at {resize_script}")
+        # Try Derrian's enhanced resize script first, fallback to Kohya's
+        derrian_resize_script = os.path.join(self.trainer_dir, "derrian_backend", "utils", "resize_lora.py") 
+        kohya_resize_script = os.path.join(self.sd_scripts_dir, "networks/resize_lora.py")
+        
+        if os.path.exists(derrian_resize_script):
+            resize_script = derrian_resize_script
+            print("🔧 Using Derrian's enhanced resize script with dynamic ranking")
+        elif os.path.exists(kohya_resize_script):
+            resize_script = kohya_resize_script  
+            print("🔧 Using Kohya's standard resize script")
+        else:
+            print(f"❌ Error: No LoRA resize script found")
+            print(f"   Looked for: {derrian_resize_script}")
+            print(f"   Looked for: {kohya_resize_script}")
             print("💡 Please ensure the trainer environment setup completed successfully.")
             return False
 

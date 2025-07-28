@@ -321,6 +321,21 @@ class SetupManager:
         except ImportError as e:
             print(f"   ❌ Custom optimizers: {e}")
             
+        # Check Derrian's utility modules
+        derrian_utils_dir = os.path.join(self.derrian_dir, "utils")
+        if os.path.exists(derrian_utils_dir):
+            try:
+                # Add derrian_backend to path for utility imports
+                if self.derrian_dir not in sys.path:
+                    sys.path.insert(0, self.derrian_dir)
+                
+                from utils import validation, process, resize_lora
+                print("   ✅ Derrian's utilities (validation, process, resize_lora)")
+            except ImportError as e:
+                print(f"   ❌ Derrian's utilities: {e}")
+        else:
+            print("   ❌ Derrian's utilities directory missing")
+            
         print("   🏁 Setup verification complete!")
 
 class ModelManager:

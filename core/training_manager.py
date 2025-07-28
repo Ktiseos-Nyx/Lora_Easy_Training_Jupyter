@@ -854,6 +854,7 @@ class HybridTrainingManager:
         print("Preparing hybrid training configuration...")
         
         # Validate advanced configuration (pure function - no side effects)
+        # TODO: Consider integrating Derrian's validation.py for enhanced validation
         validation = self._validate_advanced_config(config)
         
         # Apply suggested changes to config
