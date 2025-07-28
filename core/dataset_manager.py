@@ -68,8 +68,22 @@ class DatasetManager:
         # First ensure the tagger model is available
         self._ensure_tagger_model_available(tagger_model)
         
+        # Try to find appropriate Python executable
         venv_python = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        if not os.path.exists(venv_python):
+            # Fallback to system python if venv doesn't exist
+            import sys
+            venv_python = sys.executable
+            print(f"⚠️ Kohya venv not found, using system Python: {venv_python}")
+        
         tagger_script = os.path.join(self.sd_scripts_dir, "finetune/tag_images_by_wd14_tagger.py")
+        
+        # Check if tagger script exists
+        if not os.path.exists(tagger_script):
+            print(f"❌ Tagger script not found at: {tagger_script}")
+            print("💡 This usually means the SD-scripts setup is incomplete")
+            print("💡 Try running the setup widget first to install the training backend")
+            return False
 
         # Build command with enhanced options
         command = [
@@ -105,8 +119,22 @@ class DatasetManager:
     
     def _tag_images_blip(self, dataset_path, caption_extension):
         """Tag images using BLIP captioning"""
+        # Try to find appropriate Python executable
         venv_python = os.path.join(self.sd_scripts_dir, "venv/bin/python")
+        if not os.path.exists(venv_python):
+            # Fallback to system python if venv doesn't exist
+            import sys
+            venv_python = sys.executable
+            print(f"⚠️ Kohya venv not found, using system Python: {venv_python}")
+        
         blip_script = os.path.join(self.sd_scripts_dir, "finetune/make_captions.py")
+        
+        # Check if BLIP script exists
+        if not os.path.exists(blip_script):
+            print(f"❌ BLIP script not found at: {blip_script}")
+            print("💡 This usually means the SD-scripts setup is incomplete")
+            print("💡 Try running the setup widget first to install the training backend")
+            return False
 
         command = [
             venv_python, blip_script,
@@ -312,7 +340,29 @@ class DatasetManager:
             }
             
             print("📡 Fetching image URLs from Gelbooru...")
-            response = requests.get(api_url, params=params, timeout=30)
+            
+            # Add headers to avoid 401 errors
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'application/json, text/plain, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+            }
+            
+            response = requests.get(api_url, params=params, headers=headers, timeout=30)
+            
+            if response.status_code == 401:
+                print("❌ Gelbooru API returned 401 Unauthorized")
+                print("💡 This might be due to:")
+                print("   - Rate limiting (wait a few minutes)")
+                print("   - API changes requiring authentication")
+                print("   - Blocked IP or user agent")
+                print("   - Try using different tags or smaller limits")
+                return False
+            
             response.raise_for_status()
             
             data = response.json()

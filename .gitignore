@@ -68,12 +68,26 @@ output/
 dataset/
 logs/
 *.log
+trainer/sd_scripts/venv/
+trainer/*/logs/
+training_configs/
+*.toml
 
 # Temporary files
 *.tmp
 *.temp
 temp/
 tmp/
+.cache/
+cache/
+
+# Personal/sensitive files
+*.env
+.env.*
+config.json
+secrets.json
+api_keys.txt
+hf_token.txt
 
 # OS generated files
 .directory

@@ -460,6 +460,26 @@ class DatasetWidget:
         self.remove_tags_button.on_click(self.run_remove_tags)
         self.search_replace_button.on_click(self.run_search_replace)
         self.organize_tags_button.on_click(self.run_organize_tags)
+        
+        # --- File Upload Observer ---
+        self.file_upload.observe(self.on_file_upload_change, names='value')
+
+    def on_file_upload_change(self, change):
+        """Handle file upload selection changes"""
+        if change['new']:  # Files have been selected
+            file_count = len(change['new'])
+            if file_count > 0:
+                # Enable upload button if files are selected and folder exists
+                if self.dataset_directory.value:
+                    self.upload_images_button.disabled = False
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload!</div>"
+                else:
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> {file_count} file(s) selected. Please create a folder first.</div>"
+            else:
+                self.upload_images_button.disabled = True
+        else:
+            # No files selected
+            self.upload_images_button.disabled = True
 
     def run_url_download(self, b):
         """Handle URL/ZIP download method"""
@@ -538,10 +558,14 @@ class DatasetWidget:
                 # Update shared dataset directory
                 self.dataset_directory.value = folder_path
                 
-                # Enable upload button
-                self.upload_images_button.disabled = False
-                
-                self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! Now select images to upload.</div>"
+                # Enable upload button only if files are already selected
+                if self.file_upload.value:
+                    self.upload_images_button.disabled = False
+                    file_count = len(self.file_upload.value)
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! {file_count} file(s) ready to upload.</div>"
+                else:
+                    self.upload_images_button.disabled = True
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! Now select images to upload.</div>"
                 
             except Exception as e:
                 print(f"❌ Failed to create folder: {e}")

@@ -25,5 +25,8 @@ onnx>=1.14.0                  # ONNX model format support
 onnxruntime-gpu>=1.15.0       # GPU-accelerated ONNX runtime (falls back to CPU)
 # tensorflow>=2.12.0,<2.16.0 # TensorFlow for tagger (commented - prefer ONNX)
 
+# Advanced optimizers (for training)
+pytorch_optimizer>=3.1.0     # Additional optimizers (CAME, Prodigy, etc.)
+
 # Note: Training dependencies (PyTorch, transformers, etc.) are installed
 # by the LoRA training backend during environment setup, not here
