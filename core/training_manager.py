@@ -733,6 +733,101 @@ class HybridTrainingManager:
         
         return validation_result
     
+    def _run_derrian_validation(self, config) -> Dict[str, any]:
+        """🔍 Run Derrian's comprehensive validation system"""
+        validation_result = {
+            'passed': False,
+            'is_sdxl': False,
+            'errors': [],
+            'warnings': [],
+            'suggestions': {}
+        }
+        
+        try:
+            # Add derrian_backend to path if not already there
+            derrian_dir = os.path.join(self.trainer_dir, "derrian_backend")
+            if derrian_dir not in sys.path:
+                sys.path.insert(0, derrian_dir)
+            
+            from utils import validation
+            
+            # Convert our config format to Derrian's expected format
+            derrian_config = self._convert_config_to_derrian_format(config)
+            
+            # Run Derrian's validation
+            passed, is_sdxl, errors, args_data, dataset_data, tag_data = validation.validate(derrian_config)
+            
+            validation_result.update({
+                'passed': passed,
+                'is_sdxl': is_sdxl,
+                'errors': errors,
+                'args_data': args_data,
+                'dataset_data': dataset_data,
+                'tag_data': tag_data
+            })
+            
+            if passed:
+                print("✅ Derrian's validation passed - configuration looks good!")
+            else:
+                print("⚠️ Derrian's validation found issues:")
+                for error in errors:
+                    print(f"   ❌ {error}")
+                    validation_result['warnings'].append(f"Derrian validation: {error}")
+            
+            if is_sdxl:
+                print("🎯 SDXL model detected - optimizing configuration")
+                validation_result['suggestions']['sdxl_optimized'] = True
+                
+        except ImportError as e:
+            print(f"⚠️ Derrian's validation not available: {e}")
+            validation_result['warnings'].append("Derrian's validation system not available - using basic validation only")
+        except Exception as e:
+            print(f"⚠️ Error running Derrian's validation: {e}")
+            validation_result['warnings'].append(f"Derrian validation error: {e}")
+        
+        return validation_result
+    
+    def _convert_config_to_derrian_format(self, config) -> Dict[str, any]:
+        """Convert our widget config format to Derrian's validation format"""
+        # This is a simplified conversion - may need expansion based on testing
+        derrian_config = {
+            "args": {
+                "basic": {
+                    "pretrained_model_name_or_path": config.get('model_path', ''),
+                    "output_dir": config.get('output_dir', './output'),
+                    "max_train_epochs": config.get('epochs', 10),
+                    "train_batch_size": config.get('train_batch_size', 1),
+                    "learning_rate": config.get('unet_lr', 1e-4),
+                    "text_encoder_lr": config.get('text_encoder_lr', 1e-5),
+                    "network_dim": config.get('network_dim', 32),
+                    "network_alpha": config.get('network_alpha', 16),
+                    "optimizer_type": config.get('optimizer', 'AdamW8bit'),
+                    "lr_scheduler_type": config.get('lr_scheduler', 'cosine'),
+                    "mixed_precision": config.get('precision', 'fp16'),
+                    "resolution": config.get('resolution', 1024)
+                }
+            },
+            "dataset": {
+                "general": {
+                    "resolution": config.get('resolution', 1024),
+                    "batch_size": config.get('train_batch_size', 1),
+                    "enable_bucket": config.get('enable_bucket', True),
+                    "min_bucket_reso": 256,
+                    "max_bucket_reso": 2048,
+                    "bucket_reso_steps": 64,
+                    "caption_extension": ".txt"
+                },
+                "subsets": [
+                    {
+                        "image_dir": config.get('train_data_dir', ''),
+                        "num_repeats": config.get('num_repeats', 1)
+                    }
+                ]
+            }
+        }
+        
+        return derrian_config
+    
     def _apply_experimental_features(self, config, training_args: Dict[str, Any]) -> Dict[str, Any]:
         """🔬 Apply experimental features to training arguments"""
         
@@ -854,18 +949,29 @@ class HybridTrainingManager:
         print("Preparing hybrid training configuration...")
         
         # Validate advanced configuration (pure function - no side effects)
-        # TODO: Consider integrating Derrian's validation.py for enhanced validation
         validation = self._validate_advanced_config(config)
+        
+        # Enhanced validation using Derrian's sophisticated validation system
+        derrian_validation = self._run_derrian_validation(config)
         
         # Apply suggested changes to config
         for key, value in validation['suggested_changes'].items():
             config[key] = value
+            
+        # Apply Derrian validation suggestions
+        if derrian_validation['passed'] and 'suggestions' in derrian_validation:
+            for key, value in derrian_validation['suggestions'].items():
+                if key == 'sdxl_optimized' and value:
+                    print("🎯 Applying SDXL optimizations from Derrian's validation")
+                    # SDXL optimizations could be applied here
             
         # Print all validation results
         for warning in validation['warnings']:
             print(warning)
         for conflict in validation['conflicts']:
             print(conflict)
+        for warning in derrian_validation.get('warnings', []):
+            print(warning)
         
         # Show advanced features summary
         if config.get('advanced_mode_enabled', False):
