@@ -1,14 +1,14 @@
 # widgets/training_widget.py
 import ipywidgets as widgets
 from IPython.display import display
-from core.training_manager import TrainingManager
+from core.training_manager import HybridTrainingManager
 from .training_monitor_widget import TrainingMonitorWidget
 
 class TrainingWidget:
     def __init__(self, training_manager=None):
         # Use dependency injection - accept manager instance or create default
         if training_manager is None:
-            training_manager = TrainingManager()
+            training_manager = HybridTrainingManager()
             
         self.manager = training_manager
         self.create_widgets()

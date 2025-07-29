@@ -4,7 +4,7 @@
 
 from core.managers import SetupManager, ModelManager
 from core.dataset_manager import DatasetManager
-from core.training_manager import TrainingManager
+from core.training_manager import HybridTrainingManager
 from core.utilities_manager import UtilitiesManager
 
 # Create single instances of each manager
@@ -12,7 +12,7 @@ from core.utilities_manager import UtilitiesManager
 setup_manager = SetupManager()
 model_manager = ModelManager()
 dataset_manager = DatasetManager(model_manager)
-training_manager = TrainingManager()
+training_manager = HybridTrainingManager()
 utilities_manager = UtilitiesManager()
 
 # Import all widgets

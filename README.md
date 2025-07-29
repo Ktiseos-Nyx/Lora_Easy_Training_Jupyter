@@ -236,6 +236,25 @@ This tool helps you:
 
 ## 🐛 Troubleshooting
 
+### Known Issues & Compatibility
+
+⚠️ **Flux/SD3.5 Training (EXPERIMENTAL)**
+- The `Flux_SD3_Training/` folder contains **work-in-progress** Flux and SD3.5 LoRA training
+- May not function correctly - still under active development
+- Use at your own risk for testing purposes only
+
+⚠️ **Triton/ONNX Compatibility Warnings**
+- **Docker/VastAI users**: Triton compiler may fail with AdamW8bit optimizer
+- **Symptoms**: "TRITON NOT FOUND" or "triton not compatible" errors
+- **Solution**: System will auto-fallback to AdamW (uses more VRAM but stable)
+- **ONNX Runtime**: Dependency conflicts possible between `onnxruntime-gpu` and `open-clip-torch`
+
+⚠️ **Advanced LoRA Methods (EXPERIMENTAL)**
+- **DoRA, GLoRA, BOFT (Butterfly)**: May not function correctly as of yet
+- **Status**: Currently under testing and validation
+- **Recommendation**: Use standard LoRA or LoCon for stable results
+- **More testing**: Additional compatibility testing is ongoing
+
 ### Support
 - **GitHub Issues**: Report bugs and feature requests
 - **Documentation**: Check tooltips and explanations in widgets

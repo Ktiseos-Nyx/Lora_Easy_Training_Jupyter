@@ -205,10 +205,7 @@ class TrainingMonitorWidget:
         self.start_training_button.disabled = False
         self.stop_training_button.disabled = True
     
-    def display(self):
-        """Display the training monitor widget"""
-        from IPython.display import display
-        display(self.widget_box)
+    # Removed duplicate display method - main one is at end of class
     
     def update_phase(self, phase_text, phase_type="info"):
         """Update the current training phase"""
