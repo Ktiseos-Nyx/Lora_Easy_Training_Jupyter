@@ -14,7 +14,7 @@ Perfect for beginners and those wanting step-by-step guidance:
 ### 📖 Guides
 Comprehensive guides for specific aspects of LoRA training:
 
-- **[Dataset Creation](guides/dataset_creation.md)** - Master dataset preparation and curation
+- **[Dataset Preparation](guides/dataset_preparation.md)** - Complete dataset preparation and curation workflow
 - **[Troubleshooting](guides/troubleshooting.md)** - Solutions to common problems
 - In-depth coverage of tools and techniques
 
@@ -40,7 +40,7 @@ Quick lookup for parameters, settings, and technical details:
 
 ### Ready to Level Up?
 1. Read **[Training Concepts](advanced/training_concepts.md)** for deeper understanding
-2. Master **[Dataset Creation](guides/dataset_creation.md)** techniques
+2. Master **[Dataset Preparation](guides/dataset_preparation.md)** techniques
 3. Experiment with advanced settings using **[Widget Reference](reference/widget_reference.md)**
 
 ### Need Help Right Now?
