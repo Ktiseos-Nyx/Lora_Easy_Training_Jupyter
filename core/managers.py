@@ -325,8 +325,60 @@ class SetupManager:
             except subprocess.CalledProcessError as e:
                 print(f"⚠️ Failed to install {package}: {e}")
         
+        # Fix Triton installation for Docker/VastAI compatibility
+        self._fix_triton_installation()
+        
         if not os.path.exists(requirements_file):
             print("⚠️ SD scripts requirements.txt not found")
+    
+    def _fix_triton_installation(self):
+        """Fix Triton installation for Docker/VastAI platform compatibility issues"""
+        print("🔧 Checking and fixing Triton installation for Docker compatibility...")
+        
+        try:
+            # First, try to import triton to see if it's working
+            import triton
+            print("✅ Triton already working, skipping reinstall")
+            return
+        except ImportError as e:
+            print(f"⚠️ Triton import failed: {e}")
+        except Exception as e:
+            print(f"⚠️ Triton compatibility issue: {e}")
+        
+        # Try different Triton installation methods for Docker compatibility
+        triton_install_methods = [
+            # Method 1: Force Linux platform (fixes Windows wheel issue)
+            ['pip', 'install', '--force-reinstall', 'triton', '--platform=linux_x86_64', '--only-binary=:all:'],
+            
+            # Method 2: Use PyTorch's index (proper CUDA compatibility)
+            ['pip', 'install', '--force-reinstall', 'triton', '--index-url=https://download.pytorch.org/whl/cu121'],
+            
+            # Method 3: Specific version that matches common Docker setups
+            ['pip', 'install', '--force-reinstall', 'triton==2.1.0'],
+            
+            # Method 4: Latest from PyPI with no cache (clears corrupted downloads)
+            ['pip', 'install', '--force-reinstall', '--no-cache-dir', 'triton']
+        ]
+        
+        for i, method in enumerate(triton_install_methods):
+            try:
+                print(f"🔄 Trying Triton installation method {i+1}...")
+                subprocess.run(method, check=True)
+                
+                # Test if it works
+                import importlib
+                if 'triton' in sys.modules:
+                    importlib.reload(sys.modules['triton'])
+                import triton
+                print(f"✅ Triton installation method {i+1} succeeded!")
+                return
+                
+            except (subprocess.CalledProcessError, ImportError) as e:
+                print(f"❌ Method {i+1} failed: {e}")
+                continue
+        
+        print("⚠️ All Triton installation methods failed - AdamW8bit may not work")
+        print("💡 The training will automatically fallback to AdamW when needed")
             
     def _verify_installation(self):
         """Verify all components are working"""

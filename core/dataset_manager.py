@@ -109,7 +109,8 @@ class DatasetManager:
                 "--batch_size", "8" if "v3" in model_to_try or "swinv2" in model_to_try else "1",
                 "--max_data_loader_n_workers", "2",
                 "--caption_extension", caption_extension,
-                "--remove_underscore"  # Convert underscores to spaces
+                "--remove_underscore",  # Convert underscores to spaces
+                "--character_tags_first"  # Put character tags before general tags
             ]
             
             # Force ONNX usage for modern models

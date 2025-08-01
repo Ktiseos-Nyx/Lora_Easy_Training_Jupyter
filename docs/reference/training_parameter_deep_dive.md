@@ -49,18 +49,21 @@ This guide synthesizes knowledge from:
 
 **Network Dimension (Rank)**
 - **What it controls**: The "size" or capacity of the LoRA adaptation
-- **Range**: Typically 4-128, commonly 8-32
+- **Range**: Typically 4-128, commonly 8-32 for regular LoRA, 16-32 for LyCORIS
 - **Trade-offs**: Higher = more detail capture, larger files, slower training
 - **OneTrainer guidance**: Start with 8-16 for most use cases
 - **Kohya_ss guidance**: Increase for complex styles or characters
-- **Our system**: Adjustable in network settings
+- **LyCORIS consideration**: Higher capacity needed due to more stable training
+- **Our system**: Adjustable in network settings (defaults: 16 for LyCORIS, 8 for regular LoRA)
 
 **Network Alpha**
-- **What it does**: Scaling factor for LoRA weights
-- **Common values**: Often set to half of network dimension
-- **Effect**: Higher alpha = stronger LoRA influence
-- **Mathematical relationship**: alpha/rank ratio affects learning dynamics
-- **Our system**: Paired with network dimension setting
+- **What it does**: Scaling factor for LoRA weights during training
+- **Common values**: Often set to half of network dimension (dim/2 ratio)
+- **Effect**: Higher alpha = stronger LoRA influence during training
+- **Mathematical relationship**: alpha/rank ratio affects learning dynamics and final strength
+- **LyCORIS behavior**: Can handle higher alpha values due to improved stability
+- **Capacity vs Stability**: Lower alpha/dim ratios (like 0.25-0.5) provide more stable training
+- **Our system**: Paired with network dimension setting (defaults: 8 for LyCORIS, 4 for regular LoRA)
 
 **Dropout**
 - **Purpose**: Regularization technique to prevent overfitting
@@ -293,11 +296,29 @@ This guide synthesizes knowledge from:
 - **Practical**: Test both parameters together
 - **OneTrainer guidance**: Sophisticated parameter relationship handling
 
-**Network Dimension × Alpha**
-- **Common ratios**: alpha = dim/2 is traditional
-- **Experimentation**: Some prefer alpha = dim or alpha = 1
-- **Effect**: Different ratios change learning dynamics
-- **Research**: Ongoing investigation into optimal ratios
+**Network Dimension × Alpha - The Capacity vs Stability Trade-off**
+
+**Understanding the Relationship:**
+- **Alpha/Dim ratio**: Controls learning strength vs stability balance
+- **0.25 ratio (dim=16, alpha=4)**: Very stable, may underfit with small datasets
+- **0.5 ratio (dim=16, alpha=8)**: Balanced approach, our new default for LyCORIS
+- **1.0 ratio (dim=16, alpha=16)**: Aggressive learning, higher burning risk
+
+**Architecture-Specific Behavior:**
+- **Regular LoRA**: More sensitive to high alpha/dim ratios, burns easily
+- **LyCORIS methods**: More stable, can handle higher ratios and dimensions
+- **DoRA**: Even more stable, can push ratios higher without burning
+
+**Dataset Size Considerations:**
+- **Small datasets (10-30 images)**: Higher dim/alpha needed for sufficient learning
+- **Medium datasets (50-200 images)**: Standard ratios work well
+- **Large datasets (500+ images)**: Lower ratios prevent overfitting
+
+**Practical Guidelines from Analysis:**
+- **Regular LoRA**: 8/4 (0.5 ratio) - proven stable
+- **LyCORIS**: 16/8 (0.5 ratio) - higher capacity, same stability
+- **Experimental**: Try 32/16 for complex characters with good datasets
+- **Conservative**: Drop to 16/4 (0.25 ratio) if experiencing burning
 
 **Optimizer × Learning Rate**
 - **AdamW**: Standard learning rate ranges

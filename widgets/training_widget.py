@@ -157,7 +157,7 @@ class TrainingWidget:
         self.random_crop = widgets.Checkbox(value=False, description="Random Crop (data augmentation)", indent=False)
         
         # Bucketing settings (moved from "advanced")
-        self.bucket_reso_steps = widgets.IntSlider(value=64, min=32, max=128, step=32, description='Bucket Resolution Steps:', style={'description_width': 'initial'}, continuous_update=False)
+        self.sdxl_bucket_optimization = widgets.Checkbox(value=False, description="📐 SDXL Bucket Optimization (32 steps vs 64 standard)", indent=False)
         self.min_bucket_reso = widgets.IntSlider(value=256, min=128, max=512, step=64, description='Min Bucket Resolution:', style={'description_width': 'initial'}, continuous_update=False)
         self.max_bucket_reso = widgets.IntSlider(value=2048, min=1024, max=4096, step=512, description='Max Bucket Resolution:', style={'description_width': 'initial'}, continuous_update=False)
         self.bucket_no_upscale = widgets.Checkbox(value=False, description="No Bucket Upscale (prevent upscaling small images)", indent=False)
@@ -169,7 +169,7 @@ class TrainingWidget:
         # --- LoRA Structure ---
         lora_struct_desc = widgets.HTML("""
         <h3>▶️ LoRA Structure</h3>
-        <p>Choose your LoRA type and define its dimensions. <strong>8 dim/4 alpha works great for characters (~50MB)</strong>. Higher dimensions capture more detail but create larger files.</p>
+        <p>Choose your LoRA type and define its dimensions. <strong>16 dim/8 alpha balances capacity and stability</strong> for most use cases (~100MB). LyCORIS methods can handle higher dimensions than regular LoRA.</p>
         
         <div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 10px 0;'>
         <h4>🧩 Conv Layers Explained:</h4>
@@ -177,7 +177,7 @@ class TrainingWidget:
         <ul>
         <li><strong>Conv layers help with:</strong> Fine details, textures, spatial features, artistic styles</li>
         <li><strong>When to use:</strong> Style LoRAs, complex characters, detailed concepts</li>
-        <li><strong>Recommended:</strong> Start with same values as Network Dim/Alpha (8/4)</li>
+        <li><strong>Recommended:</strong> Start with same values as Network Dim/Alpha (16/8)</li>
         <li><strong>Higher values:</strong> More detail capture but larger file size and slower training</li>
         <li><strong>Skip for:</strong> Simple character LoRAs where standard LoRA works fine</li>
         </ul>
@@ -196,10 +196,10 @@ class TrainingWidget:
             description='LoRA Type:', 
             style={'description_width': 'initial'}
         )
-        self.network_dim = widgets.IntText(value=8, description='Network Dim:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        self.network_alpha = widgets.IntText(value=4, description='Network Alpha:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        self.conv_dim = widgets.IntText(value=8, description='🧩 Conv Dim (for textures/details):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        self.conv_alpha = widgets.IntText(value=4, description='🧩 Conv Alpha (conv learning rate):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.network_dim = widgets.IntText(value=16, description='Network Dim:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.network_alpha = widgets.IntText(value=8, description='Network Alpha:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.conv_dim = widgets.IntText(value=16, description='🧩 Conv Dim (for textures/details):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.conv_alpha = widgets.IntText(value=8, description='🧩 Conv Alpha (conv learning rate):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         lora_box = widgets.VBox([lora_struct_desc, self.lora_type, self.network_dim, self.network_alpha, self.conv_dim, self.conv_alpha])
 
         # --- Training Options ---
@@ -221,7 +221,11 @@ class TrainingWidget:
         self.cache_latents = widgets.Checkbox(value=True, description="Cache Latents (saves memory)", indent=False)
         self.cache_latents_to_disk = widgets.Checkbox(value=True, description="Cache Latents to Disk (uses disk space, saves more memory)", indent=False)
         self.cache_text_encoder_outputs = widgets.Checkbox(value=False, description="Cache Text Encoder Outputs (disables text encoder training)", indent=False)
-        self.v_parameterization = widgets.Checkbox(value=False, description="V-Parameterization (enable for SDXL v-pred models)", indent=False)
+        self.v2 = widgets.Checkbox(value=False, description="SD 2.x Base Model (enable for SD 2.0/2.1 base models)", indent=False)
+        self.v_parameterization = widgets.Checkbox(value=False, description="V-Parameterization (enable for SDXL v-pred models or SD 2.x 768px models)", indent=False)
+        
+        # SDXL-specific optimizations (highly recommended by Kohya SS docs)
+        self.network_train_unet_only = widgets.Checkbox(value=False, description="🎯 Train U-Net Only (highly recommended for SDXL LoRA)", indent=False)
         
         # Saving options (moved from separate section)
         self.save_every_n_epochs = widgets.IntText(value=1, description='Save Every N Epochs:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
@@ -240,10 +244,10 @@ class TrainingWidget:
             # Training options
             self.optimizer, self.cross_attention, self.precision, self.fp8_base,
             self.cache_latents, self.cache_latents_to_disk, self.cache_text_encoder_outputs,
-            self.v_parameterization, self.zero_terminal_snr, self.enable_bucket, 
+            self.v2, self.v_parameterization, self.network_train_unet_only, self.zero_terminal_snr, self.enable_bucket, 
             self.gradient_checkpointing, self.gradient_accumulation_steps, self.max_grad_norm, self.full_fp16, self.random_crop,
             # Bucketing and VAE settings
-            self.bucket_reso_steps, self.min_bucket_reso, self.max_bucket_reso, self.bucket_no_upscale,
+            self.sdxl_bucket_optimization, self.min_bucket_reso, self.max_bucket_reso, self.bucket_no_upscale,
             self.vae_batch_size, self.no_half_vae,
             self.save_every_n_epochs, self.keep_only_last_n_epochs,
             # Config warnings at the end
@@ -487,7 +491,9 @@ class TrainingWidget:
             'cache_latents_to_disk': self.cache_latents_to_disk.value,
             'cache_text_encoder_outputs': self.cache_text_encoder_outputs.value,
             'shuffle_caption': self.shuffle_caption.value,
+            'v2': self.v2.value,
             'v_parameterization': self.v_parameterization.value,
+            'network_train_unet_only': self.network_train_unet_only.value,
             'save_every_n_epochs': self.save_every_n_epochs.value,
             'keep_only_last_n_epochs': self.keep_only_last_n_epochs.value,
             # Advanced training options
@@ -504,7 +510,7 @@ class TrainingWidget:
             'max_grad_norm': self.max_grad_norm.value,
             'full_fp16': self.full_fp16.value,
             'random_crop': self.random_crop.value,
-            'bucket_reso_steps': self.bucket_reso_steps.value,
+            'bucket_reso_steps': 32 if self.sdxl_bucket_optimization.value else 64,
             'min_bucket_reso': self.min_bucket_reso.value,
             'max_bucket_reso': self.max_bucket_reso.value,
             'bucket_no_upscale': self.bucket_no_upscale.value,

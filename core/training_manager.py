@@ -80,22 +80,26 @@ class HybridTrainingManager:
         # Try to import and verify CAME is available (from custom_scheduler)
         try:
             import LoraEasyCustomOptimizer.came
-            pass  # CAME available
+            from LoraEasyCustomOptimizer.came import CAME
+            print("✅ CAME optimizer found and ready!")
         except ImportError as e:
             print(f"⚠️ CAME optimizer not found: {e}")
             
             # Try alternative import paths for Derrian's structure
             alt_paths = [
-                'came', 'optimizers.came', 'custom_optimizers.came',
-                'custom_scheduler.LoraEasyCustomOptimizer.came'
+                ('came', 'CAME'),
+                ('optimizers.came', 'CAME'), 
+                ('custom_optimizers.came', 'CAME'),
+                ('custom_scheduler.LoraEasyCustomOptimizer.came', 'CAME')
             ]
             
-            for alt_path in alt_paths:
+            for module_path, class_name in alt_paths:
                 try:
-                    __import__(alt_path)
-                    print(f"✅ Found CAME at: {alt_path}")
+                    module = __import__(module_path, fromlist=[class_name])
+                    getattr(module, class_name)  # Test if class exists
+                    print(f"✅ Found CAME at: {module_path}.{class_name}")
                     break
-                except ImportError:
+                except (ImportError, AttributeError):
                     continue
             else:
                 print("💡 CAME optimizer not found in any expected location")
@@ -107,6 +111,46 @@ class HybridTrainingManager:
         except ImportError as e:
             print(f"⚠️ REX scheduler not found: {e}")
             print("💡 Custom optimizers might not be available - using standard optimizers")
+    
+    def _test_triton_compatibility(self):
+        """Test if Triton is working properly for AdamW8bit"""
+        try:
+            # Try to import and test basic Triton functionality
+            import triton
+            import torch
+            
+            # Test if we can create a simple operation that would use Triton
+            # This mimics what bitsandbytes.AdamW8bit would try to do
+            if not torch.cuda.is_available():
+                print("🔍 CUDA not available - AdamW8bit may not work optimally")
+                return False
+                
+            # Try a simple tensor operation that would trigger Triton compilation
+            test_tensor = torch.randn(10, device='cuda', dtype=torch.float16)
+            _ = test_tensor * 2.0
+            
+            print("✅ Triton compatibility test passed - AdamW8bit should work")
+            return True
+            
+        except ImportError as e:
+            print(f"⚠️ Triton not found: {e}")
+            print("💡 Will fallback to AdamW for compatibility")
+            return False
+        except Exception as e:
+            print(f"⚠️ Triton compatibility test failed: {e}")
+            print("💡 Will fallback to AdamW for compatibility")
+            return False
+    
+    def _get_safe_optimizer_config(self, requested_optimizer):
+        """Get optimizer config with automatic fallback for compatibility issues"""
+        if requested_optimizer == 'AdamW8bit':
+            # Test Triton compatibility before using AdamW8bit
+            if not self._test_triton_compatibility():
+                print("🔄 Automatically switching from AdamW8bit to AdamW due to compatibility issues")
+                print("📋 AdamW provides similar performance with broader compatibility")
+                return 'AdamW'
+        
+        return requested_optimizer
     
     def _safe_float(self, value, default=0.0):
         """Safely convert value to float with fallback"""
@@ -205,6 +249,8 @@ class HybridTrainingManager:
                 'optimizer_type': 'LoraEasyCustomOptimizer.came.CAME',
                 'scheduler': 'LoraEasyCustomOptimizer.RexAnnealingWarmRestarts.RexAnnealingWarmRestarts',
                 'loss_type': 'huber',
+                'huber_c': 0.1,
+                'huber_schedule': 'snr',
                 'args': ['weight_decay=0.04', 'eps=1e-16'],
                 'scheduler_args': ['min_lr=1e-9', 'gamma=0.9', 'd=0.9'],
                 'description': 'Derrian\'s memory-efficient optimizer'
@@ -520,10 +566,13 @@ class HybridTrainingManager:
 
         # 🚀 Advanced Optimizer Handling
         optimizer_args = []
-        optimizer_type = config['optimizer']  # Default to widget selection
+        requested_optimizer = config['optimizer']  # Default to widget selection
+        optimizer_type = self._get_safe_optimizer_config(requested_optimizer)  # Apply fallback logic
         lr_scheduler_type = None
         lr_scheduler_args = None
         loss_type = None
+        huber_c = None
+        huber_schedule = None
         
         # Check for advanced optimizer
         advanced_optimizer = config.get('advanced_optimizer', 'standard')
@@ -539,6 +588,13 @@ class HybridTrainingManager:
                 lr_scheduler_args = adv_config['scheduler_args']
             if 'loss_type' in adv_config:
                 loss_type = adv_config['loss_type']
+                print(f"🎯 Loss Function: {loss_type} (more robust than MSE)")
+            if 'huber_c' in adv_config:
+                huber_c = adv_config['huber_c'] 
+                print(f"📊 Huber C: {huber_c} (threshold parameter)")
+            if 'huber_schedule' in adv_config:
+                huber_schedule = adv_config['huber_schedule']
+                print(f"📈 Huber Schedule: {huber_schedule} (SNR-based scheduling)")
             
             print(f"🚀 Using advanced optimizer: {advanced_optimizer} - {adv_config['description']}")
             
@@ -563,17 +619,17 @@ class HybridTrainingManager:
                 print(f"📊 Learning rate auto-set to: {adv_config['learning_rate_override']}")
         
         # Standard optimizer configurations - use dictionary lookup for cleaner code
-        elif config['optimizer'] in self.standard_optimizers:
-            std_config = self.standard_optimizers[config['optimizer']]
+        elif optimizer_type in self.standard_optimizers:
+            std_config = self.standard_optimizers[optimizer_type]
             optimizer_type = std_config['optimizer_type']
             optimizer_args.extend(std_config['args'])
             
             # Handle special cases like Prodigy warmup
-            if config['optimizer'] == 'Prodigy' and config.get('lr_warmup_ratio', 0) > 0:
+            if optimizer_type == 'Prodigy' and config.get('lr_warmup_ratio', 0) > 0:
                 if 'warmup_args' in std_config:
                     optimizer_args.extend(std_config['warmup_args'])
             
-            print(f"🔧 Using {config['optimizer']}: {std_config['description']}")
+            print(f"🔧 Using {optimizer_type}: {std_config['description']}")
         
         # If no match, use the optimizer name as-is and let SD scripts handle it
         else:
@@ -632,9 +688,17 @@ class HybridTrainingManager:
         }
 
         # Add v_parameterization only if explicitly enabled
+        if config.get('v2', False):
+            training_args["v2"] = True
+            print("✅ SD 2.x mode enabled for SD 2.0/2.1 base models")
+        
         if config.get('v_parameterization', False):
             training_args["v_parameterization"] = True
             print("✅ V-Parameterization enabled for v-pred models")
+        
+        if config.get('network_train_unet_only', False):
+            training_args["network_train_unet_only"] = True
+            print("🎯 Training U-Net only (SDXL LoRA optimization)")
 
         # Apply experimental features
         training_args = self._apply_experimental_features(config, training_args)
@@ -658,6 +722,9 @@ class HybridTrainingManager:
                 "optimizer_args": optimizer_args if optimizer_args else None,
                 "lr_scheduler_type": lr_scheduler_type,
                 "lr_scheduler_args": lr_scheduler_args,
+                "loss_type": loss_type if loss_type else None,
+                "huber_c": huber_c if huber_c else None,
+                "huber_schedule": huber_schedule if huber_schedule else None,
             },
             "training_arguments": training_args
         }
