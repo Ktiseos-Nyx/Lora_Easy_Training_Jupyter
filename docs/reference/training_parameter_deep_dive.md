@@ -98,50 +98,134 @@ This guide synthesizes knowledge from:
 
 ## 🧠 **Advanced Optimization**
 
+## 🧠 **Understanding Optimizers vs Schedulers**
+
+**OPTIMIZERS** control **HOW** the model learns from gradients:
+- **What they do**: Update model weights based on calculated gradients
+- **Key function**: Decide how much to change weights each step
+- **Think of it as**: The "learning strategy" - cautious vs aggressive weight updates
+- **Examples**: AdamW, CAME, Adafactor, SGD
+
+**SCHEDULERS** control **WHEN** and **HOW MUCH** learning happens:
+- **What they do**: Adjust the learning rate over time during training
+- **Key function**: Start high/low, increase/decrease, restart, etc.
+- **Think of it as**: The "learning timeline" - when to learn fast vs slow
+- **Examples**: Cosine, Linear, Constant, Cosine with Restarts
+
+**The Relationship:**
+```
+Learning Rate Schedule (when/how much) + Optimizer (how) = Training Strategy
+    ↓                                        ↓                    ↓
+Cosine (start high, decay smooth)    +    AdamW (adaptive)  = Stable training
+Constant (same rate always)         +    CAME (efficient)  = Fast convergence  
+```
+
 ### Optimizer Selection
 
 **AdamW (Standard)**
+- **How it works**: Adaptive learning with momentum and weight decay
 - **Characteristics**: Reliable, well-tested optimizer
-- **Memory usage**: Higher memory requirements
-- **Learning rate**: Works well with standard learning rates
-- **Kohya_ss default**: Traditional choice for stability
+- **Memory usage**: Higher memory requirements (~2-3GB extra)
+- **Learning rate**: Works well with standard learning rates (1e-4 to 1e-6)
+- **Best for**: General purpose, proven stability
+- **Scheduler pairs**: Works with all schedulers
 - **Our system**: Primary optimizer option
 
-**AdamW8Bit**
+**AdamW8Bit** ⚠️ 
+- **How it works**: Quantized version of AdamW using 8-bit precision
 - **Purpose**: Memory-optimized version of AdamW
-- **Memory savings**: Significant reduction in VRAM usage
+- **Memory savings**: Significant reduction in VRAM usage (~1-2GB saved)
 - **Performance**: Minimal quality difference from full AdamW
-- **Use case**: When memory is constrained
-- **Our system**: Available for memory optimization
+- **CRITICAL ISSUE**: **Requires Triton compiler** - often broken in Docker/VastAI containers
+- **Use case**: When memory is constrained AND Triton works
+- **VastAI/Docker**: **Likely to fail** - see VastAI section below
 
-**CAME**
-- **Innovation**: Confidence-guided adaptive optimizer
-- **Memory efficiency**: Very low memory overhead
-- **Learning rate**: Often works with higher learning rates
-- **Stability**: Good for difficult training scenarios
-- **Our system**: Available as advanced optimizer
+**CAME** ✅
+- **How it works**: Confidence-guided Adaptive Memory Efficient optimizer
+- **Innovation**: Uses confidence measures to guide updates more intelligently
+- **Memory efficiency**: Very low memory overhead (~500MB vs AdamW's 2-3GB)
+- **Learning rate**: Often works with higher learning rates than AdamW
+- **Stability**: Excellent for difficult training scenarios (v-pred models)
+- **Special feature**: **Uses Huber loss automatically** for better robustness
+- **Best for**: Memory-constrained systems, unstable models (NoobAI-XL, v-pred)
+- **Our system**: Advanced optimizer with automatic Huber loss + REX scheduling
 
-**Prodigy**
-- **Unique feature**: Learning rate free optimization
-- **How it works**: Automatically adjusts learning rate during training
-- **Experimental**: Newer, less tested but promising
-- **OneTrainer experience**: Good results when it works
-- **Our system**: Available for experimentation
+**Adafactor** ✅
+- **How it works**: Adaptive learning with factorized second moments (memory efficient)
+- **Innovation**: Reduces memory by factorizing the optimizer state
+- **Memory efficiency**: Very low memory usage, scales well with model size  
+- **Learning rate**: Can work with higher rates, has adaptive scaling options
+- **Stability**: More stable than AdamW for large models
+- **Best for**: Large models, memory-constrained training, SDXL fine-tuning
+- **Scheduler pairs**: Works best with constant or constant_with_warmup
+- **Our system**: Available as standard optimizer
+
+**Prodigy/Prodigy Plus**
+- **How it works**: Learning rate-free optimization - automatically finds optimal rates
+- **Unique feature**: No manual learning rate tuning required
+- **Innovation**: Estimates optimal learning rate based on gradient statistics
+- **Experimental**: Newer, less tested but very promising results
+- **Memory**: Similar to AdamW but with automatic rate adjustment
+- **Learning rate**: Set to 1.0 and let Prodigy handle the rest
+- **Best for**: When you don't want to tune learning rates manually
+- **Our system**: Available for experimentation with schedule-free option
+
+### Learning Rate Schedulers Explained
+
+**Constant**
+- **How it works**: Learning rate stays the same throughout training
+- **When to use**: Simple training, when you found a good learning rate
+- **Pros**: Predictable, easy to understand
+- **Cons**: May not be optimal for long training runs
+- **Best with**: Adafactor, Prodigy (which handles rate internally)
+
+**Linear**
+- **How it works**: Learning rate decreases linearly from start to end
+- **When to use**: When you want gradual slowdown
+- **Pros**: Smooth transition, predictable
+- **Cons**: May decrease too aggressively early on
+- **Best with**: AdamW for simple decay
+
+**Cosine**
+- **How it works**: Learning rate follows smooth cosine curve (high→low)
+- **When to use**: Most LoRA training - excellent default choice
+- **Pros**: Smooth decay, good for convergence
+- **Cons**: Single decay cycle only
+- **Best with**: AdamW, CAME - most popular combination
+
+**Cosine with Restarts**
+- **How it works**: Cosine decay but restarts to high learning rate periodically
+- **When to use**: Long training, escaping local minima
+- **Pros**: Can find better solutions through restarts
+- **Cons**: More complex, needs tuning of restart frequency
+- **Best with**: AdamW, good for difficult datasets
+
+**Constant with Warmup**
+- **How it works**: Starts low, warms up to target rate, then stays constant
+- **When to use**: Large models, Adafactor training
+- **Pros**: Stable start, prevents early instability
+- **Cons**: May not decay when needed
+- **Best with**: Adafactor (often recommended), large model training
 
 ### Advanced Schedulers
 
 **REX (Exponential Annealing)**
-- **Concept**: Exponential learning rate decay with restarts
-- **Benefits**: Can escape local minima
-- **Complexity**: More parameters to configure
+- **How it works**: Exponential learning rate decay with warm restarts
+- **Innovation**: More sophisticated than cosine restarts
+- **Benefits**: Can escape local minima better than standard schedulers
+- **Complexity**: More parameters to configure (gamma, d values)
 - **Research basis**: Based on recent optimization research
-- **Our system**: Available in advanced scheduler options
+- **Best with**: CAME optimizer (our default pairing)
+- **Our system**: Available in advanced scheduler options with CAME
 
 **Schedule-Free**
-- **Philosophy**: Automatic schedule adjustment
+- **How it works**: Optimizer handles scheduling internally - no external scheduler
+- **Philosophy**: Automatic schedule adjustment based on gradient statistics
 - **Implementation**: No manual schedule configuration needed
-- **Experimental**: Cutting-edge research implementation
+- **Innovation**: Cutting-edge research implementation
 - **Use case**: When you don't want to tune schedules manually
+- **Best with**: Prodigy Plus (our implementation)
+- **Our system**: Available with Prodigy Plus optimizer
 
 ### Precision and Memory
 
@@ -326,21 +410,89 @@ This guide synthesizes knowledge from:
 - **Prodigy**: Learning rate free operation
 - **Adaptation**: Each optimizer has different optimal ranges
 
+## 🐳 **VastAI / Docker Container Specific Guide**
+
+### **The Triton Problem**
+
+**If you're on VastAI or Docker containers, you're likely stuck in "Triton Hell":**
+
+**Symptoms:**
+```
+TRITON NOT FOUND
+RuntimeError: triton not compatible  
+bitsandbytes compilation failed
+AdamW8bit requires Triton
+```
+
+**Root Cause:**
+- **VastAI containers** have pre-built Python environments
+- **Triton compiler** needs specific CUDA toolkit versions
+- **Docker layers** make Triton installation extremely difficult
+- **Our auto-fixes try** but container restrictions often prevent success
+
+### **VastAI Recommended Optimizers (Triton-Free)**
+
+**🥇 CAME (Best Choice)**
+- **Why**: No Triton dependency, memory efficient, includes Huber loss
+- **Settings**: Use default with REX scheduler
+- **Learning Rate**: Can use slightly higher rates (1e-4 to 3e-4)
+- **Best for**: All training types, especially v-pred models
+
+**🥈 Adafactor (SDXL Champion)**  
+- **Why**: No Triton dependency, excellent for large models
+- **Settings**: Use with constant_with_warmup scheduler
+- **Learning Rate**: Can use higher rates, has adaptive scaling
+- **Best for**: SDXL fine-tuning, large models, memory-constrained training
+
+**🥉 Regular AdamW (Reliable Fallback)**
+- **Why**: Always works, well-tested, no dependencies
+- **Settings**: Use with cosine or cosine_with_restarts
+- **Learning Rate**: Standard rates (1e-4 to 1e-6)
+- **Best for**: When you want proven stability
+
+**❌ Avoid on VastAI:**
+- **AdamW8bit** - Requires Triton (will likely fail)
+- **Lion** - May have compilation issues
+- **Any optimizer** labeled as requiring Triton compilation
+
+### **VastAI Training Strategy**
+
+**Recommended Combination:**
+```
+Optimizer: CAME
+Scheduler: REX (included with CAME)
+Loss: Huber (automatic with CAME)
+Learning Rate: 1e-4 to 3e-4
+```
+
+**Alternative for SDXL:**
+```
+Optimizer: Adafactor  
+Scheduler: constant_with_warmup
+Learning Rate: 4e-7 (SDXL original rate) or higher
+Warmup Steps: 100-200
+```
+
+**Memory Optimization for VastAI:**
+- **Cache latents**: Always enable
+- **Cache text encoder outputs**: For memory savings
+- **Gradient checkpointing**: Essential for large models
+- **fp16 precision**: Saves memory without Triton
+
 ### Quality vs Efficiency Trade-offs
 
-**Training Speed Optimizations**
+**Training Speed Optimizations (VastAI-Safe)**
 - Lower resolution training
-- Smaller batch sizes
+- Smaller batch sizes  
 - fp16 mixed precision
 - Gradient checkpointing (slower but less memory)
-- Efficient optimizers (CAME, AdamW8Bit)
+- Efficient optimizers (CAME, Adafactor) - **NO AdamW8bit**
 
-**Quality Maximization**
+**Quality Maximization (VastAI-Safe)**
 - Higher resolution training
 - Larger network dimensions
-- Full precision training
-- DoRA network type
-- Careful learning rate tuning
+- DoRA network type (if memory allows)
+- CAME optimizer with Huber loss
 - Multiple training runs with different seeds
 
 ### Debugging and Troubleshooting
@@ -399,6 +551,50 @@ This guide synthesizes knowledge from:
 - **Kohya_ss Community**: Comprehensive parameter documentation
 - **Research Community**: Academic papers and innovations
 - **LoRA Training Community**: Practical experience and validation
+
+## 📋 **Quick Reference: Optimizer + Scheduler Combinations**
+
+### **Recommended Pairings**
+
+**For Beginners (Most Reliable):**
+```
+AdamW + Cosine
+Learning Rate: 1e-4 to 1e-6
+```
+
+**For VastAI/Docker (Triton-Free):**  
+```
+CAME + REX (automatic)
+Learning Rate: 1e-4 to 3e-4
+```
+
+**For SDXL Training:**
+```
+Adafactor + constant_with_warmup  
+Learning Rate: 4e-7 to 1e-6
+Warmup: 100-200 steps
+```
+
+**For Memory-Constrained:**
+```
+CAME + REX (uses ~500MB vs AdamW's 2-3GB)
+Enable: cache_latents, gradient_checkpointing, fp16
+```
+
+**For Experimentation:**
+```
+Prodigy Plus + schedule_free (automatic)
+Learning Rate: 1.0 (let Prodigy handle it)
+```
+
+### **Troubleshooting Quick Fix**
+
+**If AdamW8bit fails:** → Switch to CAME
+**If training is unstable:** → Lower learning rate or try CAME with Huber loss  
+**If out of memory:** → CAME + gradient checkpointing + fp16
+**If on VastAI/Docker:** → Avoid anything requiring Triton, use CAME or Adafactor
+
+---
 
 *Remember: Understanding parameters conceptually helps you make better training decisions regardless of which specific interface you're using. The goal is training better LoRAs through informed parameter choices!*
 
