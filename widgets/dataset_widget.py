@@ -98,11 +98,14 @@ class DatasetWidget:
             disabled=True
         )
         
+        # Create button row for upload and reset
+        upload_button_row = widgets.HBox([self.upload_images_button, self.reset_upload_button])
+        
         self.upload_method_box = widgets.VBox([
             upload_method_desc,
             folder_creation_box,
             self.file_upload,
-            self.upload_images_button
+            upload_button_row
         ])
         
         # Gelbooru Scraper Section
@@ -463,6 +466,14 @@ class DatasetWidget:
         
         # --- File Upload Observer ---
         self.file_upload.observe(self.on_file_upload_change, names='value')
+        
+        # Add a reset button to manually clear widget cache
+        self.reset_upload_button = widgets.Button(
+            description='🔄 Reset Upload',
+            button_style='info',
+            tooltip='Clear upload widget cache if it gets stuck'
+        )
+        self.reset_upload_button.on_click(self.reset_upload_widget)
 
     def on_file_upload_change(self, change):
         """Handle file upload selection changes"""
@@ -632,10 +643,20 @@ class DatasetWidget:
             if uploaded_count > 0:
                 self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
                 
-                # Clear the file upload widget for next use
+                # Clear the file upload widget for next use and force state refresh
                 self.file_upload.value = ()
+                # Trigger widget observers to properly clear internal state
+                self.file_upload.notify_change({'name': 'value', 'old': self.file_upload.value, 'new': ()})
             else:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
+    
+    def reset_upload_widget(self, b):
+        """Reset the file upload widget to clear any cached state"""
+        self.file_upload.value = ()
+        self.file_upload.notify_change({'name': 'value', 'old': (), 'new': ()})
+        self.upload_images_button.disabled = True
+        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔄 Status:</strong> Upload widget reset. Select new files to upload.</div>"
+        print("🔄 Upload widget cache cleared!")
 
     def run_gelbooru_scraper(self, b):
         """Handle Gelbooru image scraping"""

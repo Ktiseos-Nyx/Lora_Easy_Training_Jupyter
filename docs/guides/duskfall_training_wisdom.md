@@ -189,11 +189,147 @@ Success in LoRA training comes from:
 
 *"These are just tips I've picked up to manage my own training sessions. Your results may vary, and that's perfectly normal!" - DuskFall*
 
+## 💸 Duskfall's 2025 GPU Rental Research
+*Real money, real results - documented findings from RTX 5090 training sessions*
+
+### CAME + DoRA Fighting Game Style Experiments
+
+**Current Test Pipeline:**
+- **Marvel vs Capcom** (73 images + CVS crossover data)
+- **Capcom vs SNK** (62 images, pure style consistency)  
+- **Marvel Rivals** (282 images, largest dataset test)
+
+**Configuration Being Tested:**
+```toml
+# Network Setup
+network_dim = 16
+network_alpha = 8
+network_module = "lycoris.kohya"
+network_args = ["algo=lora", "use_dora=True", "conv_dim=16", "conv_alpha=8"]
+
+# Optimizer (CAME)
+learning_rate = 1e-4 (0.0001)
+text_encoder_lr = 0.0 (style training focus)
+optimizer_type = "LoraEasyCustomOptimizer.came.CAME"
+optimizer_args = ["weight_decay=0.1"]
+lr_scheduler = "cosine"
+
+# Training Parameters
+train_batch_size = 4 (RTX 5090 power usage)
+max_train_epochs = 10
+min_snr_gamma = 8.0
+keep_tokens = 1
+```
+
+**Hypothesis Being Tested:**
+- CAME's adaptive learning should handle 1410 steps (282 images × 2 repeats × 10 epochs ÷ 4 batch) without overfitting
+- DoRA should provide better style expressiveness than standard LoRA at same dimensions
+- Style training benefits from aggressive regularization (weight_decay=0.1)
+
+**Learning Rate Discoveries:**
+- **1e-4 with CAME**: Expected sweet spot for style training
+- **5e-4 with CAME**: "Endsinger mode" - abstract nightmare fuel (avoid!)
+- **6e-5**: Too conservative for 282-image style datasets
+
+**Environment Optimizations Applied:**
+- Custom tagger with robust error handling (no more dependency crashes)
+- Environment-based fallback system (cloud/rental GPU optimizations)
+- Fixed widget cache issues for smooth dataset management
+
+**Cost Efficiency Notes:**
+- RTX 5090 rental @ ~$0.50/hour
+- Batch size 4 maximizes GPU utilization
+- Training time: ~20-30 minutes per style LoRA
+
+**Training Results & Discoveries:**
+
+### CAME Dataset Size Threshold Discovery
+**Confirmed through RTX 4090/5090 testing:**
+
+**✅ CAME Success Cases:**
+- **Tyler Kincade (14 images):** PERFECT character learning
+  - 6e-5 LR, 8/4 dimensions, 336 steps
+  - Result: Slightly overbaked but highly versatile
+  - Style inheritance actually beneficial for comic characters
+  - Users can dial down to 0.5 strength for style flexibility
+
+- **Wuthering Waves (125 images):** Style learning with base model dependency
+  - 1e-4 LR, DoRA 16/8, 630 steps, text encoder disabled
+  - Result: Success varies by base model - gacha-focused models perform better
+  - Not as thick as original versions but more focused due to curated dataset
+  - Won't do characters perfectly (by design with TE disabled)
+  - **Base model alignment crucial** - Chinese gacha styles work better on gacha-trained models
+
+**⚠️ CAME Partial Success:**
+- **Marvel vs Capcom (73 images):** Weak but functional style learning
+  - 6e-5 LR, regular LoRA 16/8, 730 steps
+  - Result: Generic anime-ish style, recognizable but not strong
+  - Works better when prompted with specific MvC characters
+  - Benefited from base model's existing knowledge of similar styles (Persona 5-adjacent)
+  - **Learning:** Even in CAME's comfort zone, style training needs higher LR than characters
+
+**❌ CAME Failure Case:**
+- **Marvel Rivals (282 images):** Failed style learning
+  - 1e-4 LR, regular LoRA 16/8, 1410 steps  
+  - Result: Wimpy texture learning only, missed actual style
+
+**✅ AdamW Success Case:**
+- **Marvel Rivals (282 images):** B+ style learning - underbaked but functional
+  - 5e-4 LR, regular LoRA 16/8, AdamW optimizer
+  - Result: Actually learning the style, some artifacts but recognizable
+  - Higher epochs showing improvement trend
+  - **Base model bias:** SDXL defaults to Captain America/Superman for superhero prompts
+  - **Negative prompting helps** reduce default superhero references
+  - **Conclusion:** AdamW can handle novel styles that CAME cannot
+
+### Key Threshold Insights:
+- **<50 images:** CAME perfect for characters (6e-5 LR ideal)
+- **50-100 images:** CAME weak for styles (needs 1e-4+ LR, benefits from base model knowledge)
+- **100-150 images:** CAME viable for styles with DoRA assistance (1e-4 LR minimum)  
+- **>200 images:** CAME too conservative, switch to AdamW + aggressive LR (5e-4+)
+
+### Style vs Character Training with CAME:
+- **Character LoRAs:** Conservative LR (6e-5) works perfectly
+- **Style LoRAs:** Need higher LR (1e-4+) even in CAME's comfort zone
+- **Style novelty matters:** Familiar styles (MvC) easier than unique styles (Marvel Rivals)
+- **Base model knowledge:** Significant advantage for style learning efficiency
+- **Base model alignment:** Critical factor - gacha styles work better on gacha-focused models
+
+### Testing Methodology Notes:
+**Professional evaluation standards applied:**
+- **ADetailer used** for face/detail enhancement during generation
+- **Hires fix applied** for upscaling and quality assessment  
+- **Proper generation pipeline** - not basic/default settings
+- **Quality over quantity approach** - realistic user conditions
+- **Honest limitation reporting** - no overselling of results
+
+### The "Overbaked but Controllable" Philosophy:
+**Better slightly overbaked than underbaked** - discovered through Tyler results:
+- Strong learning at 1.0 strength ensures concept is properly captured
+- Users can dial down to 0.5-0.7 for style flexibility  
+- Comic/anime characters SHOULD have stylistic inheritance
+- Provides reliability over perfect calibration
+
+### What NOT to Do (Expensive Lessons Learned)
+- **Never use 5e-4 LR with CAME** - turns art into abstract void
+- **Don't skip system dependencies** - missing onnx/xformers kills training
+- **Avoid mixing different tagging methods** without cleanup
+- **Don't trust widget defaults** - always verify keep_tokens settings
+
+### Future Research Directions
+- Compare DoRA vs LoHa/LoCon performance on same datasets
+- Test CAME vs AdamW8bit on larger style datasets (500+ images)  
+- Investigate optimal repeat strategies for different dataset sizes
+- Document training time vs quality trade-offs on rental hardware
+
+---
+
 ## 🔗 Credits and References
 
-- **Original Article**: [DuskFall's Opinionated Guide to All LoRA Training 2025 Update](https://civitai.com/articles/1716/opinionated-guide-to-all-lora-training-2025-update)
-- **Author**: DuskFall (Ktiseos-Nyx)
+- **Original Article**: [Duskfall's Opinionated Guide to All LoRA Training 2025 Update](https://civitai.com/articles/1716/opinionated-guide-to-all-lora-training-2025-update)
+- **Author**: Duskfall of Ktiseos-Nyx
 - **Community Wisdom**: HoloStrawberry, JustTNP, and the broader LoRA training community
 - **System Integration**: Adapted for LoRA Easy Training Jupyter notebook system
+- **Research Funding**: Personal GPU rental expenses (the real MVP 💸)
 
 *This guide builds on the collective wisdom of the LoRA training community. Experiment, share, and help others learn!*

@@ -3,6 +3,7 @@ import subprocess
 import os
 import sys
 import zipfile
+import platform
 
 class DatasetManager:
     def __init__(self, model_manager):
@@ -10,6 +11,52 @@ class DatasetManager:
         self.model_manager = model_manager
         self.trainer_dir = os.path.join(self.project_root, "trainer")
         self.sd_scripts_dir = os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts")
+
+    def _detect_environment_type(self):
+        """Detect the current environment to choose the best tagger strategy"""
+        # Check for cloud/rental GPU environments
+        if (os.path.exists("/workspace") or 
+            any(key in os.environ for key in ["VAST_CONTAINERLABEL", "COLAB_GPU"]) or
+            "vastai" in platform.node().lower()):
+            return "cloud_rental"
+        
+        # Check for Colab/Jupyter environments  
+        if (os.path.exists("/content") or 
+            "COLAB_GPU" in os.environ or
+            "jupyter" in sys.modules):
+            return "jupyter_colab"
+            
+        # Default to local environment
+        return "local"
+    
+    def _get_tagger_script_path(self):
+        """Get the appropriate tagger script based on environment"""
+        env_type = self._detect_environment_type()
+        
+        if env_type == "cloud_rental":
+            # Use robust custom tagger for unstable rental GPU environments
+            custom_tagger = os.path.join(self.project_root, "custom", "tag_images_by_wd14_tagger.py")
+            if os.path.exists(custom_tagger):
+                print("🛡️ Using robust custom tagger for cloud/rental environment")
+                return custom_tagger
+        
+        elif env_type == "jupyter_colab":
+            # Use HoloStrawberry's version optimized for Colab/Jupyter
+            holo_tagger = os.path.join(self.project_root, "kohya-colab-main", "tag_images_by_wd14_tagger.py")
+            if os.path.exists(holo_tagger):
+                print("📚 Using HoloStrawberry's tagger for Jupyter/Colab environment") 
+                return holo_tagger
+        
+        # Fallback to Derrian's backend (Kohya-based)
+        derrian_tagger = os.path.join(self.sd_scripts_dir, "finetune", "tag_images_by_wd14_tagger.py")
+        if os.path.exists(derrian_tagger):
+            print("⚙️ Using Derrian's backend tagger (Kohya-based)")
+            return derrian_tagger
+            
+        # Final fallback to custom if nothing else works
+        custom_tagger = os.path.join(self.project_root, "custom", "tag_images_by_wd14_tagger.py")
+        print("🔄 Falling back to custom tagger as last resort")
+        return custom_tagger
 
     def extract_dataset(self, zip_path, extract_to_dir, hf_token=""):
         if not extract_to_dir:
@@ -87,7 +134,7 @@ class DatasetManager:
             venv_python = sys.executable
             print(f"⚠️ Kohya venv not found, using system Python: {venv_python}")
         
-        tagger_script = os.path.join(self.sd_scripts_dir, "finetune/tag_images_by_wd14_tagger.py")
+        tagger_script = self._get_tagger_script_path()
         
         # Check if tagger script exists
         if not os.path.exists(tagger_script):

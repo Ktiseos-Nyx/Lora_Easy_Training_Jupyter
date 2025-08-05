@@ -88,8 +88,13 @@ def main(args):
 
     # 画像を読み込む
     if args.onnx:
-        import onnxruntime as ort
+        try:
+            import onnxruntime as ort
+        except ImportError:
+            print("❌ ONNX runtime not available, falling back to TensorFlow")
+            args.onnx = False
 
+    if args.onnx:
         onnx_path = f"{args.model_dir}/model.onnx"
         print("Running wd14 tagger with onnx")
         print(f"loading onnx model: {onnx_path}")
@@ -109,9 +114,12 @@ def main(args):
             else ["CPUExecutionProvider"],
         )
     else:
-        from tensorflow.keras.models import load_model
-
-        model = load_model(f"{args.model_dir}")
+        try:
+            from tensorflow.keras.models import load_model
+            model = load_model(f"{args.model_dir}")
+        except ImportError:
+            print("❌ TensorFlow not available and ONNX failed, cannot run tagger")
+            return False
 
     # label_names = pd.read_csv("2022_0000_0899_6549/selected_tags.csv")
     # 依存ライブラリを増やしたくないので自力で読むよ
