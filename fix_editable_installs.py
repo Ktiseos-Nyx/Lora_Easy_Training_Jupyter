@@ -115,18 +115,23 @@ class PipInstallFixer:
         for editable_req in self.pending_editable:
             print(f"🔄 Installing editable package: {editable_req}")
             try:
-                # Try with -U first
-                subprocess.run([pip_cmd, 'install', '-U'] + editable_req.split()[1:], 
-                             check=True, capture_output=True)
-                print(f"   ✅ Installed: {editable_req}")
-            except subprocess.CalledProcessError:
-                try:
-                    # Try without -U
-                    subprocess.run([pip_cmd, 'install'] + editable_req.split()[1:], 
-                                 check=True, capture_output=True)
+                # Try with -U first (use original subprocess to avoid recursion)
+                result = self._run_original_subprocess([pip_cmd, 'install', '-U'] + editable_req.split()[1:])
+                if result.returncode == 0:
+                    print(f"   ✅ Installed: {editable_req}")
+                    continue
+            except:
+                pass
+            
+            try:
+                # Try without -U
+                result = self._run_original_subprocess([pip_cmd, 'install'] + editable_req.split()[1:])
+                if result.returncode == 0:
                     print(f"   ✅ Installed (no upgrade): {editable_req}")
-                except subprocess.CalledProcessError as e:
-                    print(f"   ❌ Failed to install {editable_req}: {e}")
+                else:
+                    print(f"   ❌ Failed to install {editable_req}")
+            except Exception as e:
+                print(f"   ❌ Failed to install {editable_req}: {e}")
         
         # Clear pending list
         self.pending_editable = []
@@ -147,8 +152,8 @@ class PipInstallFixer:
                     new_args = args.copy()
                     new_args[r_index + 1] = fixed_req_file
                     
-                    # Run pip with fixed requirements
-                    result = subprocess.run([self.original_pip] + new_args[1:])
+                    # Run pip with fixed requirements (bypass interceptor)
+                    result = self._run_original_subprocess([self.original_pip] + new_args[1:])
                     
                     # Install editable packages separately
                     self.install_editable_packages(args[0] if args[0] != 'pip' else None)
@@ -161,8 +166,17 @@ class PipInstallFixer:
             except (ValueError, IndexError):
                 pass
         
-        # For non-requirements installs, just pass through
-        return subprocess.run([self.original_pip] + args[1:]).returncode
+        # For non-requirements installs, just pass through (bypass interceptor)
+        return self._run_original_subprocess([self.original_pip] + args[1:]).returncode
+    
+    def _run_original_subprocess(self, cmd):
+        """Run subprocess without interception"""
+        # This will be set by setup_pip_interceptor
+        if hasattr(self, '_original_run'):
+            return self._original_run(cmd)
+        else:
+            # Fallback
+            return subprocess.run(cmd)
 
 def create_pip_wrapper():
     """Create a pip wrapper script that uses our fixer"""
@@ -190,6 +204,10 @@ def setup_pip_interceptor():
     
     # Create the fixer
     fixer = PipInstallFixer()
+    
+    # Store original functions in the fixer to avoid recursion
+    fixer._original_run = subprocess.run
+    fixer._original_check_call = subprocess.check_call
     
     # Monkey patch subprocess to intercept pip calls
     original_run = subprocess.run
