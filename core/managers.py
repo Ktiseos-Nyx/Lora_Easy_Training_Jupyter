@@ -288,13 +288,26 @@ class SetupManager:
         """Install requirements for SD scripts and additional optimizers"""
         requirements_file = os.path.join(self.sd_scripts_dir, "requirements.txt")
         
+        # Determine the correct pip path for sd_scripts venv (same logic as _fix_triton_installation)
+        if sys.platform == "win32":
+            sd_venv_pip = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "pip.exe")
+        else:
+            sd_venv_pip = os.path.join(self.sd_scripts_dir, "venv", "bin", "pip")
+        
+        # Check if sd_scripts venv exists, otherwise use system/VastAI pip
+        if os.path.exists(sd_venv_pip):
+            pip_cmd = sd_venv_pip
+            print(f"🎯 Using SD scripts venv pip: {pip_cmd}")
+        else:
+            pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
+            print(f"🎯 Using system pip: {pip_cmd}")
+        
         if os.path.exists(requirements_file):
             print("📦 Installing SD scripts requirements...")
             
             try:
                 # Install from the correct working directory so -e . resolves properly
                 print(f"🔧 Installing requirements from {self.sd_scripts_dir} directory...")
-                pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
                 subprocess.run([pip_cmd, 'install', '-r', 'requirements.txt'], 
                              check=True, cwd=self.sd_scripts_dir)
                 print("✅ SD scripts requirements installed")
@@ -311,7 +324,6 @@ class SetupManager:
                         line = line.strip()
                         if line and not line.startswith('#') and not line.startswith('file://'):
                             try:
-                                pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
                                 subprocess.run([pip_cmd, 'install', line], check=True, capture_output=True)
                                 print(f"  ✅ {line}")
                             except subprocess.CalledProcessError:
@@ -334,7 +346,6 @@ class SetupManager:
         
         for package in additional_packages:
             try:
-                pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
                 subprocess.run([pip_cmd, 'install', package], check=True)
                 print(f"✅ {package} installed")
             except subprocess.CalledProcessError as e:
@@ -347,7 +358,6 @@ class SetupManager:
             result = subprocess.run(['nvidia-smi'], capture_output=True, text=True)
             if result.returncode == 0:
                 print("✅ NVIDIA GPU detected, installing ONNX runtime GPU...")
-                pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
                 # Try CUDA 12 version first (matches modern setups)
                 try:
                     subprocess.run([pip_cmd, 'install', 'onnxruntime-gpu==1.17.1', 
@@ -456,41 +466,58 @@ class SetupManager:
         else:
             print("   ❌ Kohya SD training scripts missing")
             
-        # Check core packages that should definitely work
-        try:
-            import pytorch_optimizer
-            print("   ✅ PyTorch Optimizer (CAME, Prodigy, etc.)")
-        except ImportError:
-            print("   ⚠️  PyTorch Optimizer not available (will install when needed)")
+        # Determine the correct python path for sd_scripts venv to test imports
+        if sys.platform == "win32":
+            sd_venv_python = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
+        else:
+            sd_venv_python = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
+        
+        # Use sd_scripts venv if it exists, otherwise use system python
+        if os.path.exists(sd_venv_python):
+            test_python = sd_venv_python
+            print(f"   🎯 Testing imports with SD scripts venv: {test_python}")
+        else:
+            test_python = sys.executable
+            print(f"   🎯 Testing imports with system Python: {test_python}")
             
-        try:
-            import safetensors
-            print("   ✅ SafeTensors (model loading)")
-        except ImportError:
-            print("   ⚠️  SafeTensors not available (will install when needed)")
-            
-        # Check if LyCORIS directory exists (don't test import - it's complex)
+        # Test imports in the target environment
+        def test_import(module_name, description):
+            try:
+                result = subprocess.run([test_python, '-c', f'import {module_name}'], 
+                                      check=True, capture_output=True, text=True)
+                print(f"   ✅ {description}")
+                return True
+            except subprocess.CalledProcessError:
+                print(f"   ❌ {module_name} import failed: {description}")
+                return False
+        
+        # Test LyCORIS import
         if os.path.exists(self.lycoris_dir):
             print("   ✅ LyCORIS directory available (DoRA, LoHa, LoKr, etc.)")
         else:
             print("   ❌ LyCORIS directory missing")
-            
-        # Check if custom optimizers installed
+        
+        # Test core package imports in the sd_scripts environment
+        test_import('pytorch_optimizer', 'PyTorch Optimizer: CAME, Prodigy, etc.')
+        test_import('safetensors', 'SafeTensors: model loading')
+        
+        # Test custom optimizers
         try:
-            import LoraEasyCustomOptimizer
-            print("   ✅ Custom optimizers package installed")
-        except ImportError:
-            print("   ⚠️  Custom optimizers not available")
+            result = subprocess.run([test_python, '-c', 'import LoraEasyCustomOptimizer'], 
+                                  check=True, capture_output=True, text=True)
+            print("   ✅ Custom optimizers: Derrian's utilities")
+        except subprocess.CalledProcessError:
+            print("   ❌ Custom optimizers: No module named 'LoraEasyCustomOptimizer'")
             
-        # Check if SD scripts installed (the important one!)
+        # Test SD scripts library (most important!)
         try:
-            import sys
-            if self.sd_scripts_dir not in sys.path:
-                sys.path.insert(0, self.sd_scripts_dir)
-            import library
-            print("   ✅ Kohya SD scripts library installed")
-        except ImportError:
-            print("   ❌ SD scripts library missing - this is a problem!")
+            # Add sd_scripts to Python path and test import
+            import_test = f"import sys; sys.path.insert(0, '{self.sd_scripts_dir}'); import library"
+            result = subprocess.run([test_python, '-c', import_test], 
+                                  check=True, capture_output=True, text=True)
+            print("   ✅ Derrian's utilities: library module")
+        except subprocess.CalledProcessError:
+            print("   ❌ Derrian's utilities: No module named 'library'")
             
         print("   🏁 Setup verification complete!")
 
