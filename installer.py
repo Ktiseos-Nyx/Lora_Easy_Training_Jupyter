@@ -134,28 +134,147 @@ class LoRATrainingInstaller:
             print("   ❌ No NVIDIA driver detected")
             print("   📝 LoRA training requires NVIDIA GPU with 6GB+ VRAM")
     
+    def install_pillow_smart(self):
+        """Smart Pillow installation with fallbacks for different environments"""
+        print("🖼️  Installing Pillow with smart fallbacks...")
+        
+        # Check if already working
+        try:
+            import PIL
+            from PIL import Image
+            print(f"   ✅ Pillow {PIL.__version__} already working")
+            return True
+        except ImportError:
+            pass
+        
+        # Installation methods in order of preference
+        methods = [
+            ("pre-compiled wheels", [self.python_cmd, '-m', 'pip', 'install', '--only-binary=all', 'Pillow<10.0.0']),
+            ("standard install", [self.python_cmd, '-m', 'pip', 'install', 'Pillow<10.0.0']),
+            ("no cache", [self.python_cmd, '-m', 'pip', 'install', '--no-cache-dir', 'Pillow<10.0.0']),
+            ("specific version 9.4.0", [self.python_cmd, '-m', 'pip', 'install', 'Pillow==9.4.0']),
+            ("specific version 9.3.0", [self.python_cmd, '-m', 'pip', 'install', 'Pillow==9.3.0'])
+        ]
+        
+        # If in container, try installing system deps first
+        if self.is_container:
+            print("   🐳 Container detected - attempting system dependencies...")
+            try:
+                # Try apt-get
+                subprocess.run(['apt-get', 'update'], check=True, capture_output=True)
+                deps = ['libjpeg-dev', 'zlib1g-dev', 'libtiff-dev', 'libfreetype6-dev', 'liblcms2-dev', 'libwebp-dev']
+                subprocess.run(['apt-get', 'install', '-y'] + deps, check=True, capture_output=True)
+                print("   ✅ System dependencies installed")
+                # Add force reinstall method after system deps
+                methods.insert(1, ("force reinstall", [self.python_cmd, '-m', 'pip', 'install', '--force-reinstall', 'Pillow<10.0.0']))
+            except:
+                print("   ⚠️  Could not install system dependencies, trying pre-compiled only")
+        
+        # Try each method
+        for method_name, cmd in methods:
+            print(f"   🔄 Trying: {method_name}")
+            try:
+                subprocess.run(cmd, check=True, capture_output=True)
+                # Verify it works
+                import importlib
+                if 'PIL' in sys.modules:
+                    del sys.modules['PIL']
+                import PIL
+                from PIL import Image
+                print(f"   ✅ Pillow {PIL.__version__} installed successfully using {method_name}")
+                return True
+            except Exception as e:
+                print(f"   ❌ {method_name} failed")
+                continue
+        
+        # All methods failed
+        print("   ❌ All Pillow installation methods failed!")
+        print("   📝 Manual steps to try:")
+        if self.is_container:
+            print("      - Run: apt-get update && apt-get install -y libjpeg-dev zlib1g-dev")
+        print("      - Try: pip install --only-binary=all Pillow")
+        print("      - Consider using a base image with pre-installed dependencies")
+        return False
+
+    def check_and_fix_requirements(self):
+        """Check requirements and automatically fix any issues"""
+        print("🔍 Checking existing requirements...")
+        
+        # Define required packages and their fixes
+        required_packages = {
+            'PIL': {'name': 'Pillow', 'fixer': self.install_pillow_smart},
+            'ipywidgets': {'name': 'ipywidgets', 'fixer': None},
+            'IPython': {'name': 'IPython', 'fixer': None},
+            'toml': {'name': 'toml', 'fixer': None},
+            'requests': {'name': 'requests', 'fixer': None},
+            'tqdm': {'name': 'tqdm', 'fixer': None},
+        }
+        
+        missing_packages = []
+        working_packages = []
+        
+        for import_name, config in required_packages.items():
+            try:
+                if import_name == 'PIL':
+                    # Special test for Pillow functionality
+                    from PIL import Image, ImageDraw
+                    img = Image.new('RGB', (10, 10), color='red')
+                    working_packages.append(config['name'])
+                    print(f"   ✅ {config['name']} working")
+                else:
+                    __import__(import_name)
+                    working_packages.append(config['name'])
+                    print(f"   ✅ {config['name']} working")
+            except ImportError:
+                missing_packages.append((import_name, config))
+                print(f"   ❌ {config['name']} missing")
+            except Exception as e:
+                missing_packages.append((import_name, config))
+                print(f"   ⚠️  {config['name']} installed but not working: {e}")
+        
+        # Auto-fix missing packages
+        if missing_packages:
+            print(f"\n🔧 Auto-fixing {len(missing_packages)} package issues...")
+            
+            for import_name, config in missing_packages:
+                if config['fixer']:
+                    print(f"   🔄 Fixing {config['name']}...")
+                    if config['fixer']():
+                        print(f"   ✅ {config['name']} fixed!")
+                    else:
+                        print(f"   ❌ Could not fix {config['name']}")
+                else:
+                    print(f"   📦 Will install {config['name']} with other packages")
+            
+            # Collect packages that need pip install
+            pip_packages = [config['name'] for _, config in missing_packages if not config['fixer']]
+            if pip_packages:
+                print(f"   📦 Installing remaining packages: {', '.join(pip_packages)}")
+                return pip_packages
+        else:
+            print("   🎉 All requirements already satisfied!")
+        
+        return []
+
     def install_jupyter(self):
         """Install Jupyter and required packages"""
         print("📚 Installing Jupyter and core packages...")
         
-        # Core packages for the widget system
-        packages = [
-            'ipywidgets',
-            'ipython',
-            'toml',
-            'requests',
-            'tqdm',
-            'Pillow<10.0.0',
-        ]
+        # First, check what's already working and fix what's broken
+        missing_packages = self.check_and_fix_requirements()
         
-        cmd = [self.python_cmd, '-m', 'pip', 'install', '--upgrade'] + packages
+        # Install any remaining packages
+        if missing_packages:
+            cmd = [self.python_cmd, '-m', 'pip', 'install', '--upgrade'] + missing_packages
+            
+            try:
+                subprocess.run(cmd, check=True)
+                print("   ✅ Remaining packages installed")
+            except subprocess.CalledProcessError as e:
+                print(f"   ❌ Failed to install packages: {e}")
+                sys.exit(1)
         
-        try:
-            subprocess.run(cmd, check=True)
-            print("   ✅ Jupyter and core packages installed")
-        except subprocess.CalledProcessError as e:
-            print(f"   ❌ Failed to install packages: {e}")
-            sys.exit(1)
+        print("   🎉 All core packages ready!")
     
     def setup_directories(self):
         """Create necessary directories"""
@@ -284,6 +403,9 @@ fi
         print("   2. Download a base model (Illustrious, PonyDiff, etc.)")
         print("   3. Prepare your dataset")
         print("   4. Start training!")
+        print()
+        print("🔧 If you encounter issues later:")
+        print("   python check_requirements.py  # Re-validate your setup")
         print()
         print("💝 Happy training! Remember: 'Either gonna work or blow up!' 😄")
         print()

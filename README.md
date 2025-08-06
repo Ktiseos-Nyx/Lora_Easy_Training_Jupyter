@@ -67,9 +67,45 @@ This project builds upon and integrates the excellent work of:
 
 ### What You Need
 - **Computer**: Windows, macOS, or Linux
-- **Python**: Version 3.10 or newer 
+- **Python**: Version 3.10 ⚠️ **IMPORTANT: Python 3.12+ will break dependencies!**
 - **GPU**: NVIDIA GPU with 8GB+ VRAM recommended (can work with less)
 - **Git**: For downloading this project (explained below)
+
+### ⚠️ Python Version Compatibility
+
+**🔍 Check Your Python Version First:**
+```bash
+python --version
+# Should show Python 3.10.x - if it shows 3.12+, you'll need to fix this
+```
+
+**✅ Compatible Environments:**
+- **Local**: Python 3.10.x installations
+- **Anaconda/Miniconda**: Create environment with Python 3.10
+- **Docker/Containers**: PyTorch or CUDA containers with Python 3.10
+- **VastAI**: PyTorch/CUDA templates (avoid base Ubuntu images)
+
+**❌ Known Issues:**
+- **Python 3.12+**: Breaks TensorFlow dependencies (common in newer systems)
+- **Base Ubuntu 22.04+**: Often ships with Python 3.12
+- **Latest Anaconda**: May default to Python 3.12
+
+**🔧 How to Fix Python Version Issues:**
+
+**Local Users (Windows/Mac/Linux):**
+```bash
+# Create Python 3.10 environment with conda/miniconda
+conda create -n lora-training python=3.10
+conda activate lora-training
+```
+
+**Docker Users:**
+Use PyTorch or CUDA base images instead of plain Ubuntu:
+- `pytorch/pytorch:2.0.1-cuda11.7-cudnn8-devel`
+- `nvidia/cuda:11.8-cudnn8-devel-ubuntu20.04`
+
+**VastAI Users:** 
+Select templates with "PyTorch" or "CUDA" rather than "Ubuntu" base images.
 
 ### Installation
 

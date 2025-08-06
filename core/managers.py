@@ -90,6 +90,21 @@ class SetupManager:
                     installer_path = os.path.join(path, "installer.py")
                     if os.path.exists(installer_path):
                         try:
+                            # Activate pip interceptor to fix -e and file:// issues
+                            print("🔧 Activating pip interceptor for -e flag fixes...")
+                            try:
+                                # Import our pip fixer
+                                fix_editable_path = os.path.join(self.project_root, "fix_editable_installs.py")
+                                if os.path.exists(fix_editable_path):
+                                    sys.path.insert(0, self.project_root)
+                                    from fix_editable_installs import setup_pip_interceptor
+                                    setup_pip_interceptor()
+                                    print("✅ Pip interceptor activated!")
+                                else:
+                                    print("⚠️ Pip interceptor not found, continuing without fixes")
+                            except Exception as e:
+                                print(f"⚠️ Could not activate pip interceptor: {e}")
+                            
                             # Use 'local' argument to skip interactive prompts
                             subprocess.run([sys.executable, installer_path, "local"], cwd=path, check=True)
                             print("✅ Derrian's dependencies installed")
