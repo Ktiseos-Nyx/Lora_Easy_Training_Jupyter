@@ -98,6 +98,12 @@ class DatasetWidget:
             disabled=True
         )
         
+        self.reset_upload_button = widgets.Button(
+            description="🔄 Reset Upload", 
+            button_style='warning',
+            disabled=False
+        )
+        
         # Create button row for upload and reset
         upload_button_row = widgets.HBox([self.upload_images_button, self.reset_upload_button])
         
@@ -467,12 +473,7 @@ class DatasetWidget:
         # --- File Upload Observer ---
         self.file_upload.observe(self.on_file_upload_change, names='value')
         
-        # Add a reset button to manually clear widget cache
-        self.reset_upload_button = widgets.Button(
-            description='🔄 Reset Upload',
-            button_style='info',
-            tooltip='Clear upload widget cache if it gets stuck'
-        )
+        # Reset upload button event handler (button created earlier)
         self.reset_upload_button.on_click(self.reset_upload_widget)
 
     def on_file_upload_change(self, change):

@@ -161,6 +161,31 @@ class HybridTrainingManager:
         except (ValueError, TypeError):
             return default
     
+    def _get_logging_backend(self, config):
+        """Determine the appropriate logging backend (wandb, tensorboard, or none)"""
+        # Check if wandb key is provided and looks valid
+        wandb_key = config.get('wandb_key', '').strip()
+        if wandb_key and len(wandb_key) > 20:  # wandb keys are typically 40+ chars
+            print("📊 Enabling WandB logging with provided API key")
+            project_name = config.get('project_name', 'lora-training')
+            print(f"📊 WandB project: {project_name}")
+            return "wandb"
+        elif wandb_key:
+            print(f"⚠️ WandB API key too short ({len(wandb_key)} chars) - should be 40+ characters")
+            print("💡 Get your API key from: https://wandb.ai/settings")
+        elif config.get('wandb_key') == '':
+            print("ℹ️ No WandB API key provided - skipping cloud logging")
+        
+        # Try tensorboard as fallback (usually works locally)
+        try:
+            import tensorboard
+            print("📊 Using TensorBoard logging (local logs in training_outputs/)")
+            return "tensorboard"
+        except ImportError:
+            print("📊 No logging backend available - training will run without metrics")
+            print("💡 Install tensorboard: pip install tensorboard")
+            return None
+    
     def _calculate_warmup_steps(self, config):
         """Calculate warmup steps based on ACTUAL training steps, not hardcoded bias"""
         try:

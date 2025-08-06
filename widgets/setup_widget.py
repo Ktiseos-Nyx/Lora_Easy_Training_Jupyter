@@ -227,7 +227,7 @@ class SetupWidget:
         # For VastAI, prioritize the most popular/stable models
         if self.container_info['is_vastai']:
             vastai_order = {
-                "(XL) Illustrious v0.1 ⭐ Popular": base_presets["(XL) Illustrious v0.1"],
+                "(XL) Illustrious v0.1 ⭐ Popular": "https://huggingface.co/OnomaAIResearch/Illustrious-xl-early-release-v0/resolve/main/Illustrious-XL-v0.1.safetensors",
                 "(XL) PonyDiffusion v6 ⭐ Popular": base_presets["(XL) PonyDiffusion v6"],
                 "(XL) NoobAI Epsilon v1.0 ⭐ Popular": base_presets["(XL) NoobAI Epsilon v1.0"],
                 "Custom URL (enter below)": ""

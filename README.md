@@ -291,6 +291,21 @@ This tool helps you:
 - **Recommendation**: Use standard LoRA or LoCon for stable results
 - **More testing**: Additional compatibility testing is ongoing
 
+⚠️ **VastAI/Cloud Instance Compatibility Issues**
+- **Reality**: VastAI instances vary wildly - some work perfectly, others are broken out of the box
+- **Common Issues**: Triton, ONNX, bitsandbytes, xFormers, and WandB may fail depending on the specific instance
+- **Symptoms**: 
+  - Dependency conflicts, import errors, CUDA detection failures
+  - WandB 403 errors (Cloudflare/network routing issues)
+  - "Library not found" or version compatibility problems
+- **Before reporting bugs**: Test basic functionality on your specific instance first
+- **Solutions**:
+  - **First step**: Try the environment setup - it may resolve dependency issues
+  - **WandB fails**: Clear API key to use local TensorBoard logging instead
+  - **Dependencies broken**: Try `/venv/main/bin/pip install --force-reinstall [package]`
+  - **Everything fails**: Kill the instance and try a different VastAI server
+- **Bottom line**: If your instance can't do basic operations (import libraries, zip files), it's fundamentally broken - get a new one
+
 ### Support
 - **GitHub Issues**: Report bugs and feature requests
 - **Documentation**: Check tooltips and explanations in widgets

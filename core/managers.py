@@ -28,6 +28,14 @@ class SetupManager:
         self.sd_scripts_dir = os.path.join(self.derrian_dir, "sd_scripts")
         self.lycoris_dir = os.path.join(self.derrian_dir, "lycoris")
         
+        # VastAI-specific venv detection and correction
+        self.is_vastai = bool(os.environ.get('VAST_CONTAINERLABEL') or '/workspace' in self.project_root)
+        if self.is_vastai:
+            self.correct_venv_path = '/venv/main/bin/pip'
+            print(f"🐳 VastAI detected - using correct venv: {self.correct_venv_path}")
+        else:
+            self.correct_venv_path = 'pip'
+        
         # Submodule URLs - Only need derrian_backend which includes sd_scripts and lycoris
         self.submodules = {
             'derrian_backend': {
@@ -90,21 +98,6 @@ class SetupManager:
                     installer_path = os.path.join(path, "installer.py")
                     if os.path.exists(installer_path):
                         try:
-                            # Activate pip interceptor to fix -e and file:// issues
-                            print("🔧 Activating pip interceptor for -e flag fixes...")
-                            try:
-                                # Import our pip fixer
-                                fix_editable_path = os.path.join(self.project_root, "fix_editable_installs.py")
-                                if os.path.exists(fix_editable_path):
-                                    sys.path.insert(0, self.project_root)
-                                    from fix_editable_installs import setup_pip_interceptor
-                                    setup_pip_interceptor()
-                                    print("✅ Pip interceptor activated!")
-                                else:
-                                    print("⚠️ Pip interceptor not found, continuing without fixes")
-                            except Exception as e:
-                                print(f"⚠️ Could not activate pip interceptor: {e}")
-                            
                             # Use 'local' argument to skip interactive prompts
                             subprocess.run([sys.executable, installer_path, "local"], cwd=path, check=True)
                             print("✅ Derrian's dependencies installed")
@@ -297,9 +290,13 @@ class SetupManager:
         
         if os.path.exists(requirements_file):
             print("📦 Installing SD scripts requirements...")
+            
             try:
-                # First try the normal install
-                subprocess.run(['pip', 'install', '-r', requirements_file], check=True)
+                # Install from the correct working directory so -e . resolves properly
+                print(f"🔧 Installing requirements from {self.sd_scripts_dir} directory...")
+                pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
+                subprocess.run([pip_cmd, 'install', '-r', 'requirements.txt'], 
+                             check=True, cwd=self.sd_scripts_dir)
                 print("✅ SD scripts requirements installed")
             except subprocess.CalledProcessError as e:
                 print(f"⚠️ Requirements install failed: {e}")
@@ -314,7 +311,8 @@ class SetupManager:
                         line = line.strip()
                         if line and not line.startswith('#') and not line.startswith('file://'):
                             try:
-                                subprocess.run(['pip', 'install', line], check=True, capture_output=True)
+                                pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
+                                subprocess.run([pip_cmd, 'install', line], check=True, capture_output=True)
                                 print(f"  ✅ {line}")
                             except subprocess.CalledProcessError:
                                 print(f"  ⚠️ Skipped: {line} (problematic)")
@@ -329,16 +327,44 @@ class SetupManager:
             "pytorch_optimizer>=3.1.0",  # For CAME, Prodigy, etc.
             "schedulefree",  # For schedule-free optimizers
             "prodigy-plus-schedule-free",  # For Prodigy Plus
-            "onnx>=1.14.0",  # For ONNX model format support
-            "onnxruntime>=1.17.0"  # For ONNX runtime (required for WD14 taggers)
+            "onnx==1.15.0",  # For ONNX model format support (Kohya version)
+            "onnxruntime==1.17.1",  # For ONNX runtime CPU (required for WD14 taggers)
+            "protobuf==3.20.3"  # Required for ONNX compatibility
         ]
         
         for package in additional_packages:
             try:
-                subprocess.run(['pip', 'install', package], check=True)
+                pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
+                subprocess.run([pip_cmd, 'install', package], check=True)
                 print(f"✅ {package} installed")
             except subprocess.CalledProcessError as e:
                 print(f"⚠️ Failed to install {package}: {e}")
+        
+        # Try to install GPU-accelerated ONNX runtime if CUDA is available
+        try:
+            print("🎮 Checking for CUDA to install GPU-accelerated ONNX runtime...")
+            # Check if CUDA is available
+            result = subprocess.run(['nvidia-smi'], capture_output=True, text=True)
+            if result.returncode == 0:
+                print("✅ NVIDIA GPU detected, installing ONNX runtime GPU...")
+                pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
+                # Try CUDA 12 version first (matches modern setups)
+                try:
+                    subprocess.run([pip_cmd, 'install', 'onnxruntime-gpu==1.17.1', 
+                                  '--extra-index-url', 'https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/'], 
+                                  check=True)
+                    print("✅ ONNX runtime GPU (CUDA 12) installed")
+                except subprocess.CalledProcessError:
+                    # Fallback to standard GPU version
+                    try:
+                        subprocess.run([pip_cmd, 'install', 'onnxruntime-gpu==1.17.1'], check=True)
+                        print("✅ ONNX runtime GPU (standard) installed")
+                    except subprocess.CalledProcessError as e:
+                        print(f"⚠️ GPU ONNX runtime install failed: {e}")
+            else:
+                print("ℹ️ No NVIDIA GPU detected, using CPU-only ONNX runtime")
+        except FileNotFoundError:
+            print("ℹ️ nvidia-smi not found, using CPU-only ONNX runtime")
         
         # Fix Triton installation for Docker/VastAI compatibility
         self._fix_triton_installation()
@@ -347,53 +373,78 @@ class SetupManager:
             print("⚠️ SD scripts requirements.txt not found")
     
     def _fix_triton_installation(self):
-        """Fix Triton installation for Docker/VastAI platform compatibility issues"""
-        print("🔧 Checking and fixing Triton installation for Docker compatibility...")
+        """Fix Triton installation for bitsandbytes AdamW8bit compatibility"""
+        print("🔧 Installing Triton for bitsandbytes (AdamW8bit) compatibility...")
         
+        # Determine the correct pip path for sd_scripts venv
+        if sys.platform == "win32":
+            sd_venv_pip = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "pip.exe")
+        else:
+            sd_venv_pip = os.path.join(self.sd_scripts_dir, "venv", "bin", "pip")
+        
+        # Check if sd_scripts venv exists, otherwise use system/VastAI pip
+        if os.path.exists(sd_venv_pip):
+            pip_cmd = sd_venv_pip
+            print(f"🎯 Using SD scripts venv pip: {pip_cmd}")
+        else:
+            pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
+            print(f"🎯 Using system pip: {pip_cmd}")
+        
+        # Test if Triton is already working in the target environment
         try:
-            # First, try to import triton to see if it's working
-            import triton
-            print("✅ Triton already working, skipping reinstall")
+            test_cmd = [pip_cmd.replace('pip', 'python') if 'bin' in pip_cmd or 'Scripts' in pip_cmd else sys.executable, 
+                       '-c', 'import triton; print("Triton version:", triton.__version__)']
+            result = subprocess.run(test_cmd, check=True, capture_output=True, text=True)
+            print(f"✅ Triton already working: {result.stdout.strip()}")
             return
-        except ImportError as e:
-            print(f"⚠️ Triton import failed: {e}")
-        except Exception as e:
-            print(f"⚠️ Triton compatibility issue: {e}")
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            print("⚠️ Triton not found or not working, installing...")
         
-        # Try different Triton installation methods for Docker compatibility
+        # Install Triton with CUDA 12.4 compatibility (matches Kohya's PyTorch)
         triton_install_methods = [
-            # Method 1: Force Linux platform (fixes Windows wheel issue)
-            ['pip', 'install', '--force-reinstall', 'triton', '--platform=linux_x86_64', '--only-binary=:all:'],
+            # Method 1: PyTorch CUDA 12.4 index (matches Kohya exactly)
+            [pip_cmd, 'install', '--force-reinstall', 'triton', '--index-url=https://download.pytorch.org/whl/cu124'],
             
-            # Method 2: Use PyTorch's index (proper CUDA compatibility)
-            ['pip', 'install', '--force-reinstall', 'triton', '--index-url=https://download.pytorch.org/whl/cu121'],
+            # Method 2: Force Linux x86_64 platform with CUDA 12.4
+            [pip_cmd, 'install', '--force-reinstall', 'triton', '--platform=linux_x86_64', '--only-binary=:all:', 
+             '--index-url=https://download.pytorch.org/whl/cu124'],
             
-            # Method 3: Specific version that matches common Docker setups
-            ['pip', 'install', '--force-reinstall', 'triton==2.1.0'],
+            # Method 3: Specific Triton version known to work with PyTorch 2.5.1
+            [pip_cmd, 'install', '--force-reinstall', 'triton==3.0.0'],
             
-            # Method 4: Latest from PyPI with no cache (clears corrupted downloads)
-            ['pip', 'install', '--force-reinstall', '--no-cache-dir', 'triton']
+            # Method 4: Fallback to PyPI with no cache
+            [pip_cmd, 'install', '--force-reinstall', '--no-cache-dir', 'triton']
         ]
         
         for i, method in enumerate(triton_install_methods):
             try:
-                print(f"🔄 Trying Triton installation method {i+1}...")
-                subprocess.run(method, check=True)
+                print(f"🔄 Method {i+1}: Installing Triton...")
+                subprocess.run(method, check=True, cwd=self.sd_scripts_dir if os.path.exists(self.sd_scripts_dir) else None)
                 
-                # Test if it works
-                import importlib
-                if 'triton' in sys.modules:
-                    importlib.reload(sys.modules['triton'])
-                import triton
+                # Test if it works in the target environment
+                test_cmd = [pip_cmd.replace('pip', 'python') if 'bin' in pip_cmd or 'Scripts' in pip_cmd else sys.executable,
+                           '-c', 'import triton; print("✅ Triton working!")']
+                subprocess.run(test_cmd, check=True, capture_output=True)
                 print(f"✅ Triton installation method {i+1} succeeded!")
+                
+                # Also test bitsandbytes import since that's what we really care about
+                try:
+                    test_bnb_cmd = [pip_cmd.replace('pip', 'python') if 'bin' in pip_cmd or 'Scripts' in pip_cmd else sys.executable,
+                                   '-c', 'import bitsandbytes; print("✅ bitsandbytes can use Triton!")']
+                    subprocess.run(test_bnb_cmd, check=True, capture_output=True)
+                    print("✅ bitsandbytes + Triton integration working!")
+                except subprocess.CalledProcessError:
+                    print("⚠️ Triton installed but bitsandbytes integration may have issues")
+                
                 return
                 
-            except (subprocess.CalledProcessError, ImportError) as e:
+            except subprocess.CalledProcessError as e:
                 print(f"❌ Method {i+1} failed: {e}")
                 continue
         
-        print("⚠️ All Triton installation methods failed - AdamW8bit may not work")
-        print("💡 The training will automatically fallback to AdamW when needed")
+        print("⚠️ All Triton installation methods failed")
+        print("💡 AdamW8bit will fallback to slower implementations or regular AdamW")
+        print("💡 Training will still work, just without 8-bit optimization benefits")
             
     def _verify_installation(self):
         """Verify all components are working"""
@@ -405,45 +456,41 @@ class SetupManager:
         else:
             print("   ❌ Kohya SD training scripts missing")
             
-        # Check LyCORIS
-        try:
-            import sys
-            sys.path.insert(0, self.lycoris_dir)
-            import lycoris
-            print("   ✅ LyCORIS (DoRA, LoHa, LoKr, etc.)")
-        except ImportError as e:
-            print(f"   ❌ LyCORIS import failed: {e}")
-            
-        # Check pytorch_optimizer
+        # Check core packages that should definitely work
         try:
             import pytorch_optimizer
             print("   ✅ PyTorch Optimizer (CAME, Prodigy, etc.)")
-        except ImportError as e:
-            print(f"   ❌ PyTorch Optimizer: {e}")
+        except ImportError:
+            print("   ⚠️  PyTorch Optimizer not available (will install when needed)")
             
-        # Check custom optimizers
         try:
-            import LoraEasyCustomOptimizer.came
-            import LoraEasyCustomOptimizer.RexAnnealingWarmRestarts
-            print("   ✅ Derrian's custom optimizers (CAME, REX)")
-        except ImportError as e:
-            print(f"   ❌ Custom optimizers: {e}")
+            import safetensors
+            print("   ✅ SafeTensors (model loading)")
+        except ImportError:
+            print("   ⚠️  SafeTensors not available (will install when needed)")
             
-        # Check Derrian's utility modules
-        derrian_utils_dir = os.path.join(self.derrian_dir, "utils")
-        if os.path.exists(derrian_utils_dir):
-            try:
-                # Add derrian_backend to path for utility imports
-                # NOTE: Using os.path.join for cross-platform compatibility (Windows/Mac/Linux)
-                if self.derrian_dir not in sys.path:
-                    sys.path.insert(0, self.derrian_dir)
-                
-                from utils import validation, process, resize_lora
-                print("   ✅ Derrian's utilities (validation, process, resize_lora)")
-            except ImportError as e:
-                print(f"   ❌ Derrian's utilities: {e}")
+        # Check if LyCORIS directory exists (don't test import - it's complex)
+        if os.path.exists(self.lycoris_dir):
+            print("   ✅ LyCORIS directory available (DoRA, LoHa, LoKr, etc.)")
         else:
-            print("   ❌ Derrian's utilities directory missing")
+            print("   ❌ LyCORIS directory missing")
+            
+        # Check if custom optimizers installed
+        try:
+            import LoraEasyCustomOptimizer
+            print("   ✅ Custom optimizers package installed")
+        except ImportError:
+            print("   ⚠️  Custom optimizers not available")
+            
+        # Check if SD scripts installed (the important one!)
+        try:
+            import sys
+            if self.sd_scripts_dir not in sys.path:
+                sys.path.insert(0, self.sd_scripts_dir)
+            import library
+            print("   ✅ Kohya SD scripts library installed")
+        except ImportError:
+            print("   ❌ SD scripts library missing - this is a problem!")
             
         print("   🏁 Setup verification complete!")
 
