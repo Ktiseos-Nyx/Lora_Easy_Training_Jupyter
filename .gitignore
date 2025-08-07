@@ -89,6 +89,9 @@ secrets.json
 api_keys.txt
 hf_token.txt
 
+# Claude Code project instructions (private)
+CLAUDE.md
+
 # OS generated files
 .directory
 .fuse_hidden*

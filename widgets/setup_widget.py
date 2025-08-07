@@ -104,8 +104,9 @@ class SetupWidget:
         
         # Update URL when preset changes
         def on_preset_change(change):
-            if change['new'] in model_presets and model_presets[change['new']]:
-                self.model_url.value = model_presets[change['new']]
+            current_presets = self._get_model_presets()  # Use the actual presets dict
+            if change['new'] in current_presets and current_presets[change['new']]:
+                self.model_url.value = current_presets[change['new']]
         self.model_preset.observe(on_preset_change, names='value')
         
         model_box = widgets.VBox([

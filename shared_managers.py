@@ -1,51 +1,86 @@
 # shared_managers.py
 # This file provides shared manager instances for use across widgets
-# Import this in notebooks to get consistent, shared state
+# Uses lazy loading - only creates managers when actually needed
 
-from core.managers import SetupManager, ModelManager
-from core.dataset_manager import DatasetManager
-from core.training_manager import HybridTrainingManager
-from core.utilities_manager import UtilitiesManager
+# Global storage for manager instances (lazy loaded)
+_setup_manager = None
+_model_manager = None
+_dataset_manager = None
+_training_manager = None
+_utilities_manager = None
 
-# Create single instances of each manager
-# These will be shared across all widgets
-setup_manager = SetupManager()
-model_manager = ModelManager()
-dataset_manager = DatasetManager(model_manager)
-training_manager = HybridTrainingManager()
-utilities_manager = UtilitiesManager()
+def get_setup_manager():
+    """Get or create the setup manager"""
+    global _setup_manager
+    if _setup_manager is None:
+        from core.managers import SetupManager
+        _setup_manager = SetupManager()
+    return _setup_manager
 
-# Import all widgets
-from widgets.setup_widget import SetupWidget
-from widgets.dataset_widget import DatasetWidget
-from widgets.training_widget import TrainingWidget
-from widgets.utilities_widget import UtilitiesWidget
-from widgets.calculator_widget import CalculatorWidget
+def get_model_manager():
+    """Get or create the model manager"""
+    global _model_manager
+    if _model_manager is None:
+        from core.managers import ModelManager
+        _model_manager = ModelManager()
+    return _model_manager
+
+def get_dataset_manager():
+    """Get or create the dataset manager (no forced ModelManager dependency!)"""
+    global _dataset_manager
+    if _dataset_manager is None:
+        from core.dataset_manager import DatasetManager
+        _dataset_manager = DatasetManager()  # ModelManager loaded lazily when needed
+    return _dataset_manager
+
+def get_training_manager():
+    """Get or create the training manager (heavy imports - only load when needed!)"""
+    global _training_manager
+    if _training_manager is None:
+        from core.training_manager import HybridTrainingManager
+        _training_manager = HybridTrainingManager()
+    return _training_manager
+
+def get_utilities_manager():
+    """Get or create the utilities manager"""
+    global _utilities_manager
+    if _utilities_manager is None:
+        from core.utilities_manager import UtilitiesManager
+        _utilities_manager = UtilitiesManager()
+    return _utilities_manager
+
+# Lazy widget imports - only import when actually needed!
 
 def create_widgets():
     """
-    Create all widgets with shared manager instances
+    Create all widgets with shared manager instances (lazy loaded)
     This ensures all widgets use the same state
     """
     return {
-        'setup': SetupWidget(setup_manager, model_manager),
-        'dataset': DatasetWidget(dataset_manager),
-        'training': TrainingWidget(training_manager),
-        'utilities': UtilitiesWidget(utilities_manager),
-        'calculator': CalculatorWidget()  # No manager needed
+        'setup': create_widget('setup'),
+        'dataset': create_widget('dataset'),
+        'training': create_widget('training'),
+        'utilities': create_widget('utilities'),
+        'calculator': create_widget('calculator')
     }
 
 def create_widget(widget_name):
-    """Create a single widget with proper dependency injection"""
-    widgets_map = {
-        'setup': lambda: SetupWidget(setup_manager, model_manager),
-        'dataset': lambda: DatasetWidget(dataset_manager),
-        'training': lambda: TrainingWidget(training_manager),
-        'utilities': lambda: UtilitiesWidget(utilities_manager),
-        'calculator': lambda: CalculatorWidget()
-    }
-    
-    if widget_name not in widgets_map:
-        raise ValueError(f"Unknown widget: {widget_name}. Available: {list(widgets_map.keys())}")
-    
-    return widgets_map[widget_name]()
+    """Create a single widget with proper lazy-loaded dependency injection"""
+    if widget_name == 'setup':
+        from widgets.setup_widget import SetupWidget
+        return SetupWidget(get_setup_manager(), get_model_manager())
+    elif widget_name == 'dataset':
+        from widgets.dataset_widget import DatasetWidget
+        return DatasetWidget(get_dataset_manager())
+    elif widget_name == 'training':
+        from widgets.training_widget import TrainingWidget
+        return TrainingWidget(get_training_manager())
+    elif widget_name == 'utilities':
+        from widgets.utilities_widget import UtilitiesWidget
+        return UtilitiesWidget(get_utilities_manager())
+    elif widget_name == 'calculator':
+        from widgets.calculator_widget import CalculatorWidget
+        return CalculatorWidget()  # No manager needed - pure math widget!
+    else:
+        available = ['setup', 'dataset', 'training', 'utilities', 'calculator']
+        raise ValueError(f"Unknown widget: {widget_name}. Available: {available}")

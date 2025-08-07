@@ -8,8 +8,7 @@ class DatasetWidget:
     def __init__(self, dataset_manager=None):
         # Use dependency injection - accept manager instance or create default
         if dataset_manager is None:
-            from core.managers import ModelManager
-            dataset_manager = DatasetManager(ModelManager())
+            dataset_manager = DatasetManager()  # Uses lazy ModelManager loading now!
         
         self.manager = dataset_manager
         self.create_widgets()
@@ -194,6 +193,66 @@ class DatasetWidget:
             self.gelbooru_method_box,
             self.dataset_status,
             self.dataset_output
+        ])
+
+        # --- File Renaming Section ---
+        rename_desc = widgets.HTML("""<h3>📝 File Renaming</h3>
+        <p>Rename your dataset files to fix UTF-8 issues and create consistent naming. <strong>Caption files are automatically renamed too!</strong></p>
+        <div style='background: #fff8dc; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <strong>📋 Naming Patterns:</strong><br>
+        • <strong>Simple Numbering:</strong> MyProject_001.jpg, MyProject_002.jpg<br>
+        • <strong>Sanitized Original:</strong> MyProject_CleanedName.jpg (removes special chars)<br>
+        • <strong>With Timestamp:</strong> MyProject_20240807_001.jpg<br><br>
+        <em>💡 This fixes common training issues with special characters and UTF-8!</em>
+        </div>""")
+
+        self.rename_project_name = widgets.Text(
+            description="Project Name:",
+            placeholder="e.g., MyCharacter (will become MyCharacter_001.jpg)",
+            layout=widgets.Layout(width='99%')
+        )
+
+        self.rename_pattern = widgets.Dropdown(
+            options=[
+                ('Simple Numbering (MyProject_001.jpg)', 'numbered'),
+                ('Sanitized Original (MyProject_CleanName.jpg)', 'sanitized'), 
+                ('With Timestamp (MyProject_20240807_001.jpg)', 'timestamp')
+            ],
+            value='numbered',
+            description='Naming Pattern:'
+        )
+
+        self.rename_start_number = widgets.IntText(
+            value=1,
+            description="Start Number:",
+            style={'description_width': 'initial'}
+        )
+
+        self.preview_rename_button = widgets.Button(
+            description="👁️ Preview Changes",
+            button_style='info'
+        )
+
+        self.rename_files_button = widgets.Button(
+            description="📝 Rename Files",
+            button_style='warning',
+            disabled=True
+        )
+
+        self.rename_output = widgets.Output()
+
+        rename_controls = widgets.HBox([
+            self.rename_start_number,
+            self.preview_rename_button, 
+            self.rename_files_button
+        ])
+
+        rename_box = widgets.VBox([
+            rename_desc,
+            self.rename_project_name,
+            self.rename_pattern,
+            rename_controls,
+            self.rename_output
         ])
 
         # --- Tagging Section ---
@@ -447,14 +506,16 @@ class DatasetWidget:
         # --- Accordion ---
         self.accordion = widgets.Accordion(children=[
             dataset_setup_box,
+            rename_box,
             tagging_box,
             caption_box,
             cleanup_box
         ])
         self.accordion.set_title(0, "📁 Dataset Setup")
-        self.accordion.set_title(1, "🏷️ Image Tagging")
-        self.accordion.set_title(2, "📝 Advanced Caption Management")
-        self.accordion.set_title(3, "🧹 Dataset Cleanup")
+        self.accordion.set_title(1, "📝 File Renaming")
+        self.accordion.set_title(2, "🏷️ Image Tagging")
+        self.accordion.set_title(3, "📝 Advanced Caption Management")
+        self.accordion.set_title(4, "🧹 Dataset Cleanup")
 
         self.widget_box = widgets.VBox([header_main, self.accordion])
 
@@ -463,6 +524,8 @@ class DatasetWidget:
         self.create_folder_button.on_click(self.run_create_folder)
         self.upload_images_button.on_click(self.run_upload_images)
         self.gelbooru_button.on_click(self.run_gelbooru_scraper)
+        self.preview_rename_button.on_click(self.run_preview_rename)
+        self.rename_files_button.on_click(self.run_rename_files)
         self.tagging_button.on_click(self.run_tagging)
         self.cleanup_button.on_click(self.run_cleanup)
         self.add_trigger_button.on_click(self.run_add_trigger)
@@ -997,6 +1060,88 @@ class DatasetWidget:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Tag organization complete.</div>"
             else:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Tag organization failed. Check logs.</div>"
+
+    def run_preview_rename(self, b):
+        """Preview file renaming changes"""
+        with self.rename_output:
+            self.rename_output.clear_output()
+            
+            if not self.rename_project_name.value.strip():
+                print("⚠️ Please enter a project name.")
+                return
+            
+            if not self.dataset_directory.value.strip():
+                print("⚠️ Please set up a dataset directory first.")
+                return
+            
+            project_name = self.rename_project_name.value.strip()
+            pattern = self.rename_pattern.value
+            start_num = self.rename_start_number.value
+            
+            print(f"🔍 Preview renaming for: {self.dataset_directory.value}")
+            print(f"📝 Pattern: {pattern}, Project: {project_name}, Start: {start_num}")
+            
+            preview_data = self.manager.preview_rename_files(
+                self.dataset_directory.value, 
+                project_name, 
+                pattern, 
+                start_num
+            )
+            
+            if preview_data:
+                print(f"\n📋 Preview of {len(preview_data)} files to be renamed:")
+                print("=" * 60)
+                for i, item in enumerate(preview_data[:10]):  # Show first 10
+                    status = "📸" if not item['has_caption'] else "📸📝"
+                    print(f"{status} {item['old_name']} → {item['new_name']}")
+                    if item['has_caption']:
+                        print(f"    {item['old_caption']} → {item['new_caption']}")
+                
+                if len(preview_data) > 10:
+                    print(f"... and {len(preview_data) - 10} more files")
+                
+                print("=" * 60)
+                print("💡 If this looks good, click 'Rename Files' to proceed!")
+                
+                # Enable the rename button
+                self.rename_files_button.disabled = False
+                
+                # Store preview data for actual rename
+                self._current_preview = preview_data
+            else:
+                self.rename_files_button.disabled = True
+
+    def run_rename_files(self, b):
+        """Actually rename the files"""
+        with self.rename_output:
+            self.rename_output.clear_output()
+            
+            if not hasattr(self, '_current_preview') or not self._current_preview:
+                print("⚠️ Please preview the changes first!")
+                return
+            
+            project_name = self.rename_project_name.value.strip()
+            pattern = self.rename_pattern.value
+            
+            print(f"📝 Renaming files...")
+            print(f"🎯 Project: {project_name}, Pattern: {pattern}")
+            
+            success = self.manager.rename_dataset_files(
+                self.dataset_directory.value,
+                project_name,
+                pattern,
+                self.rename_start_number.value,
+                self._current_preview
+            )
+            
+            if success:
+                print("✅ File renaming completed successfully!")
+                print("💡 Caption files were automatically renamed to match!")
+                # Clear preview data and disable button
+                self._current_preview = None
+                self.rename_files_button.disabled = True
+            else:
+                print("❌ File renaming failed. Check the logs above.")
 
     def display(self):
         display(self.widget_box)

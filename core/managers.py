@@ -19,22 +19,17 @@ def get_venv_python_path(base_dir):
 
 class SetupManager:
     def __init__(self):
-        # Use current working directory instead of hardcoded paths
-        self.project_root = os.getcwd()  # This will be wherever the notebook is running
+        # Light initialization - just paths, no detection spam!
+        self.project_root = os.getcwd()
         self.trainer_dir = os.path.join(self.project_root, "trainer")
-        
-        # Use Derrian's backend which includes sd_scripts and lycoris as submodules
         self.derrian_dir = os.path.join(self.trainer_dir, "derrian_backend")
         self.sd_scripts_dir = os.path.join(self.derrian_dir, "sd_scripts")
         self.lycoris_dir = os.path.join(self.derrian_dir, "lycoris")
         
-        # VastAI-specific venv detection and correction
-        self.is_vastai = bool(os.environ.get('VAST_CONTAINERLABEL') or '/workspace' in self.project_root)
-        if self.is_vastai:
-            self.correct_venv_path = '/venv/main/bin/pip'
-            print(f"🐳 VastAI detected - using correct venv: {self.correct_venv_path}")
-        else:
-            self.correct_venv_path = 'pip'
+        # Lazy-loaded properties
+        self._environment_detected = False
+        self._is_vastai = None
+        self._correct_venv_path = None
         
         # Submodule URLs - Only need derrian_backend which includes sd_scripts and lycoris
         self.submodules = {
@@ -44,6 +39,46 @@ class SetupManager:
                 'description': 'Derrian\'s backend with Kohya scripts, LyCORIS, and custom optimizers'
             }
         }
+        
+    def _detect_environment(self):
+        """Detect environment only when actually needed - not on every widget load!"""
+        if self._environment_detected:
+            return
+            
+        self._is_vastai = bool(os.environ.get('VAST_CONTAINERLABEL') or '/workspace' in self.project_root)
+        if self._is_vastai:
+            self._correct_venv_path = '/venv/main/bin/pip'
+            print(f"🐳 VastAI detected - using correct venv: {self._correct_venv_path}")
+        else:
+            self._correct_venv_path = 'pip'
+            
+        self._environment_detected = True
+    
+    @property
+    def is_vastai(self):
+        """Lazy property - only detects environment when asked"""
+        if not self._environment_detected:
+            self._detect_environment()
+        return self._is_vastai
+    
+    @property 
+    def correct_venv_path(self):
+        """Lazy property - only detects environment when asked"""
+        if not self._environment_detected:
+            self._detect_environment()
+        return self._correct_venv_path
+        
+    def check_setup_status(self):
+        """Holy shit dude you forgot to set up go back up mode! 🚨"""
+        if not os.path.exists(self.derrian_dir):
+            print("🚨 SETUP MISSING: trainer/derrian_backend not found!")
+            print("💡 Go back and run the setup widget first!")
+            return False
+        if not os.path.exists(self.sd_scripts_dir):
+            print("🚨 SETUP INCOMPLETE: sd_scripts submodule missing!")
+            print("💡 Re-run setup to initialize submodules!")
+            return False
+        return True
 
     def _check_and_install_packages(self):
         packages = ["git", "aria2c"]

@@ -6,7 +6,7 @@ import zipfile
 import platform
 
 class DatasetManager:
-    def __init__(self, model_manager):
+    def __init__(self, model_manager=None):
         self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         self.model_manager = model_manager
         self.trainer_dir = os.path.join(self.project_root, "trainer")
@@ -66,6 +66,10 @@ class DatasetManager:
         # Handle Hugging Face URL
         if zip_path.startswith("https://huggingface.co/"):
             print("Downloading dataset from Hugging Face...")
+            # Lazy load ModelManager only when needed for downloads
+            if not self.model_manager:
+                from shared_managers import get_model_manager
+                self.model_manager = get_model_manager()
             downloaded_zip_path = self.model_manager.download_file(zip_path, self.project_root, hf_token)
             if not downloaded_zip_path:
                 print("Failed to download the dataset.")
@@ -159,19 +163,27 @@ class DatasetManager:
                 "--remove_underscore"  # Convert underscores to spaces
             ]
             
-            # Force ONNX usage for modern models
-            if "v3" in model_to_try:
+            # Try ONNX but don't force it - graceful fallback to PyTorch
+            use_onnx = False
+            try:
+                # Simple import test first
+                test_onnx_cmd = [venv_python, "-c", "import onnxruntime; print('OK')"]
+                result = subprocess.run(test_onnx_cmd, check=True, capture_output=True, text=True, timeout=5)
+                if result.stdout.strip() == 'OK':
+                    use_onnx = True
+                    if "v3" in model_to_try:
+                        print("🚀 ONNX available - using for v3 model (faster inference)")
+                    else:
+                        print("✅ ONNX available - using accelerated inference")
+            except Exception as e:
+                print("⚠️ ONNX not working - using PyTorch inference (slower but stable)")
+                print(f"   Reason: {str(e)[:80]}...")
+            
+            # Only add ONNX flag if we're confident it will work
+            if use_onnx:
                 command.append("--onnx")
-                print("🚀 Using ONNX for v3 model (faster inference)")
             else:
-                # Try to add ONNX flag if available for older models
-                try:
-                    test_onnx_cmd = [venv_python, "-c", "import onnxruntime"]
-                    subprocess.run(test_onnx_cmd, check=True, capture_output=True)
-                    command.append("--onnx")
-                    print("✅ ONNX available - using accelerated inference")
-                except subprocess.CalledProcessError:
-                    print("⚠️ ONNX not available - using standard PyTorch inference")
+                print("   📝 Note: WD14 tagger will use PyTorch backend")
             
             # Add blacklisted tags if provided
             if blacklist_tags:
@@ -713,3 +725,115 @@ class DatasetManager:
         else:
             print(f"✅ Processing complete. {files_processed} files updated.")
         return True
+
+    def preview_rename_files(self, dataset_dir, project_name, pattern="numbered", start_number=1):
+        """Preview what files will be renamed to (no actual renaming)"""
+        dataset_path = os.path.join(self.project_root, dataset_dir)
+        if not os.path.exists(dataset_path):
+            print(f"❌ Dataset directory not found at {dataset_path}")
+            return []
+
+        # Get all image files
+        image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp', '.gif'}
+        image_files = []
+        
+        for file in os.listdir(dataset_path):
+            if os.path.splitext(file.lower())[1] in image_extensions:
+                image_files.append(file)
+        
+        if not image_files:
+            print("❌ No image files found in dataset directory")
+            return []
+        
+        # Sort for consistent numbering
+        image_files.sort()
+        
+        # Generate preview of renames
+        preview_data = []
+        for i, filename in enumerate(image_files):
+            old_path = os.path.join(dataset_path, filename)
+            old_name, ext = os.path.splitext(filename)
+            
+            if pattern == "numbered":
+                new_name = f"{project_name}_{start_number + i:03d}{ext}"
+            elif pattern == "sanitized":
+                # Keep original name but sanitize it
+                clean_name = self._sanitize_filename(old_name)
+                new_name = f"{project_name}_{clean_name}{ext}"
+            elif pattern == "timestamp":
+                from datetime import datetime
+                timestamp = datetime.now().strftime("%Y%m%d")
+                new_name = f"{project_name}_{timestamp}_{start_number + i:03d}{ext}"
+            else:
+                new_name = f"{project_name}_{start_number + i:03d}{ext}"
+            
+            # Check for caption file
+            old_caption = os.path.join(dataset_path, f"{old_name}.txt")
+            has_caption = os.path.exists(old_caption)
+            
+            preview_data.append({
+                'old_name': filename,
+                'new_name': new_name,
+                'has_caption': has_caption,
+                'old_caption': f"{old_name}.txt" if has_caption else None,
+                'new_caption': f"{os.path.splitext(new_name)[0]}.txt" if has_caption else None
+            })
+        
+        return preview_data
+
+    def rename_dataset_files(self, dataset_dir, project_name, pattern="numbered", start_number=1, preview_data=None):
+        """Rename files in dataset directory with consistent naming"""
+        dataset_path = os.path.join(self.project_root, dataset_dir)
+        if not os.path.exists(dataset_path):
+            print(f"❌ Dataset directory not found at {dataset_path}")
+            return False
+
+        # Use preview data if provided, otherwise generate it
+        if preview_data is None:
+            preview_data = self.preview_rename_files(dataset_dir, project_name, pattern, start_number)
+        
+        if not preview_data:
+            return False
+
+        print(f"📝 Renaming {len(preview_data)} files with pattern: {pattern}")
+        print(f"🎯 Project name: {project_name}")
+        
+        renamed_count = 0
+        caption_count = 0
+        
+        for item in preview_data:
+            old_path = os.path.join(dataset_path, item['old_name'])
+            new_path = os.path.join(dataset_path, item['new_name'])
+            
+            try:
+                # Rename image file
+                if os.path.exists(old_path) and old_path != new_path:
+                    os.rename(old_path, new_path)
+                    renamed_count += 1
+                    
+                    # Rename caption file if it exists
+                    if item['has_caption']:
+                        old_caption_path = os.path.join(dataset_path, item['old_caption'])
+                        new_caption_path = os.path.join(dataset_path, item['new_caption'])
+                        
+                        if os.path.exists(old_caption_path):
+                            os.rename(old_caption_path, new_caption_path)
+                            caption_count += 1
+                            
+            except Exception as e:
+                print(f"⚠️ Error renaming {item['old_name']}: {e}")
+                continue
+                
+        print(f"✅ Renamed {renamed_count} image files and {caption_count} caption files")
+        return True
+
+    def _sanitize_filename(self, filename):
+        """Remove problematic characters from filename"""
+        import re
+        # Replace problematic characters with underscores
+        sanitized = re.sub(r'[^\w\-_\.]', '_', filename)
+        # Remove multiple consecutive underscores
+        sanitized = re.sub(r'_+', '_', sanitized)
+        # Remove leading/trailing underscores
+        sanitized = sanitized.strip('_')
+        return sanitized or "file"  # Fallback if name becomes empty
