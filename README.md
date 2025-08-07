@@ -322,7 +322,8 @@ This project is built on the work of many awesome people:
 - **[Derrian Distro](https://github.com/derrian-distro)** - Custom optimizers
 
 **Notebook Inspirations:**
-- **AndroidXXL, Jelosus2, Linaqruf** - Original Colab notebooks that made LoRA training accessible
+- **[Linaqruf](https://github.com/Linaqruf)** - Pioneer in accessible LoRA training, creator of influential Colab notebooks and training methods that inspired much of this work
+- **AndroidXXL, Jelosus2** - Additional Colab notebook contributions that made LoRA training accessible
 
 **Community:**
 - **[ArcEnCiel](https://arcenciel.io/)** - Ongoing support and testing

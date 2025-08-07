@@ -38,8 +38,110 @@ class HybridTrainingManager:
         self.standard_optimizers = self._init_standard_optimizers()
         self.lycoris_methods = self._init_lycoris_methods()
         self.experimental_features = self._init_experimental_features()
+        self.logging_options = self._init_logging_options()
     
+    def _detect_repeat_folders(self, dataset_dir):
+        """
+        Detect existing repeat folders in dataset directory
+        Returns list of tuples: (folder_name, repeats, concept_name)
+        """
+        if not os.path.exists(dataset_dir):
+            return []
+            
+        repeat_folders = []
+        
+        for item in os.listdir(dataset_dir):
+            item_path = os.path.join(dataset_dir, item)
+            if os.path.isdir(item_path):
+                # Check if folder name matches repeat pattern
+                try:
+                    parts = item.split('_', 1)
+                    if len(parts) >= 2:
+                        repeats = int(parts[0])
+                        concept_name = parts[1]
+                        repeat_folders.append((item, repeats, concept_name))
+                except ValueError:
+                    # Not a repeat folder, skip
+                    continue
+                    
+        return repeat_folders
     
+    def _get_training_duration_config(self, config):
+        """Generate training duration config based on user preference"""
+        duration_mode = config.get('duration_mode', 'epochs')  # epochs or steps
+        
+        if duration_mode == 'steps':
+            return {
+                "max_train_steps": config.get('max_train_steps', 1600),
+                "save_every_n_steps": config.get('save_every_n_steps', 400)
+            }
+        else:  # epochs mode (default)
+            duration_config = {
+                "max_train_epochs": config.get('epochs', config.get('max_train_epochs', 4)),
+                "save_every_n_epochs": config.get('save_every_n_epochs', 1)
+            }
+            
+            # Add steps if also specified (for partial epoch saves)
+            if config.get('save_every_n_steps'):
+                duration_config["save_every_n_steps"] = config['save_every_n_steps']
+                
+            return duration_config
+    
+    def _get_logging_config(self, config):
+        """Generate logging configuration based on user preference"""
+        logging_mode = config.get('logging_mode', 'none')
+        
+        if logging_mode not in self.logging_options:
+            print(f"⚠️ Unknown logging mode '{logging_mode}', using 'none'")
+            logging_mode = 'none'
+        
+        logging_config = {}
+        logging_option = self.logging_options[logging_mode]
+        
+        print(f"📊 Logging mode: {logging_mode} - {logging_option['description']}")
+        
+        # Add basic log_with parameter
+        if logging_mode == 'tensorboard':
+            logging_config["log_with"] = "tensorboard"
+        elif logging_mode == 'wandb':
+            logging_config["log_with"] = "wandb"
+            # Add WandB specific configs
+            if config.get('wandb_api_key'):
+                logging_config["wandb_api_key"] = config['wandb_api_key']
+            if config.get('wandb_run_name'):
+                logging_config["wandb_run_name"] = config['wandb_run_name']
+        elif logging_mode == 'both':
+            logging_config["log_with"] = "all"
+            # Add WandB configs for both mode
+            if config.get('wandb_api_key'):
+                logging_config["wandb_api_key"] = config['wandb_api_key']
+            if config.get('wandb_run_name'):
+                logging_config["wandb_run_name"] = config['wandb_run_name']
+        
+        # Add common logging configs
+        if config.get('log_prefix'):
+            logging_config["log_prefix"] = config['log_prefix']
+            
+        return logging_config
+    
+    def _get_ip_noise_config(self, config):
+        """Generate IP noise gamma configuration with 2024 randomization support"""
+        ip_config = {}
+        
+        # Basic IP noise gamma
+        if config.get('ip_noise_gamma_enabled', False):
+            gamma_value = self._safe_float(config.get('ip_noise_gamma', 0.0))
+            if gamma_value > 0:
+                ip_config["ip_noise_gamma"] = gamma_value
+                
+                # 2024 randomization feature
+                if config.get('ip_noise_gamma_random_strength', False):
+                    ip_config["ip_noise_gamma_random_strength"] = True
+                    print(f"🎲 IP Noise Gamma: {gamma_value} (with randomization)")
+                else:
+                    print(f"🎯 IP Noise Gamma: {gamma_value}")
+        
+        return ip_config
     
     def _find_training_script(self):
         """Find the training script in various possible locations"""
@@ -439,8 +541,31 @@ class HybridTrainingManager:
                 'status': 'experimental'
             }
         }
+    
+    def _init_logging_options(self):
+        """Initialize logging system options"""
+        return {
+            'none': {
+                'description': 'No logging (standard console output only)',
+                'args': []
+            },
+            'tensorboard': {
+                'description': 'TensorBoard logging for training metrics',
+                'args': ['--log_with', 'tensorboard']
+            },
+            'wandb': {
+                'description': 'Weights & Biases logging for experiment tracking',
+                'args': ['--log_with', 'wandb']
+            },
+            'both': {
+                'description': 'Both TensorBoard and WandB logging',
+                'args': ['--log_with', 'all']
+            }
+        }
 
     def _create_dataset_toml(self, config):
+        """Create dataset TOML with support for repeat folders"""
+        
         dataset_config = {
             "general": {
                 "resolution": config['resolution'],
@@ -455,18 +580,44 @@ class HybridTrainingManager:
                 "max_bucket_reso": config.get('max_bucket_reso', 2048),
                 "caption_dropout_rate": config.get('caption_dropout_rate', 0.0),
                 "caption_tag_dropout_rate": config.get('caption_tag_dropout_rate', 0.0),
-            },
-            "datasets": [
-                {
-                    "subsets": [
-                        {
-                            "num_repeats": config['num_repeats'],
-                            "image_dir": os.path.abspath(config['dataset_dir']),
-                        }
-                    ]
-                }
-            ]
+            }
         }
+        
+        # Check for repeat folders in the dataset directory
+        dataset_dir = config['dataset_dir']
+        repeat_folders = self._detect_repeat_folders(dataset_dir)
+        
+        if repeat_folders:
+            # Use repeat folders - sd_scripts will auto-detect repeats from folder names
+            print(f"🔄 Detected {len(repeat_folders)} repeat folder(s), using automatic repeat detection")
+            subsets = []
+            total_effective_images = 0
+            
+            for folder_name, repeats, concept_name in repeat_folders:
+                folder_path = os.path.join(os.path.abspath(dataset_dir), folder_name)
+                subsets.append({
+                    "image_dir": folder_path,
+                    # Don't specify num_repeats - let sd_scripts auto-detect from folder name
+                })
+                
+                # Calculate effective images for reporting
+                image_count = len([f for f in os.listdir(folder_path) 
+                                 if f.lower().endswith(('.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.webp', '.gif'))])
+                total_effective_images += image_count * repeats
+                print(f"  📂 {folder_name}: {image_count} images × {repeats} repeats = {image_count * repeats} per epoch")
+            
+            print(f"✅ Total effective training images per epoch: {total_effective_images}")
+            
+        else:
+            # Standard single folder approach - use num_repeats from config
+            print("📁 Using standard folder structure with TOML-configured repeats")
+            subsets = [{
+                "num_repeats": config['num_repeats'],
+                "image_dir": os.path.abspath(dataset_dir),
+            }]
+        
+        dataset_config["datasets"] = [{"subsets": subsets}]
+        
         dataset_toml_path = os.path.join(self.config_dir, "dataset.toml")
         with open(dataset_toml_path, "w") as f:
             toml.dump(dataset_config, f)
@@ -676,7 +827,8 @@ class HybridTrainingManager:
         training_args = {
             "lowram": True,
             "pretrained_model_name_or_path": os.path.abspath(config['model_path']),
-            "max_train_epochs": config['epochs'],
+            # Training duration - support both epochs and steps
+            **self._get_training_duration_config(config),
             "train_batch_size": config['train_batch_size'],
             "mixed_precision": config['precision'],
             "save_precision": config['precision'],
@@ -688,14 +840,16 @@ class HybridTrainingManager:
             "cache_latents": config['cache_latents'],
             "cache_latents_to_disk": config['cache_latents_to_disk'], 
             "cache_text_encoder_outputs": config['cache_text_encoder_outputs'],
+            "cache_text_encoder_outputs_to_disk": config.get('cache_text_encoder_outputs_to_disk', False),
             "min_snr_gamma": self._safe_float(config['min_snr_gamma']) if config['min_snr_gamma_enabled'] else None,
-            "ip_noise_gamma": config['ip_noise_gamma'] if config['ip_noise_gamma_enabled'] else None,
+            # Enhanced IP noise gamma support (2024 randomization)
+            **self._get_ip_noise_config(config),
             "multires_noise_iterations": config.get('multires_noise_iterations', 6) if config['multinoise'] else None,
             "multires_noise_discount": config.get('multires_noise_discount', 0.3) if config['multinoise'] else None,
             "xformers": config['cross_attention'] == "xformers",
             "sdpa": config['cross_attention'] == "sdpa",
-            "log_with": "wandb" if config.get('wandb_key') else None,
-            "wandb_api_key": config['wandb_key'] if config['wandb_key'] else None,
+            # Enhanced logging system
+            **self._get_logging_config(config),
             # Advanced training options
             "noise_offset": self._safe_float(config.get('noise_offset', 0.0)) if self._safe_float(config.get('noise_offset', 0.0)) > 0 else None,
             "adaptive_noise_scale": self._safe_float(config.get('adaptive_noise_scale', 0.0)) if self._safe_float(config.get('adaptive_noise_scale', 0.0)) > 0 else None,
@@ -721,7 +875,12 @@ class HybridTrainingManager:
             training_args["v_parameterization"] = True
             print("✅ V-Parameterization enabled for v-pred models")
         
-        if config.get('network_train_unet_only', False):
+        # Handle text encoder training vs caching logic
+        if config.get('cache_text_encoder_outputs', False):
+            # Auto-disable text encoder training when caching is enabled
+            training_args["network_train_unet_only"] = True
+            print("🎯 Text encoder caching enabled - automatically disabling text encoder training")
+        elif config.get('network_train_unet_only', False):
             training_args["network_train_unet_only"] = True
             print("🎯 Training U-Net only (SDXL LoRA optimization)")
 

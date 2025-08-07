@@ -49,6 +49,17 @@ def get_utilities_manager():
         _utilities_manager = UtilitiesManager()
     return _utilities_manager
 
+# File manager instance (lazy loaded)
+_file_manager = None
+
+def get_file_manager():
+    """Get or create FileManager instance"""
+    global _file_manager
+    if _file_manager is None:
+        from core.file_manager import FileManagerUtility
+        _file_manager = FileManagerUtility()
+    return _file_manager
+
 # Lazy widget imports - only import when actually needed!
 
 def create_widgets():
@@ -61,7 +72,8 @@ def create_widgets():
         'dataset': create_widget('dataset'),
         'training': create_widget('training'),
         'utilities': create_widget('utilities'),
-        'calculator': create_widget('calculator')
+        'calculator': create_widget('calculator'),
+        'file_manager': create_widget('file_manager')
     }
 
 def create_widget(widget_name):
@@ -81,6 +93,9 @@ def create_widget(widget_name):
     elif widget_name == 'calculator':
         from widgets.calculator_widget import CalculatorWidget
         return CalculatorWidget()  # No manager needed - pure math widget!
+    elif widget_name == 'file_manager':
+        from widgets.file_manager_widget import create_file_manager_widget
+        return create_file_manager_widget()  # Returns widget directly
     else:
-        available = ['setup', 'dataset', 'training', 'utilities', 'calculator']
+        available = ['setup', 'dataset', 'training', 'utilities', 'calculator', 'file_manager']
         raise ValueError(f"Unknown widget: {widget_name}. Available: {available}")

@@ -5,6 +5,26 @@ import sys
 import zipfile
 import platform
 
+# Import colored print utility
+try:
+    from .colored_print import cprint, success, error, warning, info, progress, print_header
+except ImportError:
+    # Fallback if colored_print not available
+    def cprint(*args, **kwargs):
+        print(*args)
+    def success(msg, **kwargs):
+        print(f"✅ {msg}")
+    def error(msg, **kwargs):
+        print(f"❌ {msg}")
+    def warning(msg, **kwargs):
+        print(f"⚠️ {msg}")
+    def info(msg, **kwargs):
+        print(f"ℹ️ {msg}")
+    def progress(msg, **kwargs):
+        print(f"🚀 {msg}")
+    def print_header(text, **kwargs):
+        print(f"=== {text} ===")
+
 class DatasetManager:
     def __init__(self, model_manager=None):
         self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -837,3 +857,648 @@ class DatasetManager:
         # Remove leading/trailing underscores
         sanitized = sanitized.strip('_')
         return sanitized or "file"  # Fallback if name becomes empty
+
+    def add_emphasis_to_tags(self, dataset_dir, tags_to_emphasize, emphasis_level=1, preview_only=False):
+        """
+        Add emphasis weights to specific tags using (tag) syntax
+        
+        Args:
+            dataset_dir: Dataset directory
+            tags_to_emphasize: Comma-separated tags to emphasize  
+            emphasis_level: Number of parentheses (1 = (tag), 2 = ((tag)))
+            preview_only: Show preview without making changes
+        """
+        dataset_path = os.path.join(self.project_root, dataset_dir)
+        if not os.path.exists(dataset_path):
+            print(f"❌ Dataset directory not found at {dataset_path}")
+            return False
+            
+        if not tags_to_emphasize.strip():
+            print("❌ Please specify tags to emphasize")
+            return False
+            
+        # Parse tags
+        tags_list = [tag.strip().lower() for tag in tags_to_emphasize.split(',') if tag.strip()]
+        emphasis_chars = '(' * emphasis_level
+        closing_chars = ')' * emphasis_level
+        
+        print(f"🎯 {'Preview:' if preview_only else 'Applying'} emphasis level {emphasis_level} to tags: {', '.join(tags_list)}")
+        print(f"📝 Format: tag → {emphasis_chars}tag{closing_chars}")
+        print("=" * 60)
+        
+        files_processed = 0
+        changes_made = 0
+        preview_samples = []
+        
+        for root, dirs, files in os.walk(dataset_path):
+            for file in files:
+                if file.endswith(('.txt', '.caption')):
+                    file_path = os.path.join(root, file)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                        
+                        if not content:
+                            continue
+                            
+                        original_content = content
+                        tags = [tag.strip() for tag in content.split(',') if tag.strip()]
+                        modified_tags = []
+                        file_changes = 0
+                        
+                        for tag in tags:
+                            # Check if tag should be emphasized (case insensitive)
+                            should_emphasize = any(target_tag in tag.lower() for target_tag in tags_list)
+                            
+                            if should_emphasize and not tag.startswith('('):
+                                # Add emphasis
+                                modified_tags.append(f"{emphasis_chars}{tag}{closing_chars}")
+                                file_changes += 1
+                            else:
+                                modified_tags.append(tag)
+                        
+                        new_content = ', '.join(modified_tags)
+                        
+                        if new_content != original_content:
+                            files_processed += 1
+                            changes_made += file_changes
+                            
+                            if preview_only and len(preview_samples) < 5:
+                                preview_samples.append({
+                                    'file': file,
+                                    'before': original_content[:100] + ('...' if len(original_content) > 100 else ''),
+                                    'after': new_content[:100] + ('...' if len(new_content) > 100 else ''),
+                                    'changes': file_changes
+                                })
+                            elif not preview_only:
+                                with open(file_path, 'w', encoding='utf-8') as f:
+                                    f.write(new_content + '\n')
+                                print(f"  ✅ {file}: {file_changes} tags emphasized")
+                                
+                    except Exception as e:
+                        print(f"⚠️ Error processing {file_path}: {e}")
+        
+        if preview_only:
+            print("📋 Preview of changes (first 5 files):")
+            for sample in preview_samples:
+                print(f"\n📁 {sample['file']} ({sample['changes']} changes)")
+                print(f"  Before: {sample['before']}")
+                print(f"  After:  {sample['after']}")
+            print(f"\n🔍 Would process {files_processed} files, emphasizing {changes_made} tags")
+            print("💡 Run with preview_only=False to apply changes")
+        else:
+            print(f"\n✅ Emphasis complete: {files_processed} files updated, {changes_made} tags emphasized")
+        
+        return True
+    
+    def reduce_common_tag_weights(self, dataset_dir, common_tags="1girl,solo,looking at viewer,simple background,white background", reduction_level=1, preview_only=False):
+        """
+        Reduce weight of common/overused tags using [tag] syntax
+        
+        Args:
+            dataset_dir: Dataset directory
+            common_tags: Comma-separated tags to de-emphasize
+            reduction_level: Number of brackets (1 = [tag], 2 = [[tag]])
+            preview_only: Show preview without making changes
+        """
+        dataset_path = os.path.join(self.project_root, dataset_dir)
+        if not os.path.exists(dataset_path):
+            print(f"❌ Dataset directory not found at {dataset_path}")
+            return False
+            
+        # Parse tags
+        tags_list = [tag.strip().lower() for tag in common_tags.split(',') if tag.strip()]
+        reduction_chars = '[' * reduction_level
+        closing_chars = ']' * reduction_level
+        
+        print(f"🔻 {'Preview:' if preview_only else 'Applying'} reduction level {reduction_level} to common tags: {', '.join(tags_list)}")
+        print(f"📝 Format: tag → {reduction_chars}tag{closing_chars}")
+        print("=" * 60)
+        
+        files_processed = 0
+        changes_made = 0
+        preview_samples = []
+        
+        for root, dirs, files in os.walk(dataset_path):
+            for file in files:
+                if file.endswith(('.txt', '.caption')):
+                    file_path = os.path.join(root, file)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                        
+                        if not content:
+                            continue
+                            
+                        original_content = content
+                        tags = [tag.strip() for tag in content.split(',') if tag.strip()]
+                        modified_tags = []
+                        file_changes = 0
+                        
+                        for tag in tags:
+                            # Check if tag should be de-emphasized (case insensitive)
+                            should_reduce = any(common_tag in tag.lower() for common_tag in tags_list)
+                            
+                            if should_reduce and not tag.startswith('['):
+                                # Add reduction
+                                modified_tags.append(f"{reduction_chars}{tag}{closing_chars}")
+                                file_changes += 1
+                            else:
+                                modified_tags.append(tag)
+                        
+                        new_content = ', '.join(modified_tags)
+                        
+                        if new_content != original_content:
+                            files_processed += 1
+                            changes_made += file_changes
+                            
+                            if preview_only and len(preview_samples) < 5:
+                                preview_samples.append({
+                                    'file': file,
+                                    'before': original_content[:100] + ('...' if len(original_content) > 100 else ''),
+                                    'after': new_content[:100] + ('...' if len(new_content) > 100 else ''),
+                                    'changes': file_changes
+                                })
+                            elif not preview_only:
+                                with open(file_path, 'w', encoding='utf-8') as f:
+                                    f.write(new_content + '\n')
+                                print(f"  ✅ {file}: {file_changes} tags de-emphasized")
+                                
+                    except Exception as e:
+                        print(f"⚠️ Error processing {file_path}: {e}")
+        
+        if preview_only:
+            print("📋 Preview of changes (first 5 files):")
+            for sample in preview_samples:
+                print(f"\n📁 {sample['file']} ({sample['changes']} changes)")
+                print(f"  Before: {sample['before']}")
+                print(f"  After:  {sample['after']}")
+            print(f"\n🔍 Would process {files_processed} files, de-emphasizing {changes_made} tags")
+            print("💡 Run with preview_only=False to apply changes")
+        else:
+            print(f"\n✅ De-emphasis complete: {files_processed} files updated, {changes_made} tags de-emphasized")
+        
+        return True
+    
+    def scrape_with_gallery_dl(self, site="gelbooru", tags="", dataset_dir="", limit_range="1-200", 
+                               write_tags=True, use_aria2c=True, custom_url="", sub_folder="", 
+                               additional_args="--filename /O --no-part"):
+        """
+        Advanced image scraping using gallery-dl (supports 300+ sites)
+        
+        Args:
+            site: Site to scrape from (gelbooru, danbooru, safebooru, pixiv, twitter, etc.)
+            tags: Tags to search for (comma or space separated)
+            dataset_dir: Directory to save images
+            limit_range: Range of images to download (e.g., "1-200", "1-50")
+            write_tags: Whether to download and process tag files
+            use_aria2c: Use aria2c for faster parallel downloads
+            custom_url: Custom URL instead of using predefined site
+            sub_folder: Organize images into subfolder
+            additional_args: Additional gallery-dl arguments
+        """
+        import subprocess
+        import html
+        from urllib.parse import quote_plus
+        
+        # Check if gallery-dl is installed
+        try:
+            result = subprocess.run(['gallery-dl', '--version'], capture_output=True, text=True, timeout=5)
+            print(f"🎨 Using gallery-dl version: {result.stdout.strip()}")
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+            print("❌ gallery-dl not found. Install with: pip install gallery-dl")
+            return False
+        
+        if not tags and not custom_url:
+            print("❌ Please specify either tags or a custom URL")
+            return False
+        
+        # Setup directories
+        if dataset_dir:
+            base_dir = os.path.join(self.project_root, dataset_dir)
+        else:
+            base_dir = os.path.join(self.project_root, "dataset")
+        
+        if sub_folder:
+            if sub_folder.startswith(os.path.sep):
+                image_dir = sub_folder  # Absolute path
+            else:
+                image_dir = os.path.join(base_dir, sub_folder)
+        else:
+            image_dir = base_dir
+            
+        os.makedirs(image_dir, exist_ok=True)
+        
+        print(f"🎨 Gallery-dl scraping setup:")
+        print(f"📁 Target directory: {image_dir}")
+        print(f"🏷️ Tags: {tags}")
+        print(f"📊 Range: {limit_range}")
+        print(f"🏃‍♂️ Aria2c: {'Enabled' if use_aria2c else 'Disabled'}")
+        print("=" * 60)
+        
+        # Prepare tags for URL
+        if tags:
+            tag_list = [tag.strip() for tag in tags.replace(',', ' ').split() if tag.strip()]
+            # URL encode special characters
+            encoded_tags = '+'.join(quote_plus(tag.replace(' ', '_'), safe='') for tag in tag_list)
+            print(f"🔍 Processed tags: {' + '.join(tag_list)}")
+        
+        # Build URL based on site
+        if custom_url:
+            url = custom_url
+            print(f"🌐 Using custom URL: {url}")
+        else:
+            site_urls = {
+                "gelbooru": f"https://gelbooru.com/index.php?page=post&s=list&tags={encoded_tags}",
+                "danbooru": f"https://danbooru.donmai.us/posts?tags={encoded_tags}",
+                "safebooru": f"https://safebooru.org/index.php?page=post&s=list&tags={encoded_tags}",
+                "konachan": f"https://konachan.com/post?tags={encoded_tags}",
+                "yande.re": f"https://yande.re/post?tags={encoded_tags}",
+                "pixiv": f"https://www.pixiv.net/en/tags/{encoded_tags}/artworks",
+            }
+            
+            if site.lower() not in site_urls:
+                print(f"❌ Unsupported site: {site}")
+                print(f"📝 Supported sites: {', '.join(site_urls.keys())}")
+                print("💡 Or use custom_url parameter for other sites")
+                return False
+                
+            url = site_urls[site.lower()]
+            print(f"🌐 Built URL: {url}")
+        
+        # Common gallery-dl config
+        base_config = {
+            "user-agent": "gallery-dl/1.26.0",
+            "sleep": "1",  # Be respectful with rate limiting
+        }
+        
+        if limit_range:
+            base_config["range"] = limit_range
+            
+        # Build gallery-dl arguments
+        def build_args(config_dict):
+            args = []
+            for key, value in config_dict.items():
+                if value is True:
+                    args.append(f"--{key}")
+                elif value is False:
+                    continue
+                else:
+                    args.append(f"--{key}={value}")
+            return args
+        
+        success = False
+        
+        if use_aria2c:
+            print("🚀 Phase 1: Getting download URLs with gallery-dl...")
+            
+            # Phase 1: Get URLs
+            url_config = {**base_config, "get-urls": True}
+            url_args = build_args(url_config)
+            
+            # Add additional arguments
+            if additional_args:
+                url_args.extend(additional_args.split())
+            
+            try:
+                # Run gallery-dl to get URLs
+                cmd = ['gallery-dl'] + url_args + [url]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                
+                if result.returncode != 0:
+                    print(f"❌ Error getting URLs: {result.stderr}")
+                    return False
+                
+                # Save URLs to file
+                urls_file = os.path.join(image_dir, "download_urls.txt")
+                with open(urls_file, 'w') as f:
+                    f.write(result.stdout)
+                
+                urls_count = len([line for line in result.stdout.strip().split('\n') if line.strip()])
+                print(f"✅ Found {urls_count} image URLs")
+                
+                if urls_count == 0:
+                    print("❌ No images found matching criteria")
+                    return False
+                
+                print("🚀 Phase 2: Downloading images with aria2c...")
+                
+                # Phase 2: Download with aria2c
+                aria_cmd = [
+                    'aria2c',
+                    '--console-log-level=error',
+                    '--summary-interval=10',
+                    '--continue=true',
+                    '--max-connection-per-server=16',
+                    '--min-split-size=1M',
+                    '--split=16',
+                    '--input-file=' + urls_file,
+                    '--dir=' + image_dir
+                ]
+                
+                result = subprocess.run(aria_cmd, capture_output=True, text=True, timeout=1800)
+                
+                # Clean up URLs file
+                os.remove(urls_file)
+                
+                if result.returncode == 0:
+                    print("✅ Download completed successfully with aria2c")
+                    success = True
+                else:
+                    print(f"⚠️ Aria2c had issues: {result.stderr}")
+                    print("🔄 Falling back to direct gallery-dl download...")
+                    
+            except subprocess.TimeoutExpired:
+                print("⚠️ URL fetching timed out, trying direct download...")
+            except Exception as e:
+                print(f"⚠️ Error with aria2c method: {e}")
+                print("🔄 Falling back to direct gallery-dl download...")
+        
+        # Fallback or primary method: Direct gallery-dl download
+        if not success:
+            print("📥 Downloading images directly with gallery-dl...")
+            
+            download_config = {
+                **base_config,
+                "directory": image_dir,
+                "write-tags": write_tags
+            }
+            
+            download_args = build_args(download_config)
+            
+            # Add additional arguments
+            if additional_args:
+                download_args.extend(additional_args.split())
+            
+            try:
+                cmd = ['gallery-dl'] + download_args + [url]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+                
+                if result.returncode == 0:
+                    print("✅ Download completed successfully")
+                    success = True
+                else:
+                    print(f"❌ Gallery-dl error: {result.stderr}")
+                    return False
+                    
+            except subprocess.TimeoutExpired:
+                print("❌ Download timed out after 30 minutes")
+                return False
+            except Exception as e:
+                print(f"❌ Error during download: {e}")
+                return False
+        
+        # Post-process tags if enabled
+        if write_tags and success:
+            print("🏷️ Post-processing tag files...")
+            self._process_gallery_dl_tags(image_dir)
+        
+        # Count results
+        image_count = len([f for f in os.listdir(image_dir) 
+                          if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif'))])
+        tag_count = len([f for f in os.listdir(image_dir) if f.endswith('.txt')])
+        
+        print("\n" + "=" * 60)
+        print(f"🎉 Scraping complete!")
+        print(f"📁 Location: {image_dir}")
+        print(f"🖼️ Images downloaded: {image_count}")
+        print(f"🏷️ Tag files: {tag_count}")
+        
+        return success
+    
+    def _process_gallery_dl_tags(self, directory):
+        """Process and clean up tag files from gallery-dl"""
+        import html
+        
+        def process_dir(dir_path):
+            for item in os.listdir(dir_path):
+                item_path = os.path.join(dir_path, item)
+                
+                if os.path.isfile(item_path) and item.endswith(".txt"):
+                    try:
+                        # Handle double extensions (e.g., image.jpg.txt -> image.txt)
+                        name_parts = item.split('.')
+                        if len(name_parts) > 2:  # Has double extension
+                            base_name = '.'.join(name_parts[:-2])  # Remove last 2 extensions
+                            new_name = f"{base_name}.txt"
+                            new_path = os.path.join(dir_path, new_name)
+                            
+                            if item_path != new_path:
+                                os.rename(item_path, new_path)
+                                item_path = new_path
+                        
+                        # Clean up tag content
+                        with open(item_path, 'r', encoding='utf-8') as f:
+                            contents = f.read()
+                        
+                        # Process tags
+                        contents = html.unescape(contents)  # Decode HTML entities
+                        contents = contents.replace("_", " ")  # Convert underscores to spaces
+                        
+                        # Handle different tag formats
+                        if '\n' in contents:
+                            # Line-separated tags -> comma-separated
+                            tags = [tag.strip() for tag in contents.split('\n') if tag.strip()]
+                            contents = ", ".join(tags)
+                        elif ' ' in contents and ',' not in contents:
+                            # Space-separated -> comma-separated
+                            tags = [tag.strip() for tag in contents.split() if tag.strip()]
+                            contents = ", ".join(tags)
+                        
+                        # Write back cleaned content
+                        with open(item_path, 'w', encoding='utf-8') as f:
+                            f.write(contents)
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error processing tag file {item}: {e}")
+                
+                elif os.path.isdir(item_path):
+                    # Recursively process subdirectories
+                    process_dir(item_path)
+        
+        process_dir(directory)
+        print("✅ Tag files processed and cleaned")
+    
+    def upload_dataset_to_huggingface(self, dataset_path, dataset_name, hf_token="", 
+                                    orgs_name="", make_private=False, description=""):
+        """
+        Upload dataset to HuggingFace Hub
+        
+        Args:
+            dataset_path: Local path to dataset directory
+            dataset_name: Name for the dataset repository
+            hf_token: HuggingFace write token (get from https://huggingface.co/settings/tokens)
+            orgs_name: Organization name (optional, uses personal account if empty)
+            make_private: Whether to create private repository
+            description: Description for the dataset
+            
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            from huggingface_hub import HfApi, login, create_repo
+            from huggingface_hub.utils import validate_repo_id, HfHubHTTPError
+        except ImportError:
+            print("❌ HuggingFace Hub not installed. Install with: pip install huggingface_hub")
+            return False
+        
+        if not hf_token:
+            error("HuggingFace token required!")
+            info("Get your WRITE token here: https://huggingface.co/settings/tokens")
+            return False
+            
+        if not dataset_name.strip():
+            error("Dataset name is required!")
+            return False
+            
+        if not os.path.exists(dataset_path):
+            error(f"Dataset path not found: {dataset_path}")
+            return False
+        
+        print_header("HuggingFace Dataset Upload")
+        info(f"Dataset path: {dataset_path}")
+        info(f"Dataset name: {dataset_name}")
+        
+        try:
+            # Authenticate with HuggingFace
+            progress("Authenticating with HuggingFace Hub...")
+            login(hf_token, add_to_git_credential=True)
+            api = HfApi()
+            
+            # Get user info
+            user_info = api.whoami(hf_token)
+            username = user_info["name"]
+            success(f"Authenticated as: {username}")
+            
+            # Build repository ID
+            if orgs_name.strip():
+                repo_id = f"{orgs_name.strip()}/{dataset_name.strip()}"
+                print(f"🏢 Using organization: {orgs_name}")
+            else:
+                repo_id = f"{username}/{dataset_name.strip()}"
+                print(f"👤 Using personal account: {username}")
+            
+            # Validate repository ID
+            try:
+                validate_repo_id(repo_id)
+            except Exception as e:
+                print(f"❌ Invalid repository ID '{repo_id}': {e}")
+                return False
+            
+            print(f"📦 Repository ID: {repo_id}")
+            
+            # Create repository (if it doesn't exist)
+            try:
+                print("🔨 Creating repository...")
+                create_repo(
+                    repo_id=repo_id,
+                    repo_type="dataset",
+                    private=make_private,
+                    token=hf_token,
+                    exist_ok=True  # Don't error if repo already exists
+                )
+                print(f"✅ Repository created/verified: {repo_id}")
+                
+            except HfHubHTTPError as e:
+                if "already exists" in str(e).lower():
+                    print(f"📝 Repository '{repo_id}' already exists, continuing...")
+                else:
+                    print(f"❌ Error creating repository: {e}")
+                    return False
+            
+            # Create README if description provided
+            if description.strip():
+                readme_content = f"""---
+license: mit
+task_categories:
+- image-classification
+- text-to-image
+tags:
+- stable-diffusion
+- lora
+- dataset
+- training
+pretty_name: "{dataset_name}"
+---
+
+# {dataset_name}
+
+{description.strip()}
+
+## Dataset Structure
+
+This dataset contains images and their corresponding caption/tag files for training LoRA models.
+
+## Usage
+
+This dataset is designed for use with LoRA training scripts like:
+- Kohya SS sd-scripts
+- LoRA Easy Training scripts
+
+## Attribution
+
+Dataset created using [LoRA Easy Training](https://github.com/Linaqruf/kohya-trainer) tools.
+Special thanks to [Linaqruf](https://github.com/Linaqruf) for their contributions to the community.
+"""
+                
+                try:
+                    # Upload README
+                    api.upload_file(
+                        path_or_fileobj=readme_content.encode('utf-8'),
+                        path_in_repo="README.md",
+                        repo_id=repo_id,
+                        repo_type="dataset",
+                        token=hf_token
+                    )
+                    print("✅ README.md created")
+                except Exception as e:
+                    print(f"⚠️ Warning: Could not create README.md: {e}")
+            
+            # Upload dataset files
+            print("📤 Uploading dataset files...")
+            
+            # Check dataset structure
+            image_count = 0
+            caption_count = 0
+            
+            for root, dirs, files in os.walk(dataset_path):
+                for file in files:
+                    if file.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.bmp')):
+                        image_count += 1
+                    elif file.lower().endswith('.txt'):
+                        caption_count += 1
+            
+            print(f"📊 Dataset contains: {image_count} images, {caption_count} caption files")
+            
+            # Upload the entire dataset directory
+            try:
+                api.upload_folder(
+                    folder_path=dataset_path,
+                    repo_id=repo_id,
+                    repo_type="dataset",
+                    token=hf_token,
+                    commit_message=f"Upload {dataset_name} dataset with {image_count} images"
+                )
+                
+                success("Dataset uploaded successfully!")
+                cprint(f"View your dataset at: https://huggingface.co/datasets/{repo_id}", color="bright_blue", style="underline")
+                
+                # Provide sharing information
+                print_header("Dataset Info", length=50, char="-", color="bright_green")
+                info(f"Repository: {repo_id}")
+                info(f"Type: {'Private' if make_private else 'Public'}")
+                info(f"Images: {image_count}")
+                info(f"Captions: {caption_count}")
+                cprint(f"URL: https://huggingface.co/datasets/{repo_id}", color="bright_blue", style="underline")
+                
+                return True
+                
+            except Exception as e:
+                print(f"❌ Error uploading files: {e}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Authentication or API error: {e}")
+            print("💡 Make sure your token has WRITE permissions")
+            print("🔑 Get your token here: https://huggingface.co/settings/tokens")
+            return False

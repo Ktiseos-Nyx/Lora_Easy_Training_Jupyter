@@ -406,6 +406,74 @@ class DatasetWidget:
             self.cleanup_status,
             self.cleanup_output
         ])
+        
+        # --- HuggingFace Upload Section ---
+        upload_desc = widgets.HTML("""<h3>🤗 HuggingFace Dataset Upload</h3>
+        <div style='background: #e8f4fd; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <strong>🚀 Share your dataset with the community!</strong><br>
+        Upload your prepared dataset to HuggingFace Hub for sharing and backup.<br>
+        <strong>📋 Requirements:</strong> HuggingFace account with WRITE token
+        </div>""")
+        
+        self.upload_dataset_path = widgets.Text(
+            description="Dataset Path:",
+            placeholder="Path to your dataset folder (auto-filled from current dataset)",
+            layout=widgets.Layout(width='99%')
+        )
+        
+        self.upload_dataset_name = widgets.Text(
+            description="Repository Name:",
+            placeholder="e.g., my-character-dataset (lowercase, hyphens allowed)",
+            layout=widgets.Layout(width='99%')
+        )
+        
+        self.upload_hf_token = widgets.Password(
+            description="HF Token:",
+            placeholder="Your HuggingFace WRITE token",
+            layout=widgets.Layout(width='99%')
+        )
+        
+        token_help = widgets.HTML("""
+        <div style='background: #fff3cd; padding: 8px; border-radius: 5px; margin: 5px 0;'>
+        🔑 Get your <strong>WRITE</strong> token <a href='https://huggingface.co/settings/tokens' target='_blank'>here</a>
+        </div>
+        """)
+        
+        self.upload_orgs_name = widgets.Text(
+            description="Organization:",
+            placeholder="Leave empty to use personal account, or enter org name",
+            layout=widgets.Layout(width='99%')
+        )
+        
+        self.upload_description = widgets.Textarea(
+            description="Description:",
+            placeholder="Describe your dataset (optional but recommended)",
+            layout=widgets.Layout(width='99%', height='80px')
+        )
+        
+        self.upload_make_private = widgets.Checkbox(
+            value=False,
+            description="🔒 Make repository private",
+            indent=False
+        )
+        
+        self.upload_button = widgets.Button(description="🚀 Upload to HuggingFace", button_style='info')
+        self.upload_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007bff;'><strong>Status:</strong> Ready</div>")
+        self.upload_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
+        
+        upload_box = widgets.VBox([
+            upload_desc,
+            self.upload_dataset_path,
+            self.upload_dataset_name,
+            self.upload_hf_token,
+            token_help,
+            self.upload_orgs_name,
+            self.upload_description,
+            self.upload_make_private,
+            self.upload_button,
+            self.upload_status,
+            self.upload_output
+        ])
 
         # --- Advanced Caption Management ---
         caption_desc = widgets.HTML("""<h3>▶️ Advanced Caption Management</h3>
@@ -509,13 +577,15 @@ class DatasetWidget:
             rename_box,
             tagging_box,
             caption_box,
-            cleanup_box
+            cleanup_box,
+            upload_box
         ])
         self.accordion.set_title(0, "📁 Dataset Setup")
         self.accordion.set_title(1, "📝 File Renaming")
         self.accordion.set_title(2, "🏷️ Image Tagging")
         self.accordion.set_title(3, "📝 Advanced Caption Management")
         self.accordion.set_title(4, "🧹 Dataset Cleanup")
+        self.accordion.set_title(5, "🤗 HuggingFace Upload")
 
         self.widget_box = widgets.VBox([header_main, self.accordion])
 
@@ -532,6 +602,7 @@ class DatasetWidget:
         self.remove_tags_button.on_click(self.run_remove_tags)
         self.search_replace_button.on_click(self.run_search_replace)
         self.organize_tags_button.on_click(self.run_organize_tags)
+        self.upload_button.on_click(self.run_upload_to_huggingface)
         
         # --- File Upload Observer ---
         self.file_upload.observe(self.on_file_upload_change, names='value')
@@ -1142,6 +1213,68 @@ class DatasetWidget:
                 self.rename_files_button.disabled = True
             else:
                 print("❌ File renaming failed. Check the logs above.")
+
+    def run_upload_to_huggingface(self, b):
+        """Upload dataset to HuggingFace Hub"""
+        self.upload_output.clear_output()
+        self.upload_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007bff;'><strong>🚀 Status:</strong> Starting upload...</div>"
+        
+        with self.upload_output:
+            # Auto-fill dataset path if empty
+            if not self.upload_dataset_path.value and self.dataset_directory.value:
+                self.upload_dataset_path.value = self.dataset_directory.value
+                print(f"📁 Auto-filled dataset path: {self.dataset_directory.value}")
+            
+            # Validation
+            if not self.upload_dataset_path.value:
+                self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Dataset path required.</div>"
+                print("❌ Please specify the dataset path to upload.")
+                return
+                
+            if not self.upload_dataset_name.value:
+                self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Repository name required.</div>"
+                print("❌ Please specify a repository name.")
+                return
+                
+            if not self.upload_hf_token.value:
+                self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> HuggingFace token required.</div>"
+                print("❌ Please provide your HuggingFace WRITE token.")
+                print("🔑 Get it here: https://huggingface.co/settings/tokens")
+                return
+            
+            print("🤗 Starting HuggingFace dataset upload...")
+            print("=" * 60)
+            
+            try:
+                success = self.manager.upload_dataset_to_huggingface(
+                    dataset_path=self.upload_dataset_path.value,
+                    dataset_name=self.upload_dataset_name.value,
+                    hf_token=self.upload_hf_token.value,
+                    orgs_name=self.upload_orgs_name.value,
+                    make_private=self.upload_make_private.value,
+                    description=self.upload_description.value
+                )
+                
+                if success:
+                    self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Upload completed successfully!</div>"
+                    print("\n🎉 Upload completed successfully!")
+                    print("🤗 Your dataset is now available on HuggingFace Hub!")
+                    
+                    # Create shareable info
+                    repo_id = f"{self.upload_orgs_name.value.strip() or 'your-username'}/{self.upload_dataset_name.value}"
+                    print(f"\n📋 Dataset Details:")
+                    print(f"   🔗 URL: https://huggingface.co/datasets/{repo_id}")
+                    print(f"   📝 Name: {self.upload_dataset_name.value}")
+                    print(f"   🔒 Privacy: {'Private' if self.upload_make_private.value else 'Public'}")
+                    
+                else:
+                    self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Upload failed.</div>"
+                    print("❌ Upload failed. Check the error messages above.")
+                    
+            except Exception as e:
+                self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Upload error.</div>"
+                print(f"💥 Unexpected error during upload: {str(e)}")
+                print("💡 Please check your token permissions and try again.")
 
     def display(self):
         display(self.widget_box)

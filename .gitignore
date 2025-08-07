@@ -1,14 +1,23 @@
-# macOS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# macOS (comprehensive - all directories)
+**/.DS_Store
+**/.DS_Store?
+**/._*
+**/.Spotlight-V100
+**/.Trashes
+**/.fseventsd
+**/.TemporaryItems
+**/.VolumeIcon.icns
+**/.com.apple.timemachine.donotpresent
+**/.AppleDB
+**/.AppleDesktop
+**/.apdisk
+# Windows thumbnails
+**/ehthumbs.db
+**/Thumbs.db
 
-# Python
+# Python (comprehensive - all directories)
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
 *.so
@@ -43,6 +52,7 @@ venv.bak/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+**/.ipynb_checkpoints
 
 # Development documentation (private)
 docs/development/
