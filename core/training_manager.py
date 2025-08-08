@@ -158,8 +158,7 @@ class HybridTrainingManager:
         
         for script_path in possible_scripts:
             if os.path.exists(script_path):
-                script_type = "SDXL" if "sdxl" in os.path.basename(script_path) else "SD 1.5"
-                print(f"✅ Found {script_type} training script: {script_path}")
+                # Silently return the found script - no need to announce it every time
                 return script_path
         
         return None
@@ -179,14 +178,16 @@ class HybridTrainingManager:
             
         # Silently check for custom optimizers
             
+        # Silently check for custom optimizers - no need to spam the user
+        self._came_available = False
+        self._rex_available = False
+        
         # Try to import and verify CAME is available (from custom_scheduler)
         try:
             import LoraEasyCustomOptimizer.came
             from LoraEasyCustomOptimizer.came import CAME
-            print("✅ CAME optimizer found and ready!")
-        except ImportError as e:
-            print(f"⚠️ CAME optimizer not found: {e}")
-            
+            self._came_available = True
+        except ImportError:
             # Try alternative import paths for Derrian's structure
             alt_paths = [
                 ('came', 'CAME'),
@@ -199,20 +200,17 @@ class HybridTrainingManager:
                 try:
                     module = __import__(module_path, fromlist=[class_name])
                     getattr(module, class_name)  # Test if class exists
-                    print(f"✅ Found CAME at: {module_path}.{class_name}")
+                    self._came_available = True
                     break
                 except (ImportError, AttributeError):
                     continue
-            else:
-                print("💡 CAME optimizer not found in any expected location")
             
         # Try to import REX scheduler
         try:
             import LoraEasyCustomOptimizer.RexAnnealingWarmRestarts
-            print("✅ REX scheduler found and ready!")
-        except ImportError as e:
-            print(f"⚠️ REX scheduler not found: {e}")
-            print("💡 Custom optimizers might not be available - using standard optimizers")
+            self._rex_available = True
+        except ImportError:
+            pass  # Silently continue - user doesn't need to know unless they try to use it
     
     def _test_triton_compatibility(self):
         """Test if Triton is working properly for AdamW8bit"""
@@ -224,19 +222,18 @@ class HybridTrainingManager:
             # Test if we can create a simple operation that would use Triton
             # This mimics what bitsandbytes.AdamW8bit would try to do
             if not torch.cuda.is_available():
-                print("🔍 CUDA not available - AdamW8bit may not work optimally")
+                # Silently return False - no GPU acceleration available
                 return False
                 
             # Try a simple tensor operation that would trigger Triton compilation
             test_tensor = torch.randn(10, device='cuda', dtype=torch.float16)
             _ = test_tensor * 2.0
             
-            print("✅ Triton compatibility test passed - AdamW8bit should work")
+            # Triton test passed silently
             return True
             
-        except ImportError as e:
-            print(f"⚠️ Triton not found: {e}")
-            print("💡 Will fallback to AdamW for compatibility")
+        except ImportError:
+            # Silently return False - user will see fallback behavior if they try to use AdamW8bit
             return False
         except Exception as e:
             print(f"⚠️ Triton compatibility test failed: {e}")
@@ -778,7 +775,7 @@ class HybridTrainingManager:
             if advanced_optimizer == 'came':
                 try:
                     import LoraEasyCustomOptimizer.came
-                    print("✅ CAME optimizer verified and ready!")
+                    # Silently verified - no need to spam about success
                 except ImportError as e:
                     print(f"❌ CAME optimizer not available: {e}")
                     print("🔄 Falling back to standard AdamW optimizer...")
@@ -817,7 +814,7 @@ class HybridTrainingManager:
                 import LoraEasyCustomOptimizer.RexAnnealingWarmRestarts
                 lr_scheduler_type = "LoraEasyCustomOptimizer.RexAnnealingWarmRestarts.RexAnnealingWarmRestarts"
                 lr_scheduler_args = ["min_lr=1e-9", "gamma=0.9", "d=0.9"]
-                print("✅ REX scheduler verified and ready!")
+                # Silently verified - no spam needed
             except ImportError as e:
                 print(f"❌ REX scheduler not available: {e}")
                 print("🔄 Falling back to cosine scheduler...")

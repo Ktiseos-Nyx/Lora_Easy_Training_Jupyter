@@ -66,109 +66,103 @@ This project builds upon and integrates the excellent work of:
 ## 🚀 Quick Start
 
 ### What You Need
-- **Computer**: Windows, macOS, or Linux
-- **Python**: Version 3.10 ⚠️ **IMPORTANT: Python 3.12+ will break dependencies!**
-- **GPU**: NVIDIA GPU with 8GB+ VRAM recommended (can work with less)
-- **Git**: For downloading this project (explained below)
+- **GPU**: NVIDIA (8GB+ VRAM) OR AMD GPU (16GB+ VRAM recommended for RDNA2/3)
+- **Python**: Version 3.10.6 (compatible with Kohya-ss training)
+- **Platform**: Local computer OR cloud GPU service (see options below)
 
-### ⚠️ Python Version Compatibility
+### 🖥️ Supported Platforms
 
-**🔍 Check Your Python Version First:**
+**✅ Recommended (Easy Setup):**
+- **VastAI**: PyTorch containers with Python 3.10 (NVIDIA + select AMD GPUs)
+- **RunPod**: CUDA development templates (NVIDIA GPUs)
+- **Local NVIDIA**: Anaconda/Miniconda with Python 3.10.6 + CUDA
+- **Local AMD (Linux)**: Anaconda/Miniconda with Python 3.10.6 + ROCm 6.2+
+
+**🧪 Experimental AMD Support:**
+- **Local AMD (Windows)**: ZLUDA or DirectML acceleration
+- **Cloud AMD**: Limited availability on VastAI/RunPod
+
+**⚠️ Requires Environment Setup:**
+- **Docker**: Use PyTorch/CUDA base images (not Ubuntu)
+- **Lambda Labs**: Cloud GPU instances
+- **Paperspace**: Gradient platform
+
+### 🐍 Python Setup
+
+**Check your Python version first:**
 ```bash
 python --version
-# Should show Python 3.10.x - if it shows 3.12+, you'll need to fix this
+# Need: Python 3.10.6 (other versions may break dependencies)
 ```
 
-**✅ Compatible Environments:**
-- **Local**: Python 3.10.x installations
-- **Anaconda/Miniconda**: Create environment with Python 3.10
-- **Docker/Containers**: PyTorch or CUDA containers with Python 3.10
-- **VastAI**: PyTorch/CUDA templates (avoid base Ubuntu images)
-
-**❌ Known Issues:**
-- **Python 3.12+**: Breaks TensorFlow dependencies (common in newer systems)
-- **Base Ubuntu 22.04+**: Often ships with Python 3.12
-- **Latest Anaconda**: May default to Python 3.12
-
-**🔧 How to Fix Python Version Issues:**
-
-**Local Users (Windows/Mac/Linux):**
+**If you don't have Python 3.10.6:**
 ```bash
-# Create Python 3.10 environment with conda/miniconda
-conda create -n lora-training python=3.10
+# Create conda environment (recommended)
+conda create -n lora-training python=3.10.6 -y
 conda activate lora-training
+
+# Or install Python 3.10.6 directly from python.org
 ```
 
-**Docker Users:**
-Use PyTorch or CUDA base images instead of plain Ubuntu:
-- `pytorch/pytorch:2.0.1-cuda11.7-cudnn8-devel`
-- `nvidia/cuda:11.8-cudnn8-devel-ubuntu20.04`
-
-**VastAI Users:** 
-Select templates with "PyTorch" or "CUDA" rather than "Ubuntu" base images.
-
-### Installation
-
-1.  **Get Git** (if you don't have it)
-
-    Git is a tool for downloading code projects. Don't worry - you just need to install it once and you're done!
-    
-    **Check if you already have Git:** Open your terminal/command prompt and type `git --version`. If you see a version number, you're good to go!
-    
-    **If you need to install Git:**
-    -   **Windows**: Download from [git-scm.com](https://git-scm.com/download/win) and run the installer
-    -   **Mac**: Open Terminal and type `xcode-select --install` 
-    -   **Linux**: Type `sudo apt-get install git` (Ubuntu/Debian) or use your system's package manager
-
-2.  **Download This Project**
-
-    Open your terminal/command prompt and navigate to where you want the project folder. Then run:
-    ```bash
-    git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git
-    cd Lora_Easy_Training_Jupyter
-    ```
-
-3.  **Run Setup**
-
-    This automatically installs everything you need:
-    
-    **Mac/Linux:**
-    ```bash
-    chmod +x ./jupyter.sh
-    ./jupyter.sh
-    ```
-    
-    **Windows (or if the above doesn't work):**
-    ```bash
-    python ./installer.py
-    ```
-    
-    Just wait for it to finish - it downloads the training tools and sets everything up.
-
-### Start Training
-
-**If using VastAI or similar:** Jupyter is probably already running - just open the notebooks in your browser.
-
-**If on your own computer:** Start Jupyter like this:
+**Always activate your environment before installation:**
 ```bash
-jupyter notebook
+conda activate lora-training  # If using conda
 ```
 
-**Then open these notebooks:**
-1. `Dataset_Maker_Widget.ipynb` - Prepare your images and captions
-2. `Lora_Trainer_Widget.ipynb` - Set up and run training  
-3. `LoRA_Calculator_Widget.ipynb` - Calculate training steps (optional)
+### 📥 Installation
+
+**Prerequisites:** Git (for downloading) and Python 3.10.6
+
+**Quick Git Check:**
+```bash
+git --version  # If this fails, install Git first
+```
+
+**Install Git if needed:**
+- **Windows**: Download from [git-scm.com](https://git-scm.com/download/win)
+- **Mac**: `xcode-select --install` in Terminal
+- **Linux**: `sudo apt install git` (Ubuntu/Debian)
+
+**Download and Setup:**
+```bash
+# 1. Clone the repository
+git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git
+cd Lora_Easy_Training_Jupyter
+
+# 2. Run the installer (downloads ~10-15GB)
+python ./installer.py
+
+# Alternative for Mac/Linux:
+chmod +x ./jupyter.sh && ./jupyter.sh
+```
+
+### 🚀 Start Training
+
+1. **Open Jupyter** (if not already running):
+   ```bash
+   jupyter notebook
+   # Or: jupyter lab
+   ```
+
+2. **Use the notebooks in order:**
+   - `Dataset_Maker_Widget.ipynb` - Prepare images and captions
+   - `Lora_Trainer_Widget.ipynb` - Configure and run training
+   - `LoRA_Calculator_Widget.ipynb` - Calculate optimal steps (optional)
 
 ## 📖 How to Use
 
 ### Step 1: Prepare Your Images
 
-Open `Dataset_Maker_Widget.ipynb` and run the first cell:
+Open `Dataset_Maker_Widget.ipynb` and run the cells in order:
 
 ```python
-# This starts the dataset preparation tool
-from widgets.dataset_widget import DatasetWidget
-dataset_widget = DatasetWidget()
+# Cell 1: Environment setup (if needed)
+from shared_managers import create_widget
+setup_widget = create_widget('setup')
+setup_widget.display()
+
+# Cell 2: Dataset preparation
+dataset_widget = create_widget('dataset')  
 dataset_widget.display()
 ```
 
@@ -271,6 +265,39 @@ This tool helps you:
 - **`widgets/utilities_widget.py`**: Post-training tools
 
 ## 🐛 Troubleshooting
+
+### AMD GPU Support
+
+**🔥 AMD GPU Training is now supported through multiple acceleration methods:**
+
+#### **ROCm (Linux Only) - Recommended**
+- **Requirements**: Linux, AMD RDNA2/3 GPU, ROCm 6.1+ drivers
+- **Installation**: Automatic via setup widget "Diagnose & Fix" button
+- **Performance**: Native AMD acceleration, best compatibility
+- **Setup Command**: `pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.0`
+
+#### **ZLUDA (Experimental) - Windows & Linux**
+- **Requirements**: AMD RDNA2+ GPU, ZLUDA runtime libraries
+- **Installation**: Manual - download from [ZLUDA GitHub](https://github.com/vosen/ZLUDA)
+- **Performance**: CUDA-to-AMD translation layer, experimental but promising
+- **Status**: Some limitations with matrix operations, actively developed
+
+#### **DirectML (Windows Fallback)**
+- **Requirements**: Windows, any DirectX 12 compatible AMD GPU
+- **Installation**: `pip install torch-directml`
+- **Performance**: Lower performance but broader compatibility
+- **Limitations**: Limited LoRA training support
+
+#### **AMD GPU Memory Requirements**
+- **RDNA2/3**: 16GB+ VRAM recommended (RX 6800 XT, RX 7900 XTX)
+- **Older Cards**: May work with reduced settings
+- **Memory Optimization**: Enable gradient checkpointing for large models
+
+#### **AMD Training Tips**
+- **Batch Size**: Start with 1, increase gradually
+- **Resolution**: 768x768 recommended vs 1024x1024 for NVIDIA
+- **Optimizer**: CAME optimizer saves significant VRAM
+- **Mixed Precision**: fp16 may have compatibility issues, try bf16
 
 ### Known Issues & Compatibility
 

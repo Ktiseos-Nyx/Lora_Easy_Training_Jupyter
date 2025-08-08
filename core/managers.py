@@ -44,15 +44,973 @@ class SetupManager:
         """Detect environment only when actually needed - not on every widget load!"""
         if self._environment_detected:
             return
-            
+        
+        # Check for VastAI first
         self._is_vastai = bool(os.environ.get('VAST_CONTAINERLABEL') or '/workspace' in self.project_root)
         if self._is_vastai:
             self._correct_venv_path = '/venv/main/bin/pip'
             print(f"🐳 VastAI detected - using correct venv: {self._correct_venv_path}")
         else:
-            self._correct_venv_path = 'pip'
+            # Detect current Python/pip environment (conda, venv, etc.)
+            self._correct_venv_path = self._detect_current_pip()
             
         self._environment_detected = True
+    
+    def _detect_current_pip(self):
+        """Detect the pip executable for the current Python environment"""
+        import sys
+        import os
+        
+        # Get current Python executable
+        current_python = sys.executable
+        
+        # Determine corresponding pip and environment type
+        if 'conda' in current_python or 'miniconda' in current_python or 'anaconda' in current_python:
+            # Conda environment - use python -m pip to ensure same env
+            pip_cmd = [current_python, '-m', 'pip']
+            env_type = "conda"
+            env_name = os.environ.get('CONDA_DEFAULT_ENV', 'unknown')
+        elif 'venv' in current_python or '.venv' in current_python:
+            # Virtual environment
+            pip_cmd = [current_python, '-m', 'pip'] 
+            env_type = "venv"
+            env_name = os.path.basename(os.path.dirname(os.path.dirname(current_python)))
+        else:
+            # System Python (fallback)
+            pip_cmd = ['pip']
+            env_type = "system"
+            env_name = "system"
+        
+        print(f"🐍 Environment detected: {env_type} ({env_name})")
+        print(f"🔧 Using Python: {current_python}")
+        
+        # Return pip command as list for subprocess
+        return pip_cmd
+    
+    def validate_and_fix_deep_dependencies(self):
+        """Comprehensive dependency validation and auto-fixing"""
+        print("🔍 Running comprehensive dependency validation...")
+        print("=" * 60)
+        
+        all_good = True
+        
+        # 1. CUDA/cuDNN Compatibility Check
+        print("🎮 Checking CUDA/cuDNN compatibility...")
+        cuda_status = self._check_cuda_cudnn_versions()
+        if not cuda_status['compatible']:
+            print(f"⚠️ CUDA issue detected: {cuda_status['issue']}")
+            if self._fix_cuda_cudnn_mismatch(cuda_status):
+                print("✅ CUDA issue fixed!")
+            else:
+                print("❌ CUDA issue persists - manual intervention needed")
+                all_good = False
+        else:
+            print("✅ CUDA/cuDNN compatibility looks good")
+        
+        # 2. PyTorch CUDA Compatibility  
+        print("\n🔥 Checking PyTorch CUDA compatibility...")
+        pytorch_status = self._check_pytorch_cuda_compatibility()
+        if not pytorch_status['compatible']:
+            print(f"⚠️ PyTorch issue: {pytorch_status['issue']}")
+            if self._reinstall_correct_pytorch(pytorch_status):
+                print("✅ PyTorch issue fixed!")
+            else:
+                print("❌ PyTorch issue persists")
+                all_good = False
+        else:
+            print("✅ PyTorch CUDA compatibility verified")
+        
+        # 3. Derrian Backend Dependencies
+        print("\n🚀 Checking Derrian backend dependencies...")
+        backend_status = self._check_derrian_backend_deps()
+        if not backend_status['complete']:
+            print(f"⚠️ Backend issue: {backend_status['issue']}")
+            if self._fix_derrian_backend_install(backend_status):
+                print("✅ Backend dependencies fixed!")
+            else:
+                print("❌ Backend issue persists")
+                all_good = False
+        else:
+            print("✅ Derrian backend dependencies complete")
+        
+        print("\n" + "=" * 60)
+        if all_good:
+            print("🎉 All dependencies validated and ready for training!")
+        else:
+            print("⚠️ Some issues remain - check logs above")
+            
+        return all_good
+    
+    def _detect_gpu_type(self):
+        """Detect GPU type and acceleration method"""
+        gpu_info = {
+            'type': 'unknown',
+            'devices': [],
+            'acceleration': None,
+            'rocm_available': False,
+            'zluda_available': False,
+            'directml_available': False
+        }
+        
+        try:
+            import torch
+            
+            # Check for AMD GPU via ROCm
+            if hasattr(torch.version, 'hip') and torch.version.hip is not None:
+                gpu_info['type'] = 'amd'
+                gpu_info['acceleration'] = 'rocm'
+                gpu_info['rocm_available'] = True
+                if torch.cuda.is_available():  # ROCm uses cuda interface
+                    gpu_info['devices'] = [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
+                return gpu_info
+            
+            # Check for NVIDIA GPU
+            if torch.cuda.is_available():
+                try:
+                    device_name = torch.cuda.get_device_name(0).lower()
+                    if 'nvidia' in device_name or 'geforce' in device_name or 'rtx' in device_name or 'gtx' in device_name:
+                        gpu_info['type'] = 'nvidia'
+                        gpu_info['acceleration'] = 'cuda'
+                        gpu_info['devices'] = [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
+                        return gpu_info
+                    elif 'amd' in device_name or 'radeon' in device_name:
+                        # AMD GPU detected via CUDA interface (ZLUDA likely)
+                        gpu_info['type'] = 'amd'
+                        gpu_info['acceleration'] = 'zluda'
+                        gpu_info['zluda_available'] = True
+                        gpu_info['devices'] = [torch.cuda.get_device_name(i) for i in range(torch.cuda.device_count())]
+                        return gpu_info
+                except:
+                    pass
+            
+            # Check for DirectML (Windows AMD fallback)
+            if sys.platform == "win32":
+                try:
+                    import torch_directml
+                    gpu_info['acceleration'] = 'directml'
+                    gpu_info['directml_available'] = True
+                    if torch_directml.is_available():
+                        gpu_info['type'] = 'amd'  # Assume AMD for DirectML
+                        gpu_info['devices'] = ['DirectML Device']
+                        return gpu_info
+                except ImportError:
+                    pass
+            
+            # Check system for AMD GPUs via other methods
+            gpu_info.update(self._detect_amd_gpu_system())
+            
+        except ImportError:
+            gpu_info['issue'] = 'PyTorch not installed'
+        
+        return gpu_info
+    
+    def _detect_amd_gpu_system(self):
+        """Detect AMD GPU via system calls"""
+        amd_info = {}
+        
+        if sys.platform == "win32":
+            # Windows: Check via wmic
+            try:
+                result = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'], 
+                                      capture_output=True, text=True, timeout=5)
+                if 'AMD' in result.stdout or 'Radeon' in result.stdout:
+                    amd_info['type'] = 'amd'
+                    amd_info['devices'] = ['AMD GPU (detected via system)']
+            except:
+                pass
+        else:
+            # Linux: Check via lspci
+            try:
+                result = subprocess.run(['lspci', '-nn'], capture_output=True, text=True, timeout=5)
+                if 'AMD' in result.stdout or 'ATI' in result.stdout:
+                    amd_info['type'] = 'amd'
+                    # Extract GPU names
+                    lines = result.stdout.split('\n')
+                    gpu_lines = [line for line in lines if ('AMD' in line or 'ATI' in line) and ('VGA' in line or 'Display' in line)]
+                    amd_info['devices'] = gpu_lines[:3]  # Limit output
+            except:
+                pass
+        
+        return amd_info
+    
+    def _check_cuda_cudnn_versions(self):
+        """Check CUDA and cuDNN version compatibility (NVIDIA) or ROCm compatibility (AMD)"""
+        gpu_info = self._detect_gpu_type()
+        
+        if gpu_info['type'] == 'amd':
+            return self._check_amd_compatibility(gpu_info)
+        elif gpu_info['type'] == 'nvidia':
+            return self._check_nvidia_cuda_compatibility()
+        else:
+            return {
+                'compatible': False,
+                'issue': 'No supported GPU detected',
+                'gpu_type': 'unknown',
+                'fix_type': 'install_gpu_support'
+            }
+    
+    def _check_nvidia_cuda_compatibility(self):
+        """Check NVIDIA CUDA compatibility"""
+        try:
+            import torch
+            
+            if not torch.cuda.is_available():
+                return {
+                    'compatible': False,
+                    'issue': 'CUDA not available in PyTorch',
+                    'cuda_version': None,
+                    'cudnn_version': None,
+                    'gpu_type': 'nvidia',
+                    'fix_type': 'reinstall_pytorch_cuda'
+                }
+            
+            cuda_version = torch.version.cuda
+            cudnn_version = torch.backends.cudnn.version()
+            
+            # Check for known problematic combinations
+            if cudnn_version and str(cudnn_version).startswith('9'):
+                return {
+                    'compatible': False,
+                    'issue': f'cuDNN {cudnn_version} incompatible (need 8.x)',
+                    'cuda_version': cuda_version,
+                    'cudnn_version': cudnn_version,
+                    'gpu_type': 'nvidia',
+                    'fix_type': 'reinstall_pytorch_cuda8'
+                }
+            
+            return {
+                'compatible': True,
+                'cuda_version': cuda_version,
+                'cudnn_version': cudnn_version,
+                'gpu_type': 'nvidia'
+            }
+            
+        except ImportError:
+            return {
+                'compatible': False,
+                'issue': 'PyTorch not installed',
+                'gpu_type': 'nvidia',
+                'fix_type': 'install_pytorch_cuda'
+            }
+    
+    def _check_amd_compatibility(self, gpu_info):
+        """Check AMD GPU compatibility with available acceleration methods"""
+        acceleration = gpu_info.get('acceleration')
+        
+        if acceleration == 'rocm':
+            return self._check_rocm_compatibility(gpu_info)
+        elif acceleration == 'zluda':
+            return self._check_zluda_compatibility(gpu_info)
+        elif acceleration == 'directml':
+            return self._check_directml_compatibility(gpu_info)
+        else:
+            # No acceleration detected, suggest options
+            return {
+                'compatible': False,
+                'issue': 'AMD GPU detected but no acceleration method available',
+                'gpu_type': 'amd',
+                'devices': gpu_info.get('devices', []),
+                'fix_type': 'install_amd_support',
+                'suggestions': self._get_amd_support_suggestions()
+            }
+    
+    def _check_rocm_compatibility(self, gpu_info):
+        """Check ROCm compatibility"""
+        try:
+            import torch
+            
+            if not torch.cuda.is_available():
+                return {
+                    'compatible': False,
+                    'issue': 'ROCm PyTorch installed but GPU not accessible',
+                    'gpu_type': 'amd',
+                    'acceleration': 'rocm',
+                    'fix_type': 'fix_rocm_setup'
+                }
+            
+            # Test ROCm functionality
+            try:
+                test_tensor = torch.randn(10, device='cuda')
+                hip_version = torch.version.hip if hasattr(torch.version, 'hip') else 'Unknown'
+                
+                return {
+                    'compatible': True,
+                    'gpu_type': 'amd',
+                    'acceleration': 'rocm',
+                    'hip_version': hip_version,
+                    'devices': gpu_info.get('devices', [])
+                }
+            except Exception as e:
+                return {
+                    'compatible': False,
+                    'issue': f'ROCm test failed: {str(e)}',
+                    'gpu_type': 'amd',
+                    'acceleration': 'rocm',
+                    'fix_type': 'fix_rocm_setup'
+                }
+                
+        except ImportError:
+            return {
+                'compatible': False,
+                'issue': 'ROCm PyTorch not installed',
+                'gpu_type': 'amd',
+                'fix_type': 'install_rocm_pytorch'
+            }
+    
+    def _check_zluda_compatibility(self, gpu_info):
+        """Check ZLUDA compatibility"""
+        try:
+            import torch
+            
+            if not torch.cuda.is_available():
+                return {
+                    'compatible': False,
+                    'issue': 'ZLUDA detected but CUDA interface not working',
+                    'gpu_type': 'amd',
+                    'acceleration': 'zluda',
+                    'fix_type': 'fix_zluda_setup'
+                }
+            
+            # Test ZLUDA functionality
+            try:
+                test_tensor = torch.randn(10, device='cuda')
+                
+                return {
+                    'compatible': True,
+                    'gpu_type': 'amd',
+                    'acceleration': 'zluda',
+                    'cuda_version': torch.version.cuda,
+                    'devices': gpu_info.get('devices', []),
+                    'note': 'ZLUDA experimental - performance may vary'
+                }
+            except Exception as e:
+                return {
+                    'compatible': False,
+                    'issue': f'ZLUDA test failed: {str(e)}',
+                    'gpu_type': 'amd',
+                    'acceleration': 'zluda',
+                    'fix_type': 'fix_zluda_setup'
+                }
+                
+        except ImportError:
+            return {
+                'compatible': False,
+                'issue': 'PyTorch not installed for ZLUDA',
+                'gpu_type': 'amd',
+                'fix_type': 'install_pytorch_zluda'
+            }
+    
+    def _check_directml_compatibility(self, gpu_info):
+        """Check DirectML compatibility"""
+        try:
+            import torch_directml
+            
+            if not torch_directml.is_available():
+                return {
+                    'compatible': False,
+                    'issue': 'DirectML installed but not available',
+                    'gpu_type': 'amd',
+                    'acceleration': 'directml',
+                    'fix_type': 'fix_directml_setup'
+                }
+            
+            return {
+                'compatible': True,
+                'gpu_type': 'amd',
+                'acceleration': 'directml',
+                'devices': gpu_info.get('devices', []),
+                'note': 'DirectML may have limited LoRA training support'
+            }
+            
+        except ImportError:
+            return {
+                'compatible': False,
+                'issue': 'DirectML not installed',
+                'gpu_type': 'amd',
+                'fix_type': 'install_directml'
+            }
+    
+    def _get_amd_support_suggestions(self):
+        """Get platform-specific AMD support suggestions"""
+        suggestions = []
+        
+        if sys.platform.startswith('linux'):
+            suggestions.extend([
+                'Install ROCm PyTorch: pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.0',
+                'Try ZLUDA: Download from https://github.com/vosen/ZLUDA',
+                'Ensure ROCm drivers installed: AMD ROCm 6.1+'
+            ])
+        elif sys.platform == 'win32':
+            suggestions.extend([
+                'Try ZLUDA: Download from https://github.com/vosen/ZLUDA',
+                'Install DirectML: pip install torch-directml',
+                'Note: ROCm not supported on Windows'
+            ])
+        else:
+            suggestions.append('AMD GPU support limited on this platform')
+        
+        return suggestions
+    
+    def _check_pytorch_cuda_compatibility(self):
+        """Check if PyTorch installation matches GPU type (CUDA for NVIDIA, ROCm for AMD)"""
+        gpu_info = self._detect_gpu_type()
+        
+        if gpu_info['type'] == 'amd':
+            return self._check_amd_pytorch_compatibility(gpu_info)
+        elif gpu_info['type'] == 'nvidia':
+            return self._check_nvidia_pytorch_compatibility()
+        else:
+            return {
+                'compatible': False,
+                'issue': 'No supported GPU detected',
+                'fix_type': 'install_gpu_support'
+            }
+    
+    def _check_nvidia_pytorch_compatibility(self):
+        """Check NVIDIA PyTorch compatibility"""
+        try:
+            import torch
+            
+            if not torch.cuda.is_available():
+                return {
+                    'compatible': False,
+                    'issue': 'PyTorch CUDA not available',
+                    'torch_cuda': None,
+                    'gpu_type': 'nvidia',
+                    'fix_type': 'reinstall_pytorch_cuda'
+                }
+            
+            torch_cuda = torch.version.cuda
+            device_count = torch.cuda.device_count()
+            device_name = torch.cuda.get_device_name(0) if device_count > 0 else "Unknown"
+            
+            # Basic sanity check
+            if device_count == 0:
+                return {
+                    'compatible': False,
+                    'issue': 'No CUDA devices detected',
+                    'gpu_type': 'nvidia',
+                    'fix_type': 'check_cuda_install'
+                }
+            
+            # Test basic CUDA operations
+            try:
+                test_tensor = torch.randn(10, device='cuda')
+                _ = test_tensor * 2.0
+            except Exception as e:
+                return {
+                    'compatible': False,
+                    'issue': f'CUDA operation failed: {e}',
+                    'gpu_type': 'nvidia',
+                    'fix_type': 'reinstall_pytorch_cuda'
+                }
+            
+            return {
+                'compatible': True,
+                'torch_cuda': torch_cuda,
+                'device_count': device_count,
+                'device_name': device_name,
+                'gpu_type': 'nvidia'
+            }
+            
+        except ImportError:
+            return {
+                'compatible': False,
+                'issue': 'PyTorch not installed',
+                'gpu_type': 'nvidia',
+                'fix_type': 'install_pytorch'
+            }
+    
+    def _check_amd_pytorch_compatibility(self, gpu_info):
+        """Check AMD PyTorch compatibility"""
+        acceleration = gpu_info.get('acceleration')
+        
+        if acceleration == 'rocm':
+            return self._check_amd_rocm_pytorch()
+        elif acceleration == 'zluda':
+            return self._check_amd_zluda_pytorch()
+        elif acceleration == 'directml':
+            return self._check_amd_directml_pytorch()
+        else:
+            return {
+                'compatible': False,
+                'issue': 'AMD GPU detected but no PyTorch acceleration available',
+                'gpu_type': 'amd',
+                'fix_type': 'install_amd_pytorch',
+                'suggestions': self._get_amd_support_suggestions()
+            }
+    
+    def _check_amd_rocm_pytorch(self):
+        """Check AMD ROCm PyTorch compatibility"""
+        try:
+            import torch
+            
+            # Check for ROCm build
+            if not hasattr(torch.version, 'hip') or torch.version.hip is None:
+                return {
+                    'compatible': False,
+                    'issue': 'AMD GPU detected but PyTorch CUDA build installed (need ROCm build)',
+                    'gpu_type': 'amd',
+                    'acceleration': 'rocm',
+                    'fix_type': 'install_rocm_pytorch'
+                }
+            
+            if not torch.cuda.is_available():
+                return {
+                    'compatible': False,
+                    'issue': 'ROCm PyTorch installed but GPU not accessible',
+                    'gpu_type': 'amd',
+                    'acceleration': 'rocm',
+                    'hip_version': torch.version.hip,
+                    'fix_type': 'fix_rocm_setup'
+                }
+            
+            device_count = torch.cuda.device_count()
+            device_name = torch.cuda.get_device_name(0) if device_count > 0 else "Unknown"
+            
+            # Test ROCm functionality
+            try:
+                test_tensor = torch.randn(10, device='cuda')
+                _ = test_tensor * 2.0
+                
+                return {
+                    'compatible': True,
+                    'gpu_type': 'amd',
+                    'acceleration': 'rocm',
+                    'hip_version': torch.version.hip,
+                    'device_count': device_count,
+                    'device_name': device_name
+                }
+            except Exception as e:
+                return {
+                    'compatible': False,
+                    'issue': f'ROCm test failed: {str(e)}',
+                    'gpu_type': 'amd',
+                    'acceleration': 'rocm',
+                    'fix_type': 'fix_rocm_setup'
+                }
+                
+        except ImportError:
+            return {
+                'compatible': False,
+                'issue': 'ROCm PyTorch not installed',
+                'gpu_type': 'amd',
+                'fix_type': 'install_rocm_pytorch'
+            }
+    
+    def _check_amd_zluda_pytorch(self):
+        """Check AMD ZLUDA PyTorch compatibility"""
+        try:
+            import torch
+            
+            if not torch.cuda.is_available():
+                return {
+                    'compatible': False,
+                    'issue': 'ZLUDA setup detected but CUDA interface not working',
+                    'gpu_type': 'amd',
+                    'acceleration': 'zluda',
+                    'fix_type': 'fix_zluda_setup'
+                }
+            
+            device_count = torch.cuda.device_count()
+            device_name = torch.cuda.get_device_name(0) if device_count > 0 else "Unknown"
+            
+            # Test ZLUDA functionality
+            try:
+                test_tensor = torch.randn(10, device='cuda')
+                _ = test_tensor * 2.0
+                
+                return {
+                    'compatible': True,
+                    'gpu_type': 'amd',
+                    'acceleration': 'zluda',
+                    'torch_cuda': torch.version.cuda,
+                    'device_count': device_count,
+                    'device_name': device_name,
+                    'note': 'ZLUDA experimental - some features may not work'
+                }
+            except Exception as e:
+                return {
+                    'compatible': False,
+                    'issue': f'ZLUDA test failed: {str(e)}',
+                    'gpu_type': 'amd',
+                    'acceleration': 'zluda',
+                    'fix_type': 'fix_zluda_setup'
+                }
+                
+        except ImportError:
+            return {
+                'compatible': False,
+                'issue': 'PyTorch not installed for ZLUDA',
+                'gpu_type': 'amd',
+                'fix_type': 'install_pytorch_zluda'
+            }
+    
+    def _check_amd_directml_pytorch(self):
+        """Check AMD DirectML PyTorch compatibility"""
+        try:
+            import torch_directml
+            
+            if not torch_directml.is_available():
+                return {
+                    'compatible': False,
+                    'issue': 'DirectML installed but not available',
+                    'gpu_type': 'amd',
+                    'acceleration': 'directml',
+                    'fix_type': 'fix_directml_setup'
+                }
+            
+            return {
+                'compatible': True,
+                'gpu_type': 'amd',
+                'acceleration': 'directml',
+                'device_count': 1,  # DirectML typically shows as single device
+                'device_name': 'DirectML Device',
+                'note': 'DirectML has limited LoRA training support'
+            }
+            
+        except ImportError:
+            return {
+                'compatible': False,
+                'issue': 'DirectML not installed',
+                'gpu_type': 'amd',
+                'fix_type': 'install_directml'
+            }
+    
+    def _check_derrian_backend_deps(self):
+        """Check if Derrian backend and CAME optimizers are properly installed"""
+        issues = []
+        
+        # Check if sd_scripts directory exists
+        if not os.path.exists(self.sd_scripts_dir):
+            issues.append("sd_scripts directory missing")
+        
+        # Check for key training scripts
+        key_scripts = ['train_network.py', 'sdxl_train_network.py']
+        for script in key_scripts:
+            if not os.path.exists(os.path.join(self.sd_scripts_dir, script)):
+                issues.append(f"Missing training script: {script}")
+        
+        # Check for CAME optimizer
+        came_available = False
+        try:
+            import LoraEasyCustomOptimizer.came
+            came_available = True
+        except ImportError:
+            # Try alternative paths
+            sys_path_backup = sys.path.copy()
+            try:
+                custom_scheduler_dir = os.path.join(self.derrian_dir, "custom_scheduler")
+                if os.path.exists(custom_scheduler_dir):
+                    sys.path.insert(0, custom_scheduler_dir)
+                    import LoraEasyCustomOptimizer.came
+                    came_available = True
+            except ImportError:
+                pass
+            finally:
+                sys.path = sys_path_backup
+        
+        if not came_available:
+            issues.append("CAME optimizer not available")
+        
+        # Check for LyCORIS
+        lycoris_available = False
+        lycoris_dir = os.path.join(self.sd_scripts_dir, "networks")
+        if os.path.exists(lycoris_dir):
+            lycoris_files = ['lora.py', 'dylora.py']  # Basic check
+            if any(os.path.exists(os.path.join(lycoris_dir, f)) for f in lycoris_files):
+                lycoris_available = True
+        
+        if not lycoris_available:
+            issues.append("LyCORIS networks not available")
+        
+        return {
+            'complete': len(issues) == 0,
+            'issues': issues,
+            'issue': '; '.join(issues) if issues else None
+        }
+    
+    def _fix_cuda_cudnn_mismatch(self, status):
+        """Attempt to fix GPU compatibility issues (NVIDIA CUDA or AMD)"""
+        print("🔧 Attempting to fix GPU compatibility issues...")
+        
+        fix_type = status.get('fix_type')
+        gpu_type = status.get('gpu_type', 'nvidia')
+        
+        # NVIDIA GPU fixes
+        if gpu_type == 'nvidia':
+            if fix_type in ['reinstall_pytorch_cuda', 'reinstall_pytorch_cuda8']:
+                return self._reinstall_pytorch_with_cuda8()
+            elif fix_type == 'install_pytorch':
+                return self._install_pytorch_with_cuda()
+        
+        # AMD GPU fixes
+        elif gpu_type == 'amd':
+            if fix_type == 'install_rocm_pytorch':
+                return self._install_rocm_pytorch()
+            elif fix_type == 'install_pytorch_zluda':
+                return self._install_pytorch_zluda()
+            elif fix_type == 'install_directml':
+                return self._install_directml()
+            elif fix_type == 'install_amd_support':
+                return self._install_amd_support()
+            elif fix_type == 'install_amd_pytorch':
+                return self._install_amd_support()
+            elif fix_type == 'fix_rocm_setup':
+                return self._fix_rocm_setup()
+            elif fix_type == 'fix_zluda_setup':
+                return self._fix_zluda_setup()
+            elif fix_type == 'fix_directml_setup':
+                return self._fix_directml_setup()
+        
+        # Generic GPU support
+        elif fix_type == 'install_gpu_support':
+            print("❓ No supported GPU detected. Please check:")
+            print("  • NVIDIA GPU: Install NVIDIA drivers + CUDA")
+            print("  • AMD GPU (Linux): Install ROCm drivers")
+            print("  • AMD GPU (Windows): Install AMD drivers")
+            return False
+        
+        print(f"❌ Unknown fix type: {fix_type} for {gpu_type} GPU")
+        return False
+    
+    def _reinstall_correct_pytorch(self, status):
+        """Reinstall PyTorch with correct CUDA support"""
+        return self._reinstall_pytorch_with_cuda8()
+    
+    def _reinstall_pytorch_with_cuda8(self):
+        """Install PyTorch with cuDNN 8.x compatibility"""
+        print("📦 Installing PyTorch with cuDNN 8.x compatibility...")
+        
+        try:
+            # Uninstall existing PyTorch
+            pip_cmd = self.correct_venv_path
+            if isinstance(pip_cmd, list):
+                uninstall_cmd = pip_cmd + ['uninstall', '-y', 'torch', 'torchvision', 'torchaudio']
+            else:
+                uninstall_cmd = [pip_cmd, 'uninstall', '-y', 'torch', 'torchvision', 'torchaudio']
+            
+            subprocess.run(uninstall_cmd, check=True, capture_output=True)
+            
+            # Install PyTorch with CUDA 11.8 (compatible with cuDNN 8.x)
+            if isinstance(pip_cmd, list):
+                install_cmd = pip_cmd + [
+                    'install', 'torch', 'torchvision', 'torchaudio', 
+                    '--index-url', 'https://download.pytorch.org/whl/cu118'
+                ]
+            else:
+                install_cmd = [pip_cmd, 'install', 'torch', 'torchvision', 'torchaudio', '--index-url', 'https://download.pytorch.org/whl/cu118']
+            
+            result = subprocess.run(install_cmd, check=True, capture_output=True, text=True)
+            print("✅ PyTorch with CUDA 11.8 installed successfully")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to reinstall PyTorch: {e}")
+            if e.stdout:
+                print("STDOUT:", e.stdout)
+            if e.stderr:
+                print("STDERR:", e.stderr)
+            return False
+    
+    def _install_pytorch_with_cuda(self):
+        """Install PyTorch with CUDA from scratch"""
+        return self._reinstall_pytorch_with_cuda8()
+    
+    # AMD GPU Support Methods
+    def _install_rocm_pytorch(self):
+        """Install ROCm PyTorch for AMD GPUs"""
+        print("🔥 Installing ROCm PyTorch for AMD GPU support...")
+        
+        venv_python = get_venv_python_path(self.project_root)
+        
+        if sys.platform.startswith('linux'):
+            commands = [
+                # Uninstall existing PyTorch first
+                [venv_python, "-m", "pip", "uninstall", "torch", "torchvision", "torchaudio", "-y"],
+                # Install ROCm PyTorch
+                [venv_python, "-m", "pip", "install", "torch", "torchvision", "torchaudio", 
+                 "--index-url", "https://download.pytorch.org/whl/rocm6.0"]
+            ]
+            
+            for cmd in commands:
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                    if result.returncode != 0:
+                        print(f"⚠️ Command failed: {' '.join(cmd)}")
+                        print(f"Error: {result.stderr}")
+                        return False
+                except subprocess.TimeoutExpired:
+                    print("⚠️ Installation timed out")
+                    return False
+            
+            print("✅ ROCm PyTorch installation completed")
+            return True
+        else:
+            print("❌ ROCm PyTorch only supported on Linux")
+            return False
+    
+    def _install_pytorch_zluda(self):
+        """Install PyTorch for ZLUDA compatibility"""
+        print("🔥 Installing PyTorch for ZLUDA compatibility...")
+        
+        # ZLUDA uses regular CUDA PyTorch - the magic happens in the ZLUDA runtime
+        return self._reinstall_pytorch_with_cuda8()
+    
+    def _install_directml(self):
+        """Install DirectML for AMD GPU support on Windows"""
+        print("🔥 Installing DirectML for AMD GPU support...")
+        
+        if sys.platform != "win32":
+            print("❌ DirectML only supported on Windows")
+            return False
+        
+        venv_python = get_venv_python_path(self.project_root)
+        
+        commands = [
+            # Install DirectML
+            [venv_python, "-m", "pip", "install", "torch-directml"]
+        ]
+        
+        for cmd in commands:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                if result.returncode != 0:
+                    print(f"⚠️ Command failed: {' '.join(cmd)}")
+                    print(f"Error: {result.stderr}")
+                    return False
+            except subprocess.TimeoutExpired:
+                print("⚠️ Installation timed out")
+                return False
+        
+        print("✅ DirectML installation completed")
+        return True
+    
+    def _install_amd_support(self):
+        """Install appropriate AMD GPU support based on platform"""
+        print("🔥 Installing AMD GPU support...")
+        
+        if sys.platform.startswith('linux'):
+            print("🐧 Linux detected - installing ROCm PyTorch...")
+            return self._install_rocm_pytorch()
+        elif sys.platform == 'win32':
+            print("🪟 Windows detected - installing DirectML...")
+            return self._install_directml()
+        else:
+            print("❌ AMD GPU support not available on this platform")
+            return False
+    
+    def _fix_rocm_setup(self):
+        """Fix ROCm setup issues"""
+        print("🔧 Fixing ROCm setup issues...")
+        
+        # Check for common ROCm environment issues
+        fixes_applied = []
+        
+        # Set HSA_OVERRIDE_GFX_VERSION if needed
+        if not os.environ.get('HSA_OVERRIDE_GFX_VERSION'):
+            os.environ['HSA_OVERRIDE_GFX_VERSION'] = '10.3.0'
+            fixes_applied.append('Set HSA_OVERRIDE_GFX_VERSION=10.3.0')
+        
+        # Try reinstalling ROCm PyTorch
+        if self._install_rocm_pytorch():
+            fixes_applied.append('Reinstalled ROCm PyTorch')
+        
+        if fixes_applied:
+            print(f"✅ Applied fixes: {', '.join(fixes_applied)}")
+            return True
+        else:
+            print("❌ Unable to fix ROCm setup")
+            return False
+    
+    def _fix_zluda_setup(self):
+        """Fix ZLUDA setup issues"""
+        print("🔧 Fixing ZLUDA setup issues...")
+        print("ℹ️ ZLUDA requires manual setup - please ensure:")
+        print("  1. ZLUDA runtime libraries are in PATH")
+        print("  2. CUDA PyTorch is installed")
+        print("  3. AMD drivers support compute")
+        print("📖 See: https://github.com/vosen/ZLUDA")
+        
+        # Try reinstalling regular PyTorch for ZLUDA
+        if self._reinstall_pytorch_with_cuda8():
+            print("✅ Reinstalled PyTorch for ZLUDA compatibility")
+            return True
+        else:
+            print("❌ Unable to fix ZLUDA setup")
+            return False
+    
+    def _fix_directml_setup(self):
+        """Fix DirectML setup issues"""
+        print("🔧 Fixing DirectML setup issues...")
+        
+        # Try reinstalling DirectML
+        if self._install_directml():
+            return True
+        else:
+            print("❌ Unable to fix DirectML setup")
+            return False
+    
+    def _fix_derrian_backend_install(self, status):
+        """Fix Derrian backend installation issues"""
+        print("🔧 Attempting to fix Derrian backend issues...")
+        
+        issues = status.get('issues', [])
+        success = True
+        
+        # Fix missing sd_scripts
+        if any('sd_scripts' in issue for issue in issues):
+            print("📦 Fixing sd_scripts installation...")
+            if not self._install_sd_scripts():
+                success = False
+        
+        # Fix CAME optimizer
+        if any('CAME' in issue for issue in issues):
+            print("📦 Fixing CAME optimizer installation...")
+            if not self._install_came_optimizer():
+                success = False
+        
+        return success
+    
+    def _install_sd_scripts(self):
+        """Ensure sd_scripts is properly installed"""
+        try:
+            # This should trigger the existing setup logic
+            return self.setup_environment()
+        except Exception as e:
+            print(f"❌ Failed to install sd_scripts: {e}")
+            return False
+    
+    def _install_came_optimizer(self):
+        """Ensure CAME optimizer is properly installed"""
+        try:
+            custom_scheduler_dir = os.path.join(self.derrian_dir, "custom_scheduler")
+            if os.path.exists(custom_scheduler_dir):
+                # Run the custom optimizer setup
+                setup_script = os.path.join(custom_scheduler_dir, "setup.py")
+                if os.path.exists(setup_script):
+                    pip_cmd = self.correct_venv_path
+                    if isinstance(pip_cmd, list):
+                        python_cmd = pip_cmd[0]  # Get the Python executable
+                    else:
+                        python_cmd = 'python'
+                    
+                    result = subprocess.run(
+                        [python_cmd, setup_script, 'install'], 
+                        cwd=custom_scheduler_dir,
+                        check=True, 
+                        capture_output=True, 
+                        text=True
+                    )
+                    print("✅ CAME optimizer installed successfully")
+                    return True
+            
+            print("❌ CAME optimizer setup files not found")
+            return False
+            
+        except subprocess.CalledProcessError as e:
+            print(f"❌ Failed to install CAME optimizer: {e}")
+            return False
     
     @property
     def is_vastai(self):
@@ -343,8 +1301,14 @@ class SetupManager:
             try:
                 # Install from the correct working directory so -e . resolves properly
                 print(f"🔧 Installing requirements from {self.sd_scripts_dir} directory...")
-                subprocess.run([pip_cmd, 'install', '-r', 'requirements.txt'], 
-                             check=True, cwd=self.sd_scripts_dir)
+                
+                # Handle both list and string pip commands
+                if isinstance(pip_cmd, list):
+                    install_cmd = pip_cmd + ['install', '-r', 'requirements.txt']
+                else:
+                    install_cmd = [pip_cmd, 'install', '-r', 'requirements.txt']
+                
+                subprocess.run(install_cmd, check=True, cwd=self.sd_scripts_dir)
                 print("✅ SD scripts requirements installed")
             except subprocess.CalledProcessError as e:
                 print(f"⚠️ Requirements install failed: {e}")

@@ -5,6 +5,7 @@ from core.managers import SetupManager, ModelManager
 import os
 import subprocess
 import shutil
+import sys
 
 class SetupWidget:
     def __init__(self, setup_manager=None, model_manager=None):
@@ -20,40 +21,253 @@ class SetupWidget:
         self.create_widgets()
     
     def _detect_container_environment(self):
-        """Detects if running in a container and what type"""
+        """The Most Ridiculously Thorough Container Detection System Ever™"""
         info = {
             'is_container': False,
             'is_vastai': False,
-            'is_colab': False,
+            'is_runpod': False,
+            'is_lambda': False,
+            'is_sagemaker': False,
+            'is_docker': False,
+            'is_kubernetes': False,
             'has_gpu': False,
+            'gpu_count': 0,
+            'gpu_names': [],
             'cuda_visible': '',
-            'environment': 'local'
+            'environment': 'local',
+            'provider_details': {},
+            'optimization_hints': []
         }
         
-        # Check for container indicators
-        if os.path.exists('/.dockerenv') or os.environ.get('CONTAINER') == 'docker':
+        # === CONTAINER DETECTION ===
+        # Docker detection
+        if os.path.exists('/.dockerenv'):
             info['is_container'] = True
+            info['is_docker'] = True
+        
+        # Kubernetes detection
+        if os.environ.get('KUBERNETES_SERVICE_HOST'):
+            info['is_container'] = True
+            info['is_kubernetes'] = True
             
-        # Check for VastAI (the important one!)
-        if os.environ.get('VAST_CONTAINERLABEL') or '/workspace' in os.getcwd():
+        # Generic container env vars
+        if os.environ.get('CONTAINER') == 'docker':
+            info['is_container'] = True
+        
+        # === GPU CLOUD PROVIDER DETECTION ===
+        
+        # VastAI Detection (Multiple Methods!)
+        vast_indicators = [
+            os.environ.get('VAST_CONTAINERLABEL'),
+            '/workspace' in os.getcwd(),
+            os.path.exists('/workspace'),
+            'vast.ai' in os.environ.get('HOSTNAME', '').lower(),
+            os.environ.get('VAST_TCP_PORT_22_EXTERNAL_PORT')
+        ]
+        if any(vast_indicators):
             info['is_vastai'] = True
             info['environment'] = 'vastai'
-            
-        # Check for GPU availability
+            info['provider_details']['name'] = 'Vast.AI'
+            info['optimization_hints'].append('VastAI detected - use /workspace for storage')
+        
+        # RunPod Detection (Multiple Methods!)
+        runpod_indicators = [
+            os.environ.get('RUNPOD_POD_ID'),
+            os.environ.get('RUNPOD_PUBLIC_IP'),
+            'runpod.io' in os.environ.get('HOSTNAME', '').lower(),
+            os.path.exists('/runpod-volume'),
+            '/workspace' in os.getcwd() and os.environ.get('JUPYTER_ENABLE_LAB'),
+            os.environ.get('RUNPOD_TCP_PORT_8888_EXTERNAL_PORT')
+        ]
+        if any(runpod_indicators):
+            info['is_runpod'] = True
+            info['environment'] = 'runpod'
+            info['provider_details']['name'] = 'RunPod'
+            if os.environ.get('RUNPOD_POD_ID'):
+                info['provider_details']['pod_id'] = os.environ.get('RUNPOD_POD_ID')
+            info['optimization_hints'].append('RunPod detected - use /workspace or /runpod-volume')
+        
+        # Google Colab Detection (NOT SUPPORTED - our code won't work there!)
+        colab_indicators = [
+            os.path.exists('/content'),
+            'google.colab' in str(sys.modules.keys()) if 'sys' in locals() else False,
+            os.environ.get('COLAB_GPU'),
+            '/content/drive' in str(os.getcwd()) if os.getcwd() else False
+        ]
+        if any(colab_indicators):
+            info['is_colab'] = True
+            info['environment'] = 'colab'
+            info['provider_details']['name'] = 'Google Colab (UNSUPPORTED!)'
+            info['optimization_hints'].append('⚠️ Colab detected - This notebook requires proper container environment!')
+        
+        # Kaggle Detection  
+        kaggle_indicators = [
+            os.environ.get('KAGGLE_KERNEL_RUN_TYPE'),
+            os.path.exists('/kaggle'),
+            'kaggle' in os.environ.get('HOSTNAME', '').lower()
+        ]
+        if any(kaggle_indicators):
+            info['is_kaggle'] = True
+            info['environment'] = 'kaggle'
+            info['provider_details']['name'] = 'Kaggle'
+            info['optimization_hints'].append('Kaggle detected - use /kaggle/working')
+        
+        # Lambda Labs Detection (Cloud GPU instances)
+        lambda_indicators = [
+            'lambda' in os.environ.get('HOSTNAME', '').lower(),
+            os.path.exists('/home/ubuntu/lambda'),
+            os.environ.get('LAMBDA_INSTANCE_TYPE')
+        ]
+        if any(lambda_indicators):
+            info['is_lambda'] = True
+            info['environment'] = 'lambda'
+            info['provider_details']['name'] = 'Lambda Labs'
+            info['optimization_hints'].append('Lambda Labs detected - high-performance cloud GPU instance')
+        
+        # AWS SageMaker Detection (Enterprise/Research platform)
+        sagemaker_indicators = [
+            os.environ.get('SM_MODEL_DIR'),
+            os.environ.get('SM_CHANNELS'),
+            os.environ.get('SAGEMAKER_JOB_NAME'),
+            '/opt/ml' in os.getcwd(),
+            os.path.exists('/opt/ml/code'),
+            'sagemaker' in os.environ.get('HOSTNAME', '').lower()
+        ]
+        if any(sagemaker_indicators):
+            info['is_sagemaker'] = True
+            info['environment'] = 'sagemaker'
+            info['provider_details']['name'] = 'AWS SageMaker'
+            info['optimization_hints'].extend([
+                'SageMaker detected - Enterprise ML platform',
+                'SageMaker: Use /opt/ml/code for persistent code',
+                'SageMaker: Check instance limits and timeouts'
+            ])
+        
+        # Paperspace Gradient Detection
+        paperspace_indicators = [
+            os.environ.get('PAPERSPACE_METRIC_WORKLOAD_ID'),
+            os.environ.get('GRADIENT_WORKSPACE_ID'),
+            'paperspace' in os.environ.get('HOSTNAME', '').lower(),
+            os.path.exists('/notebooks')
+        ]
+        if any(paperspace_indicators):
+            info['is_paperspace'] = True
+            info['environment'] = 'paperspace'
+            info['provider_details']['name'] = 'Paperspace Gradient'
+            info['optimization_hints'].append('Paperspace detected - use /notebooks')
+        
+        # === GPU DETECTION ===
         info['cuda_visible'] = os.environ.get('CUDA_VISIBLE_DEVICES', '')
+        
+        # Basic GPU availability
         info['has_gpu'] = bool(info['cuda_visible'] or os.path.exists('/proc/driver/nvidia/version'))
+        
+        # Try to get detailed GPU info
+        try:
+            import subprocess
+            result = subprocess.run(['nvidia-smi', '--query-gpu=name,memory.total', '--format=csv,noheader,nounits'], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                lines = [line.strip() for line in result.stdout.strip().split('\n') if line.strip()]
+                info['gpu_count'] = len(lines)
+                info['gpu_names'] = []
+                total_vram = 0
+                for line in lines:
+                    parts = line.split(', ')
+                    if len(parts) >= 2:
+                        name, memory = parts[0].strip(), int(parts[1])
+                        info['gpu_names'].append(f"{name} ({memory/1024:.1f}GB)")
+                        total_vram += memory
+                info['provider_details']['total_vram_gb'] = round(total_vram / 1024, 1)
+                
+                # Add GPU-specific optimization hints
+                if any('RTX 4090' in name for name in info['gpu_names']):
+                    info['optimization_hints'].append('RTX 4090 detected - excellent for SDXL training')
+                elif any('RTX 5090' in name for name in info['gpu_names']):
+                    info['optimization_hints'].append('RTX 5090 detected - beast mode activated! 🔥')
+                elif any('A100' in name for name in info['gpu_names']):
+                    info['optimization_hints'].append('A100 detected - datacenter GPU, optimize for throughput')
+                elif any('H100' in name for name in info['gpu_names']):
+                    info['optimization_hints'].append('H100 detected - next-gen performance monster!')
+                    
+        except Exception as e:
+            # Fallback GPU detection
+            if os.path.exists('/proc/driver/nvidia/version'):
+                info['gpu_count'] = 1  # Assume at least 1 GPU
+        
+        # === STORAGE AND PERFORMANCE HINTS ===
+        try:
+            # Check available storage
+            total, used, free = shutil.disk_usage('.')
+            free_gb = free / (1024**3)
+            info['provider_details']['free_storage_gb'] = round(free_gb, 1)
+            
+            if free_gb < 20:
+                info['optimization_hints'].append('⚠️ Low storage - cleanup recommended')
+            elif free_gb > 100:
+                info['optimization_hints'].append('✅ Plenty of storage available')
+                
+        except:
+            pass
+            
+        # Add provider-specific optimizations
+        if info['is_vastai']:
+            info['optimization_hints'].extend([
+                'VastAI: Use aria2c for faster downloads',
+                'VastAI: Check /workspace permissions'
+            ])
+        elif info['is_runpod']:
+            info['optimization_hints'].extend([
+                'RunPod: Volume persistence configured',
+                'RunPod: Network volumes available'
+            ])
+        elif info['is_colab']:
+            info['optimization_hints'].extend([
+                'Colab: Session timeout ~12 hours',
+                'Colab: Mount Drive for model storage'
+            ])
         
         return info
 
     def _get_environment_status_html(self):
         """Creates HTML status display for current environment"""
+        provider = self.container_info['provider_details'].get('name', 'Unknown')
+        gpu_info = f"{self.container_info['gpu_count']} GPU(s)" if self.container_info['gpu_count'] > 0 else "No GPU"
+        storage_info = f" | {self.container_info['provider_details'].get('free_storage_gb', 0):.1f}GB free" if 'free_storage_gb' in self.container_info['provider_details'] else ""
+        
+        # GPU-specific icons
+        gpu_emoji = "🔥" if any('5090' in name for name in self.container_info['gpu_names']) else \
+                   "⚡" if any('4090' in name for name in self.container_info['gpu_names']) else \
+                   "🚀" if any('A100' in name or 'H100' in name for name in self.container_info['gpu_names']) else "🎮"
+        
         if self.container_info['is_vastai']:
-            return "<div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px; margin: 10px 0;'><strong>☁️ VastAI Container Detected</strong><br>Optimized settings will be applied automatically.</div>"
+            return f"<div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px; margin: 10px 0;'><strong>☁️ {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Optimized VastAI settings will be applied</small></div>"
+        
+        elif self.container_info['is_runpod']:
+            pod_id = self.container_info['provider_details'].get('pod_id', 'Unknown')
+            return f"<div style='padding: 10px; border: 1px solid #007bff; border-radius: 5px; margin: 10px 0;'><strong>🌊 {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Pod ID: {pod_id[:12]}...</small></div>"
+        
+        elif self.container_info['is_lambda']:
+            return f"<div style='padding: 10px; border: 1px solid #ff6b6b; border-radius: 5px; margin: 10px 0;'><strong>λ {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>High-performance cloud GPU</small></div>"
+        
+        elif self.container_info['is_sagemaker']:
+            return f"<div style='padding: 10px; border: 1px solid #ff9500; border-radius: 5px; margin: 10px 0;'><strong>☁️ {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Enterprise ML platform</small></div>"
+        
+        elif self.container_info['is_paperspace']:
+            return f"<div style='padding: 10px; border: 1px solid #6c5ce7; border-radius: 5px; margin: 10px 0;'><strong>📄 {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Gradient platform active</small></div>"
+        
+        elif self.container_info['is_kaggle']:
+            return f"<div style='padding: 10px; border: 1px solid #20beff; border-radius: 5px; margin: 10px 0;'><strong>🏆 {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Competition environment</small></div>"
+        
+        elif self.container_info['is_colab']:
+            return f"<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>⚠️ {provider}</strong><br>❌ This environment is not supported!<br><small>Use RunPod, VastAI, or proper container instead</small></div>"
+        
         elif self.container_info['is_container']:
-            return "<div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px; margin: 10px 0;'><strong>📦 Docker Container Detected</strong><br>Container environment active.</div>"
+            return f"<div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px; margin: 10px 0;'><strong>📦 Docker Container</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Generic container environment</small></div>"
+        
         else:
-            gpu_status = "🟢 GPU Available" if self.container_info['has_gpu'] else "🔴 No GPU Detected"
-            return f"<div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 10px 0;'><strong>💻 Local Environment</strong> | {gpu_status}</div>"
+            gpu_status = f"{gpu_emoji} {gpu_info}" if self.container_info['has_gpu'] else "🔴 No GPU Detected"
+            return f"<div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px; margin: 10px 0;'><strong>💻 Local Environment</strong><br>{gpu_status}{storage_info}</div>"
 
     def create_widgets(self):
         """Creates all the UI components for the widget."""
@@ -67,9 +281,10 @@ class SetupWidget:
         # Environment buttons
         button_layout = widgets.Layout(width='200px', margin='2px')
         self.validate_button = widgets.Button(description="🔍 Validate Environment", button_style='info', layout=button_layout)
+        self.deep_validate_button = widgets.Button(description="🔧 Diagnose & Fix", button_style='warning', layout=button_layout)
         self.env_button = widgets.Button(description="🚩 Setup Environment", button_style='primary', layout=button_layout)
         
-        button_box = widgets.HBox([self.validate_button, self.env_button])
+        button_box = widgets.HBox([self.validate_button, self.deep_validate_button, self.env_button])
         self.env_status = widgets.HTML("<div style='padding: 8px; border: 1px solid #007acc;'><strong>📊 Status:</strong> Ready for setup</div>")
         self.env_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
         env_box = widgets.VBox([env_desc, button_box, self.env_status, self.env_output])
@@ -207,6 +422,7 @@ class SetupWidget:
 
         # --- Button Click Events ---
         self.validate_button.on_click(self.run_validate_environment)
+        self.deep_validate_button.on_click(self.run_deep_validation)
         self.env_button.on_click(self.run_setup_environment)
         self.model_button.on_click(self.run_download_model)
         self.vae_button.on_click(self.run_download_vae)
@@ -225,16 +441,7 @@ class SetupWidget:
             "(1.5) SD 1.5": "https://huggingface.co/hollowstrawberry/stable-diffusion-guide/resolve/main/models/sd-v1-5-pruned-noema-fp16.safetensors"
         }
         
-        # For VastAI, prioritize the most popular/stable models
-        if self.container_info['is_vastai']:
-            vastai_order = {
-                "(XL) Illustrious v0.1 ⭐ Popular": "https://huggingface.co/OnomaAIResearch/Illustrious-xl-early-release-v0/resolve/main/Illustrious-XL-v0.1.safetensors",
-                "(XL) PonyDiffusion v6 ⭐ Popular": base_presets["(XL) PonyDiffusion v6"],
-                "(XL) NoobAI Epsilon v1.0 ⭐ Popular": base_presets["(XL) NoobAI Epsilon v1.0"],
-                "Custom URL (enter below)": ""
-            }
-            vastai_order.update({k: v for k, v in base_presets.items() if k not in vastai_order and "Custom" not in k})
-            return vastai_order
+        
             
         return base_presets
 
@@ -322,10 +529,55 @@ class SetupWidget:
             # Check PyTorch if available
             try:
                 import torch
-                if torch.cuda.is_available():
-                    print(f"   ✅ PyTorch CUDA available ({torch.cuda.device_count()} devices)")
+                
+                # Detect GPU type and display appropriate info
+                gpu_info = self.setup_manager._detect_gpu_type()
+                gpu_type = gpu_info.get('type', 'unknown')
+                acceleration = gpu_info.get('acceleration', 'none')
+                
+                if gpu_type == 'nvidia':
+                    if torch.cuda.is_available():
+                        device_count = torch.cuda.device_count()
+                        device_names = [torch.cuda.get_device_name(i) for i in range(device_count)]
+                        print(f"   🎮 NVIDIA GPU: {device_count} device(s) - {', '.join(device_names)}")
+                        print(f"   ✅ PyTorch CUDA available (version {torch.version.cuda})")
+                    else:
+                        print("   ⚠️ NVIDIA GPU detected but PyTorch CUDA not available")
+                        
+                elif gpu_type == 'amd':
+                    devices = gpu_info.get('devices', ['AMD GPU'])
+                    device_list = ', '.join(devices[:2])  # Limit display
+                    print(f"   🔥 AMD GPU: {device_list}")
+                    
+                    if acceleration == 'rocm':
+                        if torch.cuda.is_available():  # ROCm uses CUDA interface
+                            hip_version = getattr(torch.version, 'hip', 'Unknown')
+                            print(f"   ✅ ROCm PyTorch available (HIP version {hip_version})")
+                        else:
+                            print("   ⚠️ ROCm PyTorch installed but GPU not accessible")
+                    elif acceleration == 'zluda':
+                        if torch.cuda.is_available():
+                            print(f"   🧪 ZLUDA detected (experimental CUDA compatibility)")
+                        else:
+                            print("   ⚠️ ZLUDA detected but CUDA interface not working")
+                    elif acceleration == 'directml':
+                        try:
+                            import torch_directml
+                            if torch_directml.is_available():
+                                print("   🪟 DirectML available (Windows AMD GPU support)")
+                            else:
+                                print("   ⚠️ DirectML installed but not available")
+                        except ImportError:
+                            print("   ℹ️ DirectML support available for Windows AMD GPUs")
+                    else:
+                        print("   ⚠️ AMD GPU detected but no PyTorch acceleration available")
+                        platform_info = " (Linux: ROCm, Windows: DirectML/ZLUDA)"
+                        print(f"   ℹ️ Install AMD support{platform_info}")
+                        
                 else:
-                    print("   ⚠️ PyTorch CUDA not available")
+                    print("   ❓ No supported GPU detected")
+                    print("   ℹ️ Supports NVIDIA (CUDA) and AMD (ROCm/ZLUDA/DirectML) GPUs")
+                    
             except ImportError:
                 print("   ℹ️ PyTorch not installed (will be installed during setup)")
             
@@ -402,10 +654,54 @@ class SetupWidget:
             else:
                 self.env_status.value = "<div style='padding: 8px; border: 1px solid #28a745;'><strong>✅ Status:</strong> Validation complete - Environment ready for setup!</div>"
             
-            # Container detection info
+            # Container detection info  
             if self.container_info['environment'] != 'local':
                 print(f"\n📦 Container Environment: {self.container_info['environment']}")
-                print("   Optimized settings will be applied automatically.")
+                
+                if 'name' in self.container_info['provider_details']:
+                    print(f"   🏷️  Provider: {self.container_info['provider_details']['name']}")
+                
+                if self.container_info['gpu_names']:
+                    print(f"   🎮 GPUs: {', '.join(self.container_info['gpu_names'])}")
+                
+                if 'total_vram_gb' in self.container_info['provider_details']:
+                    print(f"   💾 Total VRAM: {self.container_info['provider_details']['total_vram_gb']:.1f}GB")
+                
+                if self.container_info['optimization_hints']:
+                    print("   💡 Optimization hints:")
+                    for hint in self.container_info['optimization_hints']:
+                        print(f"      • {hint}")
+                        
+                print("   ⚙️ Provider-specific optimizations will be applied automatically.")
+    
+    def run_deep_validation(self, b):
+        """Run comprehensive dependency validation and auto-fixing"""
+        self.env_output.clear_output()
+        self.env_status.value = "<div style='padding: 8px; border: 1px solid #6c757d;'><strong>🔧 Status:</strong> Running comprehensive validation...</div>"
+        with self.env_output:
+            print("🔧 Comprehensive Dependency Validator & Auto-Fixer™")
+            print("="*60)
+            print("This will detect and fix common environment issues:")
+            print("• GPU compatibility issues (NVIDIA CUDA, AMD ROCm/ZLUDA/DirectML)") 
+            print("• PyTorch version mismatches for your GPU type")
+            print("• Missing Derrian backend dependencies")
+            print("• CAME optimizer installation issues")
+            print()
+            
+            try:
+                # Run the comprehensive validation
+                success = self.setup_manager.validate_and_fix_deep_dependencies()
+                
+                if success:
+                    self.env_status.value = "<div style='padding: 8px; border: 1px solid #28a745;'><strong>🎉 Status:</strong> All dependencies validated and fixed!</div>"
+                else:
+                    self.env_status.value = "<div style='padding: 8px; border: 1px solid #ffc107;'><strong>⚠️ Status:</strong> Some issues remain - check output above</div>"
+                    
+            except Exception as e:
+                print(f"💥 Validation failed with error: {e}")
+                import traceback
+                traceback.print_exc()
+                self.env_status.value = "<div style='padding: 8px; border: 1px solid #dc3545;'><strong>❌ Status:</strong> Validation failed - check logs</div>"
 
     def run_download_model(self, b):
         """Downloads the selected model"""
