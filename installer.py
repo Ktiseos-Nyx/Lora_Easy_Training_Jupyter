@@ -71,6 +71,8 @@ class LoRATrainingInstaller:
         required_commands = {
             'git': 'Git version control',
             'curl': 'HTTP client for downloads',
+            'ffmpeg': 'FFmpeg for video/audio processing (optional, but recommended for some datasets)',
+            'git-lfs': 'Git Large File Storage (optional, but recommended for large model downloads)',
         }
         
         missing = []
@@ -92,12 +94,19 @@ class LoRATrainingInstaller:
                         subprocess.run(['apt-get', 'install', '-y', 'git'], check=True)
                     elif cmd == 'curl':
                         subprocess.run(['apt-get', 'install', '-y', 'curl'], check=True)
+                    elif cmd == 'ffmpeg':
+                        subprocess.run(['apt-get', 'install', '-y', 'ffmpeg'], check=True)
+                    elif cmd == 'git-lfs':
+                        subprocess.run(['apt-get', 'install', '-y', 'git-lfs'], check=True)
                 print("   ✅ Dependencies installed successfully")
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Try yum (CentOS/RHEL)
                 try:
                     for cmd in missing:
-                        subprocess.run(['yum', 'install', '-y', cmd], check=True)
+                        if cmd == 'git-lfs':
+                            subprocess.run(['yum', 'install', '-y', 'git-lfs'], check=True)
+                        else:
+                            subprocess.run(['yum', 'install', '-y', cmd], check=True)
                     print("   ✅ Dependencies installed successfully")
                 except:
                     print("   ⚠️  Could not auto-install dependencies")
@@ -133,7 +142,48 @@ class LoRATrainingInstaller:
         else:
             print("   ❌ No NVIDIA driver detected")
             print("   📝 LoRA training requires NVIDIA GPU with 6GB+ VRAM")
-    
+
+    def check_pytorch_gpu_support(self):
+        """Check PyTorch GPU support after installation (NVIDIA CUDA or AMD ROCm)"""
+        print("⚡ Checking PyTorch GPU support...")
+        try:
+            import torch
+            
+            # Check for AMD ROCm support
+            if hasattr(torch.version, 'hip') and torch.version.hip is not None:
+                print("   🔥 AMD ROCm PyTorch detected!")
+                if torch.cuda.is_available():  # ROCm uses CUDA interface
+                    device_count = torch.cuda.device_count()
+                    device_name = torch.cuda.get_device_name(0) if device_count > 0 else "Unknown"
+                    print(f"   ✅ ROCm GPU support working: {device_count} device(s) - {device_name}")
+                    print(f"   📊 HIP version: {torch.version.hip}")
+                else:
+                    print("   ⚠️  ROCm PyTorch installed but GPU not accessible")
+                    print("      Check ROCm drivers and HSA_OVERRIDE_GFX_VERSION environment variable")
+                return
+            
+            # Check for NVIDIA CUDA support
+            if torch.cuda.is_available():
+                device_count = torch.cuda.device_count() 
+                device_name = torch.cuda.get_device_name(0) if device_count > 0 else "Unknown"
+                print(f"   ✅ NVIDIA CUDA support working: {device_count} device(s) - {device_name}")
+                print(f"   📊 CUDA version: {torch.version.cuda}")
+                
+                # Check CuDNN
+                if torch.backends.cudnn.is_available():
+                    print("   ✅ CuDNN is available and working")
+                else:
+                    print("   ⚠️  CuDNN is NOT available - may affect training performance")
+                    print("      Consider reinstalling PyTorch with proper CuDNN support")
+            else:
+                print("   ❌ No GPU acceleration detected in PyTorch")
+                print("      Training will use CPU (very slow) - consider installing GPU-enabled PyTorch")
+                
+        except ImportError:
+            print("   ⚠️  PyTorch not found - will be installed during backend setup")
+        except Exception as e:
+            print(f"   ❌ Error during GPU support check: {e}")
+
     def install_pillow_smart(self):
         """Smart Pillow installation with fallbacks for different environments"""
         print("🖼️  Installing Pillow with smart fallbacks...")
@@ -208,6 +258,8 @@ class LoRATrainingInstaller:
             'toml': {'name': 'toml', 'fixer': None},
             'requests': {'name': 'requests', 'fixer': None},
             'tqdm': {'name': 'tqdm', 'fixer': None},
+            'hf-transfer': {'name': 'hf-transfer', 'fixer': None},
+            'torchvision': {'name': 'torchvision', 'fixer': None},
         }
         
         missing_packages = []
@@ -360,8 +412,14 @@ echo ""
 
 # Launch with appropriate settings
 if [[ -n "$VAST_CONTAINERLABEL" ]] || [[ "$PWD" == *"/workspace"* ]]; then
-    echo "☁️  VastAI detected - using container-optimized settings"
-    jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token="" --NotebookApp.password=""
+    echo "☁️  VastAI detected - checking for existing Jupyter process..."
+    if pgrep -f "jupyter notebook" > /dev/null; then
+        echo "✅ Jupyter notebook is already running. Exiting launch script."
+        echo "📝 You can access it via the exposed port (usually 8888) or the URL provided by Vast.ai."
+    else
+        echo "🚀 Starting new Jupyter notebook instance for VastAI..."
+        jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token="" --NotebookApp.password=""
+    fi
 else
     echo "💻 Local environment - opening browser"
     jupyter notebook
@@ -415,10 +473,11 @@ fi
         try:
             self.print_banner()
             self.check_prerequisites()
-            self.check_gpu()
-            self.install_jupyter()
-            self.setup_directories()
-            self.install_aria2c()
+            self.check_gpu()                    # Check hardware first
+            self.install_jupyter()              # Install PyTorch and dependencies 
+            self.setup_directories()            # Set up project structure
+            self.install_aria2c()               # Install download tools
+            self.check_pytorch_gpu_support()    # NOW check PyTorch GPU support (after PyTorch is installed!)
             self.create_launch_script()
             self.show_completion_message()
             

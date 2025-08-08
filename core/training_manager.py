@@ -1135,6 +1135,17 @@ class HybridTrainingManager:
         env = os.environ.copy()
         env['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
         env['CUDA_LAUNCH_BLOCKING'] = '1'
+
+        # Add custom optimizers path to PYTHONPATH for the subprocess
+        derrian_dir = os.path.join(self.trainer_dir, "derrian_backend")
+        custom_scheduler_dir = os.path.join(derrian_dir, "custom_scheduler")
+
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{custom_scheduler_dir}:{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = custom_scheduler_dir
+
+        print(f"Setting PYTHONPATH for training: {env['PYTHONPATH']}")
         
         try:
             # Set up training monitoring
@@ -1268,6 +1279,17 @@ class HybridTrainingManager:
         env['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'  # Reduce fragmentation
         env['CUDA_LAUNCH_BLOCKING'] = '1'  # Better error reporting
         print("💾 Memory optimization: PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True")
+
+        # Add custom optimizers path to PYTHONPATH for the subprocess
+        derrian_dir = os.path.join(self.trainer_dir, "derrian_backend")
+        custom_scheduler_dir = os.path.join(derrian_dir, "custom_scheduler")
+
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{custom_scheduler_dir}:{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = custom_scheduler_dir
+
+        print(f"Setting PYTHONPATH for training: {env['PYTHONPATH']}")
         
         try:
             # Set up training monitoring
@@ -1276,6 +1298,12 @@ class HybridTrainingManager:
                 monitor_widget.update_phase("Initializing training process...", "info")
                 # Set total epochs for progress tracking
                 monitor_widget.total_epochs = config['epochs']
+                monitor_widget.sample_prompt = config.get('sample_prompt', '')
+                monitor_widget.sample_num_images = config.get('sample_num_images', 0)
+                monitor_widget.sample_resolution = config.get('sample_resolution', 512)
+                monitor_widget.sample_seed = config.get('sample_seed', 42)
+                monitor_widget.base_model_path = config.get('model_path', '')
+                monitor_widget.output_dir = self.output_dir
             
             # Change to scripts directory for proper LyCORIS imports (like Holo's approach)
             original_cwd = os.getcwd()

@@ -4,7 +4,9 @@ from IPython.display import display
 import re
 import time
 import threading
+import os
 from shared_managers import get_config_manager
+from core.inference_utils import generate_sample_images
 
 class TrainingMonitorWidget:
     def __init__(self, training_manager_instance):
@@ -16,6 +18,14 @@ class TrainingMonitorWidget:
         self.current_step = 0
         self.total_steps = 0
         self.training_phase = "Initializing..."
+        
+        # Inference parameters
+        self.sample_prompt = ""
+        self.sample_num_images = 0
+        self.sample_resolution = 512
+        self.sample_seed = 42
+        self.base_model_path = ""
+        self.output_dir = ""
         
     def create_widgets(self):
         """Create the training monitor interface with accordion structure"""
@@ -153,6 +163,14 @@ class TrainingMonitorWidget:
         """Set the training configuration received from TrainingWidget"""
         self.training_config = config
         
+        # Store inference parameters
+        self.sample_prompt = config.get('sample_prompt', '')
+        self.sample_num_images = config.get('sample_num_images', 0)
+        self.sample_resolution = config.get('sample_resolution', 512)
+        self.sample_seed = config.get('sample_seed', 42)
+        self.base_model_path = config.get('model_path', '')
+        self.output_dir = config.get('output_dir', '') # This should be the project's output dir
+        
         # Calculate steps per epoch for accurate progress tracking
         if config:
             try:
@@ -289,8 +307,25 @@ class TrainingMonitorWidget:
             
             if epoch_match:
                 current_epoch = int(epoch_match.group(1))
+                
+                # Check if epoch has just completed and samples are enabled
+                if current_epoch > self.current_epoch and self.sample_num_images > 0:
+                    print(f"\n🎉 Epoch {self.current_epoch} completed! Generating samples...")
+                    # Call the inference function in a separate thread to not block training log
+                    threading.Thread(target=generate_sample_images,
+                                     args=(
+                                         os.path.join(self.output_dir, f"{config_manager.get_config().get('project_name', 'lora_model')}_epoch-{self.current_epoch:03d}.safetensors"),
+                                         self.base_model_path,
+                                         self.sample_prompt,
+                                         self.sample_num_images,
+                                         os.path.join(self.output_dir, "sample_images"), # Subdirectory for samples
+                                         self.current_epoch,
+                                         self.sample_resolution,
+                                         self.sample_seed
+                                     )).start()
+
                 # Try to extract total epochs from line or use stored value
-                total_match = re.search(r'epoch[:\s]+\d+[/\s]+(\d+)', line.lower())
+                total_match = re.search(r'epoch[:\s]+\d+[/\\s]+(\d+)', line.lower())
                 if total_match:
                     total_epochs = int(total_match.group(1))
                     self.update_epoch_progress(current_epoch, total_epochs)

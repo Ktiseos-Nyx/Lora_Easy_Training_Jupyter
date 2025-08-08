@@ -202,6 +202,48 @@ class TrainingWidget:
         self.conv_alpha = widgets.IntText(value=8, description='🧩 Conv Alpha (conv learning rate):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         lora_box = widgets.VBox([lora_struct_desc, self.lora_type, self.network_dim, self.network_alpha, self.conv_dim, self.conv_alpha])
 
+        # --- Sample Generation Settings ---
+        sample_gen_desc = widgets.HTML("""
+        <h3>▶️ Sample Generation Settings</h3>
+        <p>Configure settings for generating sample images during training. These images will be generated at the end of each epoch to help you monitor your LoRA's progress.</p>
+        """)
+        self.sample_prompt = widgets.Textarea(
+            value='masterpiece, best quality, 1girl, solo, <lora_name>, in a garden, sunny day',
+            description='Sample Prompt:',
+            layout=widgets.Layout(width='90%', height='80px'),
+            style={'description_width': 'initial'}
+        )
+        self.sample_num_images = widgets.IntSlider(
+            value=3,
+            min=0,
+            max=10,
+            step=1,
+            description='Number of Samples (per epoch):',
+            continuous_update=False,
+            orientation='horizontal',
+            readout=True,
+            readout_format='d',
+            style={'description_width': 'initial'}
+        )
+        self.sample_resolution = widgets.Dropdown(
+            options=[(f'{res}x{res}', res) for res in [512, 768, 1024]],
+            value=512,
+            description='Sample Resolution:',
+            style={'description_width': 'initial'}
+        )
+        self.sample_seed = widgets.IntText(
+            value=42,
+            description='Sample Seed:',
+            style={'description_width': 'initial'}
+        )
+        sample_gen_box = widgets.VBox([
+            sample_gen_desc,
+            self.sample_prompt,
+            self.sample_num_images,
+            self.sample_resolution,
+            self.sample_seed
+        ])
+
         # --- Training Options ---
         train_opt_desc = widgets.HTML("""<h3>▶️ Training Options</h3>
         <p>Select your optimizer, cross-attention mechanism, and precision. Caching latents can save memory. Enable V-Parameterization for SDXL v-pred models. Configure saving frequency and retention.</p>
@@ -365,12 +407,14 @@ class TrainingWidget:
             project_box,
             training_config_box,
             lora_box,
+            sample_gen_box,
             advanced_combined_box
         ])
         accordion.set_title(0, "▶️ Project Settings")
         accordion.set_title(1, "▶️ Training Configuration")
         accordion.set_title(2, "▶️ LoRA Structure")
-        accordion.set_title(3, "🧪 Advanced Options")
+        accordion.set_title(3, "▶️ Sample Generation Settings")
+        accordion.set_title(4, "🧪 Advanced Options")
 
         # --- Status Summary (stays visible) ---
         self.status_bar = widgets.HTML(value="<div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px;'><strong>📊 Status:</strong> Ready to configure training. Use the Training Progress section below to start training.</div>")
@@ -483,6 +527,10 @@ class TrainingWidget:
             'network_alpha': self.network_alpha.value,
             'conv_dim': self.conv_dim.value,
             'conv_alpha': self.conv_alpha.value,
+            'sample_prompt': self.sample_prompt.value,
+            'sample_num_images': self.sample_num_images.value,
+            'sample_resolution': self.sample_resolution.value,
+            'sample_seed': self.sample_seed.value,
             'optimizer': self.optimizer.value,
             'cross_attention': self.cross_attention.value,
             'precision': self.precision.value,

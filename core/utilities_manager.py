@@ -3,6 +3,7 @@ import subprocess
 import os
 import sys
 from huggingface_hub import HfApi, login
+from .managers import get_venv_python_path, get_subprocess_environment
 
 class UtilitiesManager:
     def __init__(self):
@@ -108,6 +109,10 @@ class UtilitiesManager:
         ]
 
         print(f"Resizing LoRA from {input_path} to {output_path} with dim={new_dim}, alpha={new_alpha}...")
+        
+        # Get standardized subprocess environment (fixes CAME import issues!)
+        env = get_subprocess_environment(self.project_root)
+        
         try:
             process = subprocess.Popen(
                 command,
@@ -115,7 +120,8 @@ class UtilitiesManager:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                cwd=self.trainer_dir  # Run from trainer directory like training scripts
+                cwd=self.trainer_dir,  # Run from trainer directory like training scripts
+                env=env  # Pass the proper environment with PYTHONPATH
             )
 
             for line in iter(process.stdout.readline, ''):

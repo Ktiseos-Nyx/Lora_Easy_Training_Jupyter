@@ -17,6 +17,57 @@ def get_venv_python_path(base_dir):
         # Unix/Linux/Mac: venv/bin/python
         return os.path.join(base_dir, "venv", "bin", "python")
 
+def get_subprocess_environment(project_root=None):
+    """
+    Create standardized environment for subprocess calls with proper PYTHONPATH and CUDA setup.
+    This prevents the CAME optimizer import errors and other module not found issues.
+    """
+    if project_root is None:
+        project_root = os.getcwd()
+    
+    # Start with current environment
+    env = os.environ.copy()
+    
+    # Memory optimization
+    env['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+    env['CUDA_LAUNCH_BLOCKING'] = '1'
+    
+    # Setup PYTHONPATH for custom optimizers (CAME, etc.)
+    derrian_dir = os.path.join(project_root, "trainer", "derrian_backend")
+    custom_scheduler_dir = os.path.join(derrian_dir, "custom_scheduler")
+    
+    if os.path.exists(custom_scheduler_dir):
+        if "PYTHONPATH" in env:
+            env["PYTHONPATH"] = f"{custom_scheduler_dir}:{env['PYTHONPATH']}"
+        else:
+            env["PYTHONPATH"] = custom_scheduler_dir
+    
+    # Setup CUDA/CuDNN library paths for Linux
+    if sys.platform.startswith('linux'):
+        cuda_path = env.get("CUDA_PATH", "/usr/local/cuda")
+        new_ld_library_path = f"{cuda_path}/lib64:{cuda_path}/extras/CUPTI/lib64"
+        
+        # Add common CuDNN paths
+        cudnn_paths = [
+            f"{cuda_path}/lib",
+            f"{cuda_path}/targets/x86_64-linux/lib", 
+            "/usr/lib/x86_64-linux-gnu",
+        ]
+        for p in cudnn_paths:
+            if os.path.exists(p):
+                new_ld_library_path += f":{p}"
+
+        if "LD_LIBRARY_PATH" in env:
+            env["LD_LIBRARY_PATH"] = f"{new_ld_library_path}:{env['LD_LIBRARY_PATH']}"
+        else:
+            env["LD_LIBRARY_PATH"] = new_ld_library_path
+    
+    # ROCm support for AMD GPUs
+    if not env.get('HSA_OVERRIDE_GFX_VERSION'):
+        env['HSA_OVERRIDE_GFX_VERSION'] = '10.3.0'
+    
+    return env
+
 class SetupManager:
     def __init__(self):
         # Light initialization - just paths, no detection spam!

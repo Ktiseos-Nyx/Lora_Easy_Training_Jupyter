@@ -5,6 +5,14 @@ import sys
 import zipfile
 import platform
 
+# Import subprocess environment utilities
+try:
+    from .managers import get_subprocess_environment
+except ImportError:
+    # Fallback if not available
+    def get_subprocess_environment(project_root=None):
+        return os.environ.copy()
+
 # Import colored print utility
 try:
     from .colored_print import cprint, success, error, warning, info, progress, print_header
@@ -261,13 +269,48 @@ class DatasetManager:
     def _run_subprocess(self, command, task_name):
         """Helper to run subprocess with consistent error handling"""
         try:
+            env = os.environ.copy()
+            
+            # Add PYTHONPATH for custom optimizers (fixes CAME import issues)
+            derrian_dir = os.path.join(self.project_root, "trainer", "derrian_backend")
+            custom_scheduler_dir = os.path.join(derrian_dir, "custom_scheduler")
+            
+            if os.path.exists(custom_scheduler_dir):
+                if "PYTHONPATH" in env:
+                    env["PYTHONPATH"] = f"{custom_scheduler_dir}:{env['PYTHONPATH']}"
+                else:
+                    env["PYTHONPATH"] = custom_scheduler_dir
+            
+            # Add common CUDA/CuDNN paths to LD_LIBRARY_PATH (keep existing logic!)
+            cuda_path = os.environ.get("CUDA_PATH", "/usr/local/cuda")
+            new_ld_library_path = f"{cuda_path}/lib64:{cuda_path}/extras/CUPTI/lib64"
+            # Add common CuDNN paths (adjust if your CuDNN is elsewhere)
+            cudnn_paths = [
+                f"{cuda_path}/lib",  # Common for some CuDNN installations
+                f"{cuda_path}/targets/x86_64-linux/lib", # Common for newer CUDA/CuDNN
+                "/usr/lib/x86_64-linux-gnu", # System-wide CuDNN
+            ]
+            for p in cudnn_paths:
+                if os.path.exists(p):
+                    new_ld_library_path += f":{p}"
+
+            if "LD_LIBRARY_PATH" in env:
+                env["LD_LIBRARY_PATH"] = f"{new_ld_library_path}:{env['LD_LIBRARY_PATH']}"
+            else:
+                env["LD_LIBRARY_PATH"] = new_ld_library_path
+
+            print(f"Setting LD_LIBRARY_PATH for tagger: {env['LD_LIBRARY_PATH']}")
+            if "PYTHONPATH" in env:
+                print(f"Setting PYTHONPATH for tagger: {env['PYTHONPATH']}")
+
             process = subprocess.Popen(
                 command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                cwd=self.project_root
+                cwd=self.project_root,
+                env=env # Pass the modified environment
             )
 
             for line in iter(process.stdout.readline, ''):
