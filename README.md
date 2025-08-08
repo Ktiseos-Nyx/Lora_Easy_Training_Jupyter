@@ -2,25 +2,15 @@
 
 **Train LoRAs with guided notebooks instead of confusing command lines**
 
-This is a user-friendly LoRA training system based on proven methods from popular Colab notebooks. Instead of typing scary commands, you get helpful widgets that walk you through each step. Works on your own computer or rented GPU servers.
+This is a user-friendly LoRA training system based on proven methods from popular Google Colab notebooks. Instead of typing scary commands, you get helpful widgets that walk you through each step. Works on your own computer or rented GPU servers.
 
-## 🙏 **Built on the Shoulders of Giants**
 
-This project builds upon and integrates the excellent work of:
-
-- **[Jelosus2's LoRA Easy Training Colab](https://github.com/Jelosus2/Lora_Easy_Training_Colab)** - Original Colab notebook that inspired this adaptation
-- **[Derrian-Distro's LoRA Easy Training Backend](https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend)** - Core training backend and scripts
-- **[HoloStrawberry's Training Methods](https://github.com/holostrawberry)** - Community wisdom and proven training techniques
-- **[Kohya-ss SD Scripts](https://github.com/kohya-ss/sd-scripts)** - Foundational training scripts and infrastructure
-
-*Special thanks to these creators for making LoRA training accessible to everyone!*
 
 | Python Version | License | Discord | Twitch | Support |
 |---|---|---|---|---|
 | ![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/badge/Discord-Join%20Our%20Server-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/HhBSM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a> |
 
 ## Table of Contents
-- [About](#about)
 - [✨ What You Get](#-what-you-get)
 - [🚀 Quick Start](#-quick-start)
 - [📖 How to Use](#-how-to-use)
@@ -31,14 +21,6 @@ This project builds upon and integrates the excellent work of:
 - [🔒 Security](#-security)
 - [📄 License](#-license)
 - [🤝 Contributing](#-contributing)
-
-## About
-
-- Widget-based interface designed for both beginners and advanced users
-- Please note this is STILL a work in progress.
-- Testing was only done on a singular RTX 4090 on a Vast AI Docker Container with pre installed SD WEB UI FORGE.
-- Results MAY vary, please feel free to report issues as you see fit.
-- The system has been recently streamlined with improved widget organization and calculator accuracy.
 
 ## ✨ What You Get
 
@@ -55,7 +37,8 @@ All in simple notebooks - no command line required!
 ### What You Need
 - **GPU**: NVIDIA (8GB+ VRAM) OR AMD GPU (16GB+ VRAM recommended for RDNA2/3)
 - **Python**: Version 3.10.6 (compatible with Kohya-ss training)
-- **Platform**: Local computer OR cloud GPU service (see options below)
+- **Platform**: Windows or Linux based Operationg Systems.
+- **Device** Local GPU or Rented Cloud GPU spaces. (Not Google Colab)
 
 ### 🖥️ Supported Platforms
 
@@ -67,12 +50,8 @@ All in simple notebooks - no command line required!
 
 **🧪 Experimental AMD Support:**
 - **Local AMD (Windows)**: ZLUDA or DirectML acceleration
-- **Cloud AMD**: Limited availability on VastAI/RunPod
-
-**⚠️ Requires Environment Setup:**
-- **Docker**: Use PyTorch/CUDA base images (not Ubuntu)
-- **Lambda Labs**: Cloud GPU instances
-- **Paperspace**: Gradient platform
+- **Cloud AMD**: Limited availability on popular GPU rental platforms.
+- ⚠️ **NO SUPPORT FOR LOCAL MACINTOSH ARM/M1-M4 MACHINES** Currently RESEARCHING how to do this on mac machines intel or otherwise.
 
 ### 🐍 Python Setup
 
@@ -149,7 +128,7 @@ setup_widget = create_widget('setup')
 setup_widget.display()
 
 # Cell 2: Dataset preparation
-dataset_widget = create_widget('dataset')  
+dataset_widget = create_widget('dataset')
 dataset_widget.display()
 ```
 
@@ -209,7 +188,7 @@ setup_widget = SetupWidget()
 setup_widget.display()
 
 # Then configure training
-from widgets.training_widget import TrainingWidget  
+from widgets.training_widget import TrainingWidget
 training_widget = TrainingWidget()
 training_widget.display()
 ```
@@ -299,26 +278,17 @@ This tool helps you:
 - **Solution**: System will auto-fallback to AdamW (uses more VRAM but stable)
 - **ONNX Runtime**: Dependency conflicts possible between `onnxruntime-gpu` and `open-clip-torch`
 
+⚠️ **AMD ZLUDA/ROCM**
+- **Support for non NVIDIA CARDS** Currently untested and in development.
+- **Symptoms** Untested on cards under 24gb of Video Ram.
+- **Solution** Will gather users who could test this.
+- **Support** WILL NOT WORK ON IMAC INTEL OR MAC METAL MACHINES.
+
 ⚠️ **Advanced LoRA Methods (EXPERIMENTAL)**
 - **DoRA, GLoRA, BOFT (Butterfly)**: May not function correctly as of yet
 - **Status**: Currently under testing and validation
 - **Recommendation**: Use standard LoRA or LoCon for stable results
 - **More testing**: Additional compatibility testing is ongoing
-
-⚠️ **VastAI/Cloud Instance Compatibility Issues**
-- **Reality**: VastAI instances vary wildly - some work perfectly, others are broken out of the box
-- **Common Issues**: Triton, ONNX, bitsandbytes, xFormers, and WandB may fail depending on the specific instance
-- **Symptoms**: 
-  - Dependency conflicts, import errors, CUDA detection failures
-  - WandB 403 errors (Cloudflare/network routing issues)
-  - "Library not found" or version compatibility problems
-- **Before reporting bugs**: Test basic functionality on your specific instance first
-- **Solutions**:
-  - **First step**: Try the environment setup - it may resolve dependency issues
-  - **WandB fails**: Clear API key to use local TensorBoard logging instead
-  - **Dependencies broken**: Try `/venv/main/bin/pip install --force-reinstall [package]`
-  - **Everything fails**: Kill the instance and try a different VastAI server
-- **Bottom line**: If your instance can't do basic operations (import libraries, zip files), it's fundamentally broken - get a new one
 
 ### Support
 - **GitHub Issues**: Report bugs and feature requests
@@ -327,25 +297,23 @@ This tool helps you:
 
 ## 🏆 Credits
 
-This project is built on the work of many awesome people:
+🙏 **Built on the Shoulders of Giants**
 
-**Training Methods:**
-- **[Holostrawberry](https://github.com/hollowstrawberry)** - Training guides and recommended settings
-- **[Kohya-ss](https://github.com/kohya-ss)** - Core training scripts
-- **[LyCORIS Team](https://github.com/67372a/LyCORIS)** - Advanced LoRA methods (DoRA, LoKr, etc.)
-- **[Derrian Distro](https://github.com/derrian-distro)** - Custom optimizers
+This project builds upon and integrates the excellent work of:
 
-**Notebook Inspirations:**
+- **[Jelosus2's LoRA Easy Training Colab](https://github.com/Jelosus2/Lora_Easy_Training_Colab)** - Original Colab notebook that inspired this adaptation
+- **[Derrian-Distro's LoRA Easy Training Backend](https://github.com/derrian-distro/LoRA_Easy_Training_scripts_Backend)** - Core training backend and scripts
+- **[HoloStrawberry's Training Methods](https://github.com/holostrawberry)** - Community wisdom and proven training techniques
+- **[Kohya-ss SD Scripts](https://github.com/kohya-ss/sd-scripts)** - Foundational training scripts and infrastructure
 - **[Linaqruf](https://github.com/Linaqruf)** - Pioneer in accessible LoRA training, creator of influential Colab notebooks and training methods that inspired much of this work
 - **AndroidXXL, Jelosus2** - Additional Colab notebook contributions that made LoRA training accessible
-
-**Community:**
 - **[ArcEnCiel](https://arcenciel.io/)** - Ongoing support and testing
 - **[Civitai](https://civitai.com/)** - Platform for sharing LoRAs
+- **[LyCORIS Team](https://github.com/67372a/LyCORIS)** - Advanced LoRA methods (DoRA, LoKr, etc.)
+
+Special thanks to these creators for making LoRA training accessible to everyone!
 
 ---
-
-*"Either gonna work or blow up!" - Made with curiosity! 😄*
 
 ## 🔒 Security
 
