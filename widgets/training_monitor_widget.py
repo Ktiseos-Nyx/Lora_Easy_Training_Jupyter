@@ -4,7 +4,7 @@ from IPython.display import display
 import re
 import time
 import threading
-from core.config_manager import ConfigManager
+from shared_managers import get_config_manager
 
 class TrainingMonitorWidget:
     def __init__(self, training_manager_instance):
@@ -174,7 +174,7 @@ class TrainingMonitorWidget:
         """Handle start training button click - DEAD SIMPLE FILE HUNTING APPROACH"""
         try:
             # Create our brilliant file hunter
-            config_mgr = ConfigManager()
+            config_mgr = get_config_manager()
             
             # Step 1: Hunt for TOML files like a boss
             if not config_mgr.files_ready():

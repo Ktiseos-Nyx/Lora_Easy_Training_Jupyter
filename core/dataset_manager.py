@@ -1040,6 +1040,58 @@ class DatasetManager:
         
         return True
     
+    def display_dataset_tags(self, dataset_dir, max_files=20):
+        """Display the generated tags/captions for review (simple text display)"""
+        if not os.path.exists(dataset_dir):
+            print(f"❌ Dataset directory not found: {dataset_dir}")
+            return False
+        
+        # Find all caption files
+        import glob
+        caption_files = []
+        for ext in ['.txt', '.caption']:
+            caption_files.extend(glob.glob(os.path.join(dataset_dir, f"*{ext}")))
+        
+        if not caption_files:
+            print("❌ No caption/tag files found in dataset directory")
+            print("💡 Run tagging first to generate caption files")
+            return False
+        
+        print(f"📋 Displaying tags for {min(len(caption_files), max_files)} files:")
+        print("=" * 80)
+        
+        # Sort files for consistent display
+        caption_files.sort()
+        
+        for i, caption_file in enumerate(caption_files[:max_files]):
+            # Get corresponding image file
+            base_name = os.path.splitext(os.path.basename(caption_file))[0]
+            image_file = None
+            for img_ext in ['.jpg', '.jpeg', '.png', '.webp', '.bmp']:
+                potential_image = os.path.join(dataset_dir, f"{base_name}{img_ext}")
+                if os.path.exists(potential_image):
+                    image_file = os.path.basename(potential_image)
+                    break
+            
+            # Read caption content
+            try:
+                with open(caption_file, 'r', encoding='utf-8') as f:
+                    tags = f.read().strip()
+                
+                print(f"\n📸 {i+1}. {image_file or base_name}")
+                print(f"🏷️  {tags}")
+                
+            except Exception as e:
+                print(f"\n❌ Error reading {os.path.basename(caption_file)}: {e}")
+        
+        if len(caption_files) > max_files:
+            print(f"\n... and {len(caption_files) - max_files} more files")
+            print(f"💡 Showing first {max_files} files only")
+        
+        print("\n" + "=" * 80)
+        print(f"✅ Total caption files found: {len(caption_files)}")
+        return True
+    
     def scrape_with_gallery_dl(self, site="gelbooru", tags="", dataset_dir="", limit_range="1-200", 
                                write_tags=True, use_aria2c=True, custom_url="", sub_folder="", 
                                additional_args="--filename /O --no-part"):

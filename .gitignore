@@ -120,3 +120,7 @@ CLAUDE.md
 *.tar.gz
 *.rar
 *.7z
+
+# Gemini-generated test files
+cuda_check.html
+*.html

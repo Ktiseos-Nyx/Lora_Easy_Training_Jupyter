@@ -85,15 +85,21 @@ class DatasetWidget:
         folder_creation_box = widgets.HBox([self.folder_name, self.create_folder_button])
         
         self.file_upload = widgets.FileUpload(
-            accept='.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif',
+            accept='.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif,.zip', # Added .zip
             multiple=True,
-            description='Select Images:',
+            description='Select Images/ZIP:', # Updated description
             layout=widgets.Layout(width='99%')
         )
         
         self.upload_images_button = widgets.Button(
             description="🚀 Upload Images", 
             button_style='success',
+            disabled=True
+        )
+        
+        self.upload_zip_button = widgets.Button(
+            description="📦 Upload & Extract ZIP",
+            button_style='primary',
             disabled=True
         )
         
@@ -104,7 +110,7 @@ class DatasetWidget:
         )
         
         # Create button row for upload and reset
-        upload_button_row = widgets.HBox([self.upload_images_button, self.reset_upload_button])
+        upload_button_row = widgets.HBox([self.upload_images_button, self.upload_zip_button, self.reset_upload_button])
         
         self.upload_method_box = widgets.VBox([
             upload_method_desc,
@@ -505,6 +511,9 @@ class DatasetWidget:
         
         self.remove_tags_button = widgets.Button(description="➖ Remove Tags", button_style='warning')
         
+        # Review/display tags
+        self.review_tags_button = widgets.Button(description="👀 Review Tags", button_style='info')
+        
         # Advanced search and replace
         advanced_management_desc = widgets.HTML("<h4>🔍 Advanced Search & Replace</h4>")
         
@@ -557,7 +566,7 @@ class DatasetWidget:
             self.trigger_word, 
             self.add_trigger_button,
             self.remove_tags,
-            self.remove_tags_button,
+            widgets.HBox([self.remove_tags_button, self.review_tags_button]),
             advanced_management_desc,
             self.search_tags,
             self.replace_with,
@@ -593,6 +602,7 @@ class DatasetWidget:
         self.url_download_button.on_click(self.run_url_download)
         self.create_folder_button.on_click(self.run_create_folder)
         self.upload_images_button.on_click(self.run_upload_images)
+        self.upload_zip_button.on_click(self.run_upload_zip)
         self.gelbooru_button.on_click(self.run_gelbooru_scraper)
         self.preview_rename_button.on_click(self.run_preview_rename)
         self.rename_files_button.on_click(self.run_rename_files)
@@ -600,6 +610,7 @@ class DatasetWidget:
         self.cleanup_button.on_click(self.run_cleanup)
         self.add_trigger_button.on_click(self.run_add_trigger)
         self.remove_tags_button.on_click(self.run_remove_tags)
+        self.review_tags_button.on_click(self.run_review_tags)
         self.search_replace_button.on_click(self.run_search_replace)
         self.organize_tags_button.on_click(self.run_organize_tags)
         self.upload_button.on_click(self.run_upload_to_huggingface)
@@ -615,17 +626,31 @@ class DatasetWidget:
         if change['new']:  # Files have been selected
             file_count = len(change['new'])
             if file_count > 0:
-                # Enable upload button if files are selected and folder exists
-                if self.dataset_directory.value:
-                    self.upload_images_button.disabled = False
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload!</div>"
+                # Check if a folder is created
+                folder_exists = bool(self.dataset_directory.value)
+                
+                # Determine if any selected file is a ZIP
+                is_zip_selected = any(f.metadata['name'].endswith('.zip') for f in change['new'])
+                
+                if folder_exists:
+                    self.upload_images_button.disabled = is_zip_selected # Disable image upload if zip is selected
+                    self.upload_zip_button.disabled = not is_zip_selected # Enable zip upload only if zip is selected
+                    
+                    if is_zip_selected:
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP.</div>"
+                    else:
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images.</div>"
                 else:
+                    self.upload_images_button.disabled = True
+                    self.upload_zip_button.disabled = True
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> {file_count} file(s) selected. Please create a folder first.</div>"
             else:
                 self.upload_images_button.disabled = True
+                self.upload_zip_button.disabled = True
         else:
             # No files selected
             self.upload_images_button.disabled = True
+            self.upload_zip_button.disabled = True
 
     def run_url_download(self, b):
         """Handle URL/ZIP download method"""
@@ -781,15 +806,91 @@ class DatasetWidget:
                 # Clear the file upload widget for next use and force state refresh
                 self.file_upload.value = ()
                 # Trigger widget observers to properly clear internal state
-                self.file_upload.notify_change({'name': 'value', 'old': self.file_upload.value, 'new': ()})
+                self.file_upload.notify_change({'name': 'value', 'old': self.file_upload.value, 'new': (), 'type': 'change'})
             else:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
     
+    def run_upload_zip(self, b):
+        """Upload and extract a ZIP file to the created folder"""
+        self.dataset_output.clear_output()
+        
+        if not self.dataset_directory.value:
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
+            return
+        
+        if not self.file_upload.value:
+            self.dataset_status.value = "❌ Status: Please select a ZIP file to upload."
+            return
+        
+        upload_folder = self.dataset_directory.value
+        uploaded_files = self.file_upload.value
+        
+        # Find the first ZIP file in the uploaded files
+        zip_file_info = None
+        for file_info in uploaded_files:
+            if file_info['name'].endswith('.zip'):
+                zip_file_info = file_info
+                break
+        
+        if not zip_file_info:
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No ZIP file selected.</div>"
+            print("❌ No ZIP file selected for upload.")
+            return
+            
+        zip_filename = zip_file_info['name']
+        zip_content = zip_file_info['content'].tobytes()
+        
+        self.dataset_status.value = f"⚙️ Status: Uploading and extracting {zip_filename}..."
+        
+        with self.dataset_output:
+            import os
+            import zipfile
+            
+            temp_zip_path = os.path.join(upload_folder, zip_filename)
+            
+            try:
+                print(f"📦 Saving {zip_filename} to {temp_zip_path}")
+                with open(temp_zip_path, 'wb') as f:
+                    f.write(zip_content)
+                
+                print(f"✨ Extracting {zip_filename} to {upload_folder}")
+                with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(upload_folder)
+                print("✅ Extraction complete.")
+                
+                # Clean up the temporary zip file
+                os.remove(temp_zip_path)
+                print(f"🗑️ Removed temporary zip file: {temp_zip_path}")
+                
+                # Count images after extraction
+                try:
+                    from core.image_utils import count_images_in_directory
+                    image_count = count_images_in_directory(upload_folder)
+                    print(f"📁 Found {image_count} images in {upload_folder}")
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}. Found {image_count} images.</div>"
+                except Exception as e:
+                    print(f"⚠️ Image counting error: {e}")
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}.</div>"
+                
+                # Clear the file upload widget for next use and force state refresh
+                self.file_upload.value = ()
+                self.file_upload.notify_change({'name': 'value', 'old': self.file_upload.value, 'new': ()})
+                self.upload_images_button.disabled = True
+                self.upload_zip_button.disabled = True
+                
+            except zipfile.BadZipFile:
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Invalid ZIP file.</div>"
+                print(f"❌ Error: {zip_filename} is not a valid ZIP file.")
+            except Exception as e:
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to upload or extract ZIP.</div>"
+                print(f"❌ An error occurred during ZIP upload/extraction: {e}")
+
     def reset_upload_widget(self, b):
         """Reset the file upload widget to clear any cached state"""
         self.file_upload.value = ()
-        self.file_upload.notify_change({'name': 'value', 'old': (), 'new': ()})
+        self.file_upload.notify_change({'name': 'value', 'old': (), 'new': (), 'type': 'change'})
         self.upload_images_button.disabled = True
+        self.upload_zip_button.disabled = True # Disable zip upload button on reset
         self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔄 Status:</strong> Upload widget reset. Select new files to upload.</div>"
         print("🔄 Upload widget cache cleared!")
 
@@ -1275,6 +1376,23 @@ class DatasetWidget:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Upload error.</div>"
                 print(f"💥 Unexpected error during upload: {str(e)}")
                 print("💡 Please check your token permissions and try again.")
+    
+    def run_review_tags(self, b):
+        """Display the generated tags for review"""
+        self.caption_output.clear_output()
+        self.caption_status.value = "<div style='background: #e2e3e5; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>📋 Status:</strong> Displaying tags...</div>"
+        with self.caption_output:
+            if not self.dataset_directory.value:
+                print("❌ Please specify a dataset directory first.")
+                self.caption_status.value = "<div style='background: #f8d7da; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No dataset directory specified.</div>"
+                return
+            
+            # Display the tags
+            success = self.manager.display_dataset_tags(self.dataset_directory.value)
+            if success:
+                self.caption_status.value = "<div style='background: #d4edda; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Tags displayed successfully.</div>"
+            else:
+                self.caption_status.value = "<div style='background: #f8d7da; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to display tags.</div>"
 
     def display(self):
         display(self.widget_box)

@@ -8,6 +8,7 @@ _model_manager = None
 _dataset_manager = None
 _training_manager = None
 _utilities_manager = None
+_config_manager = None
 
 def get_setup_manager():
     """Get or create the setup manager"""
@@ -48,6 +49,14 @@ def get_utilities_manager():
         from core.utilities_manager import UtilitiesManager
         _utilities_manager = UtilitiesManager()
     return _utilities_manager
+
+def get_config_manager():
+    """Get or create the config manager"""
+    global _config_manager
+    if _config_manager is None:
+        from core.config_manager import ConfigManager
+        _config_manager = ConfigManager()
+    return _config_manager
 
 # File manager instance (lazy loaded)
 _file_manager = None
