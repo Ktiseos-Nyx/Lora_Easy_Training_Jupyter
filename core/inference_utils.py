@@ -6,6 +6,123 @@ from .managers import get_venv_python_path, get_subprocess_environment
 
 logger = logging.getLogger(__name__)
 
+def detect_model_type(model_path: str) -> str:
+    """
+    Detect if a model is SD 1.5 or SDXL based on file size and naming conventions.
+    
+    Args:
+        model_path (str): Path to the model file
+        
+    Returns:
+        str: 'sdxl' or 'sd15'
+    """
+    model_path = Path(model_path)
+    
+    # First check filename patterns (most reliable)
+    model_name = model_path.name.lower()
+    
+    # SDXL indicators in filename
+    sdxl_indicators = ['sdxl', 'xl', 'illustrious', 'pony', 'noobai']
+    if any(indicator in model_name for indicator in sdxl_indicators):
+        return 'sdxl'
+    
+    # SD 1.5 indicators in filename  
+    sd15_indicators = ['sd15', 'v1-5', 'anything', 'counterfeit', 'realistic']
+    if any(indicator in model_name for indicator in sd15_indicators):
+        return 'sd15'
+    
+    # Fall back to file size estimation (rough heuristic)
+    try:
+        file_size_gb = model_path.stat().st_size / (1024**3)
+        
+        # SDXL models are typically 6-7GB, SD 1.5 models are typically 2-4GB
+        if file_size_gb > 5.0:
+            logger.info(f"  📏 Model size {file_size_gb:.1f}GB suggests SDXL")
+            return 'sdxl'
+        else:
+            logger.info(f"  📏 Model size {file_size_gb:.1f}GB suggests SD 1.5")
+            return 'sd15'
+    except:
+        # If we can't determine file size, default to SD 1.5 (more common)
+        logger.warning("  ⚠️  Could not determine model type, defaulting to SD 1.5")
+        return 'sd15'
+
+def generate_sd15_samples(lora_path: str, base_model_path: str, prompt: str, num_samples: int, 
+                         output_dir: str, epoch: int, **kwargs):
+    """Generate samples for SD 1.5 models using gen_img_diffusers.py or gen_img.py"""
+    project_root = Path(__file__).parents[1]
+    sd_scripts_dir = project_root / "trainer" / "derrian_backend" / "sd_scripts"
+    
+    # Try diffusers version first, fallback to original
+    inference_script = sd_scripts_dir / "gen_img_diffusers.py"
+    if not inference_script.exists():
+        inference_script = sd_scripts_dir / "gen_img.py"
+    
+    if not inference_script.exists():
+        logger.error(f"❌ SD 1.5 inference script not found!")
+        return False
+    
+    logger.info(f"🎨 Using SD 1.5 inference: {inference_script.name}")
+    # SD 1.5 specific inference logic here
+    return _run_inference_script(inference_script, lora_path, base_model_path, prompt, 
+                                num_samples, output_dir, epoch, resolution=512, **kwargs)
+
+def generate_sdxl_samples(lora_path: str, base_model_path: str, prompt: str, num_samples: int,
+                         output_dir: str, epoch: int, **kwargs):
+    """Generate samples for SDXL models using sdxl_gen_img.py or sdxl_minimal_inference.py"""
+    project_root = Path(__file__).parents[1]
+    sd_scripts_dir = project_root / "trainer" / "derrian_backend" / "sd_scripts"
+    
+    # Try sdxl_gen_img.py first, fallback to sdxl_minimal_inference.py
+    inference_script = sd_scripts_dir / "sdxl_gen_img.py"
+    if not inference_script.exists():
+        inference_script = sd_scripts_dir / "sdxl_minimal_inference.py"
+    
+    if not inference_script.exists():
+        logger.error(f"❌ SDXL inference script not found! Looked for:")
+        logger.error(f"   - sdxl_gen_img.py")
+        logger.error(f"   - sdxl_minimal_inference.py")
+        return False
+    
+    logger.info(f"🎨 Using SDXL inference: {inference_script.name}")
+    # SDXL specific inference logic here
+    return _run_inference_script(inference_script, lora_path, base_model_path, prompt,
+                                num_samples, output_dir, epoch, resolution=1024, **kwargs)
+
+def generate_flux_samples(lora_path: str, base_model_path: str, prompt: str, num_samples: int,
+                         output_dir: str, epoch: int, **kwargs):
+    """Generate samples for Flux models using flux_minimal_inference.py"""
+    project_root = Path(__file__).parents[1]
+    sd_scripts_dir = project_root / "trainer" / "derrian_backend" / "sd_scripts"
+    
+    inference_script = sd_scripts_dir / "flux_minimal_inference.py"
+    
+    if not inference_script.exists():
+        logger.error(f"❌ Flux inference script not found at: {inference_script}")
+        return False
+    
+    logger.info(f"🎨 Using Flux inference: {inference_script.name}")
+    # Flux specific inference logic here
+    return _run_inference_script(inference_script, lora_path, base_model_path, prompt,
+                                num_samples, output_dir, epoch, resolution=1024, **kwargs)
+
+def generate_sd3_samples(lora_path: str, base_model_path: str, prompt: str, num_samples: int,
+                        output_dir: str, epoch: int, **kwargs):
+    """Generate samples for SD3 models using sd3_minimal_inference.py"""
+    project_root = Path(__file__).parents[1]
+    sd_scripts_dir = project_root / "trainer" / "derrian_backend" / "sd_scripts"
+    
+    inference_script = sd_scripts_dir / "sd3_minimal_inference.py"
+    
+    if not inference_script.exists():
+        logger.error(f"❌ SD3 inference script not found at: {inference_script}")
+        return False
+    
+    logger.info(f"🎨 Using SD3 inference: {inference_script.name}")
+    # SD3 specific inference logic here
+    return _run_inference_script(inference_script, lora_path, base_model_path, prompt,
+                                num_samples, output_dir, epoch, resolution=1024, **kwargs)
+
 def generate_sample_images(
     lora_path: str,
     base_model_path: str,
@@ -13,43 +130,44 @@ def generate_sample_images(
     num_samples: int,
     output_dir: str,
     epoch: int,
-    resolution: int = 512,
+    resolution: int = None,
     seed: int = 42,
     negative_prompt: str = "bad anatomy, bad hands, missing fingers, extra fingers, fewer fingers, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry",
     guidance_scale: float = 7.5,
     num_inference_steps: int = 25,
 ):
     """
-    Generates sample images using a trained LoRA and a base Stable Diffusion model
-    via the Kohya-SS sdxl_minimal_inference.py script.
-
-    Args:
-        lora_path (str): Path to the LoRA checkpoint.
-        base_model_path (str): Path to the base Stable Diffusion model (CKPT/Safetensors).
-        prompt (str): The positive prompt for image generation.
-        num_samples (int): Number of sample images to generate.
-        output_dir (str): Directory to save the generated images.
-        epoch (int): Current training epoch (for naming output files).
-        resolution (int): Resolution of the generated images (e.g., 512, 768, 1024).
-        seed (int): Random seed for reproducibility.
-        negative_prompt (str): The negative prompt for image generation.
-        guidance_scale (float): Classifier-free guidance scale.
-        num_inference_steps (int): Number of inference steps.
+    Auto-detects model type and routes to appropriate inference function.
     """
-    logger.info(f"✨ Generating {num_samples} sample images for epoch {epoch} using Kohya-SS inference...")
-    logger.info(f"  Prompt: '{prompt}'")
-    logger.info(f"  LoRA: {lora_path}")
-    logger.info(f"  Base Model: {base_model_path}")
+    logger.info(f"✨ Generating {num_samples} sample images for epoch {epoch}...")
+    
+    # Detect model type and route to appropriate function
+    model_type = detect_model_type(base_model_path)
+    logger.info(f"🔍 Detected model type: {model_type.upper()}")
+    
+    kwargs = {
+        'resolution': resolution,
+        'seed': seed,
+        'negative_prompt': negative_prompt,
+        'guidance_scale': guidance_scale,
+        'num_inference_steps': num_inference_steps
+    }
+    
+    if model_type == 'sd15':
+        return generate_sd15_samples(lora_path, base_model_path, prompt, num_samples, output_dir, epoch, **kwargs)
+    elif model_type == 'sdxl':
+        return generate_sdxl_samples(lora_path, base_model_path, prompt, num_samples, output_dir, epoch, **kwargs)
+    elif model_type == 'flux':
+        return generate_flux_samples(lora_path, base_model_path, prompt, num_samples, output_dir, epoch, **kwargs)
+    elif model_type == 'sd3':
+        return generate_sd3_samples(lora_path, base_model_path, prompt, num_samples, output_dir, epoch, **kwargs)
+    else:
+        logger.error(f"❌ Unsupported model type: {model_type}")
+        return False
 
-    # Determine the project root and script path dynamically
-    project_root = Path(__file__).parents[1] # Go up two levels from core/inference_utils.py
-    sd_scripts_dir = project_root / "trainer" / "derrian_backend" / "sd_scripts"
-    inference_script = sd_scripts_dir / "sdxl_minimal_inference.py"
-
-    if not inference_script.exists():
-        logger.error(f"❌ Inference script not found at: {inference_script}")
-        logger.error("   Please ensure the training backend is correctly installed.")
-        return
+def _run_inference_script(inference_script, lora_path, base_model_path, prompt, num_samples, 
+                         output_dir, epoch, **kwargs):
+    """Common inference script execution logic"""
 
     # Get proper venv python and environment (fixes CAME import issues!)
     venv_python = get_venv_python_path(str(project_root))

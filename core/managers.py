@@ -1033,34 +1033,66 @@ class SetupManager:
             return False
     
     def _install_came_optimizer(self):
-        """Ensure CAME optimizer is properly installed"""
+        """Ensure CAME optimizer is properly installed using standardized subprocess environment"""
         try:
             custom_scheduler_dir = os.path.join(self.derrian_dir, "custom_scheduler")
-            if os.path.exists(custom_scheduler_dir):
-                # Run the custom optimizer setup
-                setup_script = os.path.join(custom_scheduler_dir, "setup.py")
-                if os.path.exists(setup_script):
-                    pip_cmd = self.correct_venv_path
-                    if isinstance(pip_cmd, list):
-                        python_cmd = pip_cmd[0]  # Get the Python executable
-                    else:
-                        python_cmd = 'python'
-                    
-                    result = subprocess.run(
-                        [python_cmd, setup_script, 'install'], 
-                        cwd=custom_scheduler_dir,
-                        check=True, 
-                        capture_output=True, 
-                        text=True
-                    )
-                    print("✅ CAME optimizer installed successfully")
-                    return True
             
-            print("❌ CAME optimizer setup files not found")
-            return False
+            # Check if already installed
+            try:
+                venv_python = get_venv_python_path(self.project_root)
+                env = get_subprocess_environment(self.project_root)
+                
+                # Test if CAME optimizer is already available
+                result = subprocess.run(
+                    [venv_python, '-c', 'from custom_scheduler import optimizer; print("CAME available")'],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=10
+                )
+                if result.returncode == 0:
+                    print("✅ CAME optimizer already installed")
+                    return True
+            except:
+                pass  # Not installed, continue
+            
+            if os.path.exists(custom_scheduler_dir):
+                print(f"📦 Installing CAME optimizer from {custom_scheduler_dir}...")
+                
+                # Get proper venv python and environment
+                venv_python = get_venv_python_path(self.project_root)
+                if not os.path.exists(venv_python):
+                    print(f"⚠️ Virtual environment python not found at {venv_python}, using system python")
+                    venv_python = "python"
+                
+                # Get standardized subprocess environment (fixes CAME import issues!)
+                env = get_subprocess_environment(self.project_root)
+                
+                # Use pip install -e for editable installation
+                result = subprocess.run(
+                    [venv_python, '-m', 'pip', 'install', '-e', '.'], 
+                    cwd=custom_scheduler_dir,
+                    check=True, 
+                    capture_output=True, 
+                    text=True,
+                    env=env
+                )
+                print("✅ CAME optimizer installed successfully")
+                print(f"   Output: {result.stdout}")
+                return True
+            else:
+                print("❌ CAME optimizer directory not found at custom_scheduler/")
+                return False
             
         except subprocess.CalledProcessError as e:
             print(f"❌ Failed to install CAME optimizer: {e}")
+            if e.stdout:
+                print(f"   Stdout: {e.stdout}")
+            if e.stderr:
+                print(f"   Stderr: {e.stderr}")
+            return False
+        except Exception as e:
+            print(f"❌ Unexpected error installing CAME optimizer: {e}")
             return False
     
     @property

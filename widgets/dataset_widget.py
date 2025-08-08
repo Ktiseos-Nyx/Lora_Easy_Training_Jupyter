@@ -630,7 +630,7 @@ class DatasetWidget:
                 folder_exists = bool(self.dataset_directory.value)
                 
                 # Determine if any selected file is a ZIP
-                is_zip_selected = any(f.metadata['name'].endswith('.zip') for f in change['new'])
+                is_zip_selected = any(f['name'].endswith('.zip') for f in change['new'])
                 
                 if folder_exists:
                     self.upload_images_button.disabled = is_zip_selected # Disable image upload if zip is selected

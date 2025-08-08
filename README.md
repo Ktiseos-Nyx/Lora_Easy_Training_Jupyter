@@ -42,26 +42,13 @@ This project builds upon and integrates the excellent work of:
 
 ## ✨ What You Get
 
-### 🎓 **Beginner-Friendly**
-- Helpful explanations for every setting (no more guessing!)
-- Step calculator shows you exactly how long training will take
-- Warnings when settings don't work together
+- **🎓 Beginner-friendly**: Helpful explanations and step-by-step guidance
+- **🧮 Training calculator**: Shows exactly how long training will take
+- **🛠️ Easy setup**: Works with VastAI, RunPod, and local computers
+- **📊 Dataset tools**: Auto-tag images, upload files, manage captions
+- **🚀 Multiple options**: SDXL, SD 1.5, various optimizers and LoRA types
 
-### 🧪 **Advanced Options** (If You Want Them)
-- Memory-efficient optimizers (CAME, Prodigy Plus)
-- Special LoRA types (DoRA, LoKr, LoHa, IA³, BOFT, GLoRA)
-- Memory-saving options for smaller GPUs
-
-### 🛠️ **Easy Setup**
-- **Prerequisites**: This installation assumes you already have Jupyter Lab or Jupyter Notebook running
-- Two simple notebooks: one for datasets, one for training
-- Works with VastAI and other GPU rental services
-- Checks your system automatically
-
-### 📊 **Dataset Tools**
-- Auto-tag your images (WD14 for anime, BLIP for photos)
-- Add/remove tags easily
-- Upload ZIP files or folders
+All in simple notebooks - no command line required!
 
 ## 🚀 Quick Start
 

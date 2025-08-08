@@ -349,10 +349,14 @@ class DatasetManager:
                 if item.endswith(".txt"):
                     file_path = os.path.join(dataset_path, item)
                     try:
-                        with open(file_path, 'r+') as f:
-                            content = f.read()
-                            f.seek(0, 0)
+                        # Read the original content first
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            content = f.read().strip()
+                        
+                        # Write the new content with trigger word prepended
+                        with open(file_path, 'w', encoding='utf-8') as f:
                             f.write(f"{trigger_word}, {content}")
+                        
                         print(f"  Added to: {item}")
                         files_processed += 1
                     except Exception as e:

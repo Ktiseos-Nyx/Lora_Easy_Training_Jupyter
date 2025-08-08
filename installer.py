@@ -44,6 +44,47 @@ class LoRATrainingInstaller:
             self.is_vastai
         )
     
+    def _check_jupyter_running(self):
+        """Check if any form of Jupyter is already running"""
+        try:
+            # Check for running processes
+            jupyter_processes = [
+                'jupyter notebook',
+                'jupyter lab', 
+                'jupyter server',
+                'jupyter-notebook',
+                'jupyter-lab'
+            ]
+            
+            for process in jupyter_processes:
+                result = subprocess.run(['pgrep', '-f', process], 
+                                      capture_output=True, text=True)
+                if result.returncode == 0:
+                    return True, process
+            
+            # Check if port 8888 is in use (common Jupyter port)
+            port_checks = [
+                ['netstat', '-tlnp'],
+                ['lsof', '-ti:8888']
+            ]
+            
+            for cmd in port_checks:
+                try:
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=3)
+                    if result.returncode == 0:
+                        if cmd[0] == 'netstat' and ':8888' in result.stdout:
+                            return True, "port 8888 (netstat)"
+                        elif cmd[0] == 'lsof' and result.stdout.strip():
+                            return True, "port 8888 (lsof)"
+                except:
+                    continue
+                    
+            return False, None
+            
+        except Exception:
+            # If we can't check, assume not running
+            return False, None
+    
     def print_banner(self):
         """Print installation banner"""
         print("=" * 60)
@@ -309,14 +350,25 @@ class LoRATrainingInstaller:
         return []
 
     def install_jupyter(self):
-        """Install Jupyter and required packages"""
-        print("📚 Installing Jupyter and core packages...")
+        """Install Jupyter extensions and required packages (container-friendly)"""
+        if self.is_container:
+            print("📚 Installing Jupyter extensions and core packages (container mode)...")
+            print("   🐳 Container detected - assuming Jupyter is already available")
+        else:
+            print("📚 Installing Jupyter and core packages...")
         
         # First, check what's already working and fix what's broken
         missing_packages = self.check_and_fix_requirements()
         
-        # Install any remaining packages
+        # Install any remaining packages (but not jupyter itself in containers)
         if missing_packages:
+            # In containers, assume jupyter is already installed, don't try to install it
+            if self.is_container:
+                missing_packages = [pkg for pkg in missing_packages if pkg != 'jupyter']
+                if not missing_packages:
+                    print("   ✅ All required packages already available in container")
+                    return
+            
             cmd = [self.python_cmd, '-m', 'pip', 'install', '--upgrade'] + missing_packages
             
             try:
@@ -379,51 +431,100 @@ class LoRATrainingInstaller:
             print(f"   ⚠️  aria2c installation error: {e}")
     
     def create_launch_script(self):
-        """Create convenient launch script"""
+        """Create convenient launch script with smart Jupyter detection"""
         print("🚀 Creating launch script...")
         
         launch_script = self.project_root / 'start_jupyter.sh'
+        
+        # Universal script that works for both containers and local
         launch_content = f'''#!/bin/bash
-# LoRA Easy Training - Jupyter Launch Script
+# LoRA Easy Training - Smart Jupyter Launch Script
 
-echo "🚀 Starting LoRA Easy Training - Jupyter Widget Edition"
+echo "🚀 LoRA Easy Training - Jupyter Widget Edition"
 echo ""
 
 # Navigate to project directory
 cd "{self.project_root}"
 
-# Check if Jupyter is installed
-if ! command -v jupyter &> /dev/null; then
-    echo "❌ Jupyter not found. Please run installer.py first"
-    exit 1
-fi
-
-# Enable widget extensions
-echo "🔧 Enabling Jupyter widgets..."
-jupyter nbextension enable --py --sys-prefix widgetsnbextension
-
-# Start Jupyter notebook
-echo "📚 Starting Jupyter notebook server..."
-echo ""
-echo "📝 Open these notebooks to get started:"
-echo "   1. Dataset_Maker_Widget.ipynb - for dataset preparation"
-echo "   2. Lora_Trainer_Widget.ipynb - for training"
-echo ""
-
-# Launch with appropriate settings
-if [[ -n "$VAST_CONTAINERLABEL" ]] || [[ "$PWD" == *"/workspace"* ]]; then
-    echo "☁️  VastAI detected - checking for existing Jupyter process..."
-    if pgrep -f "jupyter notebook" > /dev/null; then
-        echo "✅ Jupyter notebook is already running. Exiting launch script."
-        echo "📝 You can access it via the exposed port (usually 8888) or the URL provided by Vast.ai."
-    else
-        echo "🚀 Starting new Jupyter notebook instance for VastAI..."
-        jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token="" --NotebookApp.password=""
+# Function to check if Jupyter is running
+check_jupyter_running() {{
+    # Check for various Jupyter processes
+    if pgrep -f "jupyter notebook" > /dev/null 2>&1 || \
+       pgrep -f "jupyter lab" > /dev/null 2>&1 || \
+       pgrep -f "jupyter server" > /dev/null 2>&1 || \
+       pgrep -f "jupyter-notebook" > /dev/null 2>&1 || \
+       pgrep -f "jupyter-lab" > /dev/null 2>&1; then
+        return 0
     fi
+    
+    # Check if port 8888 is in use
+    if command -v netstat > /dev/null 2>&1; then
+        if netstat -tlnp 2>/dev/null | grep -q ":8888 "; then
+            return 0
+        fi
+    fi
+    
+    if command -v lsof > /dev/null 2>&1; then
+        if lsof -ti:8888 > /dev/null 2>&1; then
+            return 0
+        fi
+    fi
+    
+    return 1
+}}
+
+# Enable widget extensions (safe to run multiple times)
+echo "🔧 Enabling Jupyter widgets extensions..."
+if command -v jupyter &> /dev/null; then
+    jupyter nbextension enable --py --sys-prefix widgetsnbextension 2>/dev/null || echo "   ℹ️  Extensions already enabled or not needed"
 else
-    echo "💻 Local environment - opening browser"
-    jupyter notebook
+    echo "   ⚠️  Jupyter command not found - extensions may need manual setup"
 fi
+
+echo ""
+echo "📝 Your notebooks are ready:"
+echo "   1. Dataset_Maker_Widget.ipynb - Dataset preparation"
+echo "   2. Lora_Trainer_Widget.ipynb - SDXL Training"
+echo "   3. Lora_Trainer_Widget_SD15.ipynb - SD 1.5 Training"
+echo ""
+
+# Smart environment detection and Jupyter handling
+if [[ -n "$VAST_CONTAINERLABEL" ]] || [[ "$PWD" == *"/workspace"* ]] || [[ -n "$RUNPOD_POD_ID" ]] || [[ -f "/.dockerenv" ]]; then
+    echo "🐳 Container environment detected"
+    
+    if check_jupyter_running; then
+        echo "✅ Jupyter is already running!"
+        echo "   • Check your container provider for the access URL"
+        echo "   • VastAI: Look for 'Jupyter' in your instance page"
+        echo "   • RunPod: Check the 'Connect' tab for Jupyter link"
+        echo "   • Usually accessible on port 8888"
+    else
+        echo "❓ Jupyter doesn't appear to be running"
+        echo "   • This might be a bare container"
+        echo "   • You can start Jupyter manually with:"
+        echo "     jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root"
+    fi
+    
+else
+    echo "💻 Local environment detected"
+    
+    if check_jupyter_running; then
+        echo "✅ Jupyter is already running!"
+        echo "   • Check http://localhost:8888 in your browser"
+        echo "   • Or look for the terminal where you started Jupyter"
+    else
+        if command -v jupyter &> /dev/null; then
+            echo "🚀 Starting Jupyter notebook (will open browser)..."
+            jupyter notebook
+        else
+            echo "❌ Jupyter not found. Please install it first:"
+            echo "   pip install jupyter"
+        fi
+    fi
+fi
+
+echo ""
+echo "🎯 Ready to start training! Open the notebooks above in your browser."
 '''
         
         with open(launch_script, 'w') as f:
@@ -439,33 +540,47 @@ fi
         print("✅ INSTALLATION COMPLETE!")
         print("=" * 60)
         print()
-        print("🚀 To start training:")
-        print("   ./start_jupyter.sh")
-        print()
-        print("📚 Or manually:")
-        print("   jupyter notebook")
-        print()
-        print("📝 Open these notebooks:")
-        print("   1. Dataset_Maker_Widget.ipynb - Dataset preparation")
-        print("   2. Lora_Trainer_Widget.ipynb - Training & setup")
-        print()
         
-        if self.is_vastai:
-            print("☁️  VastAI Tips:")
-            print("   - Port 8888 should be exposed automatically")
-            print("   - Use the provided URL to access Jupyter")
-            print("   - Popular models are pre-selected for you")
+        if self.is_container:
+            print("🐳 Container Mode Setup Complete!")
+            print("   ./start_jupyter.sh  # Enable extensions and show instructions")
+            print()
+            print("📝 Your notebooks are ready:")
+            print("   1. Dataset_Maker_Widget.ipynb - Dataset preparation")
+            print("   2. Lora_Trainer_Widget.ipynb - SDXL Training")
+            print("   3. Lora_Trainer_Widget_SD15.ipynb - SD 1.5 Training")
+            print()
+            
+            if self.is_vastai:
+                print("☁️  VastAI Container:")
+                print("   • Jupyter should already be running on port 8888")
+                print("   • Check your VastAI instance page for the Jupyter URL")
+                print("   • No need to start Jupyter manually!")
+            else:
+                print("🐳 Container Environment:")
+                print("   • Jupyter is likely already running (check port 8888)")
+                print("   • Check your container provider for access instructions")
+                print("   • RunPod: Look for 'Connect' tab → Jupyter")
+            
+        else:
+            print("💻 Local Mode Setup Complete!")
+            print("   ./start_jupyter.sh  # Start Jupyter and open browser")
+            print()
+            print("📚 Or manually:")
+            print("   jupyter notebook")
+            print()
+            print("📝 Open these notebooks:")
+            print("   1. Dataset_Maker_Widget.ipynb - Dataset preparation")
+            print("   2. Lora_Trainer_Widget.ipynb - SDXL Training") 
+            print("   3. Lora_Trainer_Widget_SD15.ipynb - SD 1.5 Training")
         
+        print()
         print("🎯 Next steps:")
-        print("   1. Run environment setup in the training notebook")
-        print("   2. Download a base model (Illustrious, PonyDiff, etc.)")
-        print("   3. Prepare your dataset")
-        print("   4. Start training!")
+        print("   1. Open the training notebook and run the Setup widget")
+        print("   2. Follow the notebook instructions step by step")
+        print("   3. Happy training!")
         print()
-        print("🔧 If you encounter issues later:")
-        print("   python check_requirements.py  # Re-validate your setup")
-        print()
-        print("💝 Happy training! Remember: 'Either gonna work or blow up!' 😄")
+        print("💝 Everything you need is in the notebooks! Remember: 'Either gonna work or blow up!' 😄")
         print()
     
     def run_installation(self):

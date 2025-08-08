@@ -249,12 +249,13 @@ class TrainingWidget:
         <p>Select your optimizer, cross-attention mechanism, and precision. Caching latents can save memory. Enable V-Parameterization for SDXL v-pred models. Configure saving frequency and retention.</p>
         
         <div style='padding: 10px; border: 1px solid #856404; border-radius: 5px; margin: 10px 0;'>
-        <strong>⚠️ Optimizer Compatibility Notes:</strong><br>
-        • <strong>AdamW:</strong> Safe, reliable, works everywhere (recommended)<br>
-        • <strong>AdamW8bit:</strong> May have compatibility issues with some environments<br>
-        • <strong>Prodigy:</strong> Adaptive learning rate, very good results<br>
+        <strong>🧪 Optimizer Guide:</strong><br>
+        • <strong>AdamW:</strong> Safe, reliable, works everywhere (recommended for beginners)<br>
+        • <strong>AdamW8bit:</strong> Memory efficient, should work with proper CUDA setup<br>
+        • <strong>CAME:</strong> Memory efficient, great for large models and low VRAM<br>
+        • <strong>Prodigy:</strong> Adaptive learning rate, excellent results<br>
         • <strong>Lion:</strong> Fast and memory efficient<br>
-        <em>If you get import errors, try switching to AdamW or Prodigy</em>
+        <em>Our environment fixes should resolve most compatibility issues! Try CAME or AdamW8bit for memory savings.</em>
         </div>""")
         self.optimizer = widgets.Dropdown(options=['AdamW', 'AdamW8bit', 'Prodigy', 'DAdaptation', 'DadaptAdam', 'DadaptLion', 'Lion', 'SGDNesterov', 'SGDNesterov8bit', 'AdaFactor', 'Came'], value='AdamW', description='Optimizer:', style={'description_width': 'initial'})
         self.cross_attention = widgets.Dropdown(options=['sdpa', 'xformers'], value='sdpa', description='Cross Attention:', style={'description_width': 'initial'})
@@ -414,7 +415,7 @@ class TrainingWidget:
         accordion.set_title(1, "▶️ Training Configuration")
         accordion.set_title(2, "▶️ LoRA Structure")
         accordion.set_title(3, "▶️ Sample Generation Settings")
-        accordion.set_title(4, "🧪 Advanced Options")
+        accordion.set_title(4, "🚀 Additional Options")
 
         # --- Status Summary (stays visible) ---
         self.status_bar = widgets.HTML(value="<div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px;'><strong>📊 Status:</strong> Ready to configure training. Use the Training Progress section below to start training.</div>")
@@ -595,7 +596,7 @@ class TrainingWidget:
         
         self.advanced_mode = widgets.Checkbox(
             value=False,
-            description="🚀 Enable Advanced Training Options",
+            description="🧪 Show More Training Options",
             style={'description_width': 'initial'}
         )
         
