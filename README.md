@@ -4,13 +4,12 @@
 
 This is a user-friendly LoRA training system based on proven methods from popular Google Colab notebooks. Instead of typing scary commands, you get helpful widgets that walk you through each step. Works on your own computer or rented GPU servers.
 
-
-
 | Python Version | License | Discord | Twitch | Support |
 |---|---|---|---|---|
 | ![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/badge/Discord-Join%20Our%20Server-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/HhBSM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a> |
 
 ## Table of Contents
+
 - [✨ What You Get](#-what-you-get)
 - [🚀 Quick Start](#-quick-start)
 - [📖 How to Use](#-how-to-use)
@@ -34,6 +33,7 @@ All in simple notebooks - no command line required!
 ## 🚀 Quick Start
 
 ### What You Need
+
 - **GPU**: NVIDIA (8GB+ VRAM) OR AMD GPU (16GB+ VRAM recommended for RDNA2/3)
 - **Python**: Version 3.10.6 (compatible with Kohya-ss training)
 - **Platform**: Windows or Linux based Operationg Systems.
@@ -42,12 +42,14 @@ All in simple notebooks - no command line required!
 ### 🖥️ Supported Platforms
 
 **✅ Recommended (Easy Setup):**
+
 - **VastAI**: PyTorch containers with Python 3.10 (NVIDIA + select AMD GPUs)
 - **RunPod**: CUDA development templates (NVIDIA GPUs)
 - **Local NVIDIA**: Anaconda/Miniconda with Python 3.10.6 + CUDA
 - **Local AMD (Linux)**: Anaconda/Miniconda with Python 3.10.6 + ROCm 6.2+
 
 **🧪 Experimental AMD Support:**
+
 - **Local AMD (Windows)**: ZLUDA or DirectML acceleration
 - **Cloud AMD**: Limited availability on popular GPU rental platforms.
 - ⚠️ **NO SUPPORT FOR LOCAL MACINTOSH ARM/M1-M4 MACHINES** Currently RESEARCHING how to do this on mac machines intel or otherwise.
@@ -55,12 +57,14 @@ All in simple notebooks - no command line required!
 ### 🐍 Python Setup
 
 **Check your Python version first:**
+
 ```bash
 python --version
 # Need: Python 3.10.6 (other versions may break dependencies)
 ```
 
 **If you don't have Python 3.10.6:**
+
 ```bash
 # Create conda environment (recommended)
 conda create -n lora-training python=3.10.6 -y
@@ -70,6 +74,7 @@ conda activate lora-training
 ```
 
 **Always activate your environment before installation:**
+
 ```bash
 conda activate lora-training  # If using conda
 ```
@@ -79,6 +84,7 @@ conda activate lora-training  # If using conda
 **Prerequisites:** Git (for downloading) and Python 3.10.6
 
 **Quick Git Check:**
+
 ```bash
 git --version  # If this fails, install Git first
 ```
@@ -89,6 +95,7 @@ git --version  # If this fails, install Git first
 - **Linux**: `sudo apt install git` (Ubuntu/Debian)
 
 **Download and Setup:**
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git
@@ -101,9 +108,12 @@ python ./installer.py
 chmod +x ./jupyter.sh && ./jupyter.sh
 ```
 
+---
+
 ### 🚀 Start Training
 
 1. **Open Jupyter** (if not already running):
+
    ```bash
    jupyter notebook
    # Or: jupyter lab
@@ -132,6 +142,8 @@ dataset_widget.display()
 ```
 
 Upload your images (ZIP files work great!) and the system will auto-tag them for you.
+
+---
 
 ### How to Get Model/VAE Links
 
@@ -176,6 +188,8 @@ Use this method if the model has only one version or if a version has multiple f
 
 ![How to get a link from Hugging Face by copying the direct file address](./assets/model_url_hf_2.png)
 
+---
+
 ### Step 2: Train Your LoRA
 
 Open `Lora_Trainer_Widget.ipynb` and run the cells to start training:
@@ -192,6 +206,7 @@ training_widget = TrainingWidget()
 training_widget.display()
 ```
 
+---
 
 ## 🔧 Architecture
 
@@ -242,6 +257,8 @@ training_widget.display()
 - **Optimizer**: CAME optimizer saves significant VRAM
 - **Mixed Precision**: fp16 may have compatibility issues, try bf16
 
+---
+
 ### Known Issues & Compatibility
 
 ⚠️ **Flux/SD3.5 Training (EXPERIMENTAL)**
@@ -273,8 +290,6 @@ training_widget.display()
 - **GitHub Issues**: Report bugs and feature requests
 - **Documentation**: Check tooltips and explanations in widgets
 - **Community**: Share your LoRAs and experiences!
-
----
 
 ## 🏆 Credits
 
@@ -310,4 +325,4 @@ We welcome contributions! Check out our [Contributing Guide](CONTRIBUTING.md) fo
 
 ---
 
-*Made with ❤️ by the community, for the community*
+Made with ❤️ by the community, for the community.
