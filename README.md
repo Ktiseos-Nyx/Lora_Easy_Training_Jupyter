@@ -14,7 +14,6 @@ This is a user-friendly LoRA training system based on proven methods from popula
 - [✨ What You Get](#-what-you-get)
 - [🚀 Quick Start](#-quick-start)
 - [📖 How to Use](#-how-to-use)
-- [🧮 Quick Training Calculator](#-quick-training-calculator)
 - [🔧 Architecture](#-architecture)
 - [🐛 Troubleshooting](#-troubleshooting)
 - [🏆 Credits](#-credits)
@@ -193,28 +192,6 @@ training_widget = TrainingWidget()
 training_widget.display()
 ```
 
-**Good Starting Settings:**
-- Learning Rate: UNet `5e-4`, Text Encoder `1e-4`
-- LoRA: `8 dim / 4 alpha` (works for most characters)
-- Target: 250-1000 training steps (the calculator helps you figure this out)
-
-## 3. Extras
-
-
-### 🧮 Quick Training Calculator
-
-Not sure about your dataset size or settings? Use our personal calculator:
-
-```bash
-python3 personal_lora_calculator.py
-```
-
-This tool helps you:
-- Calculate optimal repeats and epochs for your dataset size
-- Get personalized learning rate recommendations
-- Estimate total training steps
-- Build confidence for any dataset size (no more guesswork!) 🎯
-
 
 ## 🔧 Architecture
 
@@ -290,10 +267,14 @@ This tool helps you:
 - **Recommendation**: Use standard LoRA or LoCon for stable results
 - **More testing**: Additional compatibility testing is ongoing
 
+---
+
 ### Support
 - **GitHub Issues**: Report bugs and feature requests
 - **Documentation**: Check tooltips and explanations in widgets
 - **Community**: Share your LoRAs and experiences!
+
+---
 
 ## 🏆 Credits
 
