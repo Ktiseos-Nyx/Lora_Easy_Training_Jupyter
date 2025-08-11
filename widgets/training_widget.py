@@ -450,10 +450,15 @@ class TrainingWidget:
         )
         self.prepare_config_button.on_click(self.run_training) # This will now trigger config collection
 
+        # Progress description (was missing!)
+        progress_desc = widgets.HTML("""<h3>📊 Training Progress</h3>
+        <p>Monitor your training progress and status below. The system will automatically update with real-time information.</p>""")
+
         self.widget_box = widgets.VBox([
             header_main,
             accordion,
             self.prepare_config_button, # Add the new button here
+            progress_desc,
             self.status_bar,
             self.training_output
         ])
