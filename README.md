@@ -1,4 +1,5 @@
 # LoRA Easy Training - Jupyter Widget Edition 🚀
+
 A user-friendly LoRA training system based on KohyaSS, powered by interactive Jupyter widgets. Train on your local computer or rented GPU servers with ease.
 
 | Python Version | License | Discord | Twitch | Support |
@@ -6,6 +7,7 @@ A user-friendly LoRA training system based on KohyaSS, powered by interactive Ju
 | ![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/badge/Discord-Join%20Our%20Server-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/HhBSM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a> |
 
 ## 🌟 Overview & Key Features
+
 - **What is this project?** A user-friendly LoRA training system based on KohyaSS, powered by interactive Jupyter widgets. Instead of typing lengthy Python commands, you get helpful widgets that walk you through each step. Works on your own local computer or rented GPU servers.
 - **Why use it?**
     - **🎓 Beginner-friendly**: Helpful explanations and step-by-step guidance.
@@ -19,10 +21,10 @@ A user-friendly LoRA training system based on KohyaSS, powered by interactive Ju
 - **GPU**: Nvidia (For built-in CUDA support) or AMD Cards for ROCm. (Future Support for ARC and otherwise coming)
 - **Python**: Version 3.10.6 (compatible with Kohya-ss training)
 - **Platform**: Windows or Linux based Operating Systems.
-- ⚠️ **NO SUPPORT FOR LOCAL MACINTOSH ARM/M1-M4 MACHINES** Currently RESEARCHING how to do this on Mac machines Intel or otherwise.
 </details>
 
 ## 🚀 Quick Start (Installation & Setup)
+
 Our trainer directly handles the task of installing major requirements depending on your environment.
 
 - **Note for Cloud Users**: If you are on platforms like Vast.AI or RunPod, Jupyter is often launched automatically after your instance starts. You can usually proceed directly to the "Usage Guide" once your environment is ready.
@@ -31,26 +33,36 @@ Our trainer directly handles the task of installing major requirements depending
 You will need Git and Python 3.10.6.
 
 **Check your Python version first:**
+
 ```bash
 python --version
 # Need: Python 3.10.6 (other versions may break dependencies)
 ```
+
 You can install Python 3.10.6 directly from Python's [main website here](https://www.python.org/downloads/release/python-3106/).
 
 **Quick Git Check:**
+
 ```bash
 git --version  # If this fails, install Git first
 ```
+
 **Install Git if needed:**
 - **Windows**: Download from [git-scm.com](https://git-scm.com/download/win)
 - **Mac**: `xcode-select --install` in Terminal
 - **Linux**: `sudo apt install git` (Ubuntu/Debian)
 
 **Main Installation Steps:**
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git
 cd Lora_Easy_Training_Jupyter
+
+# 1a. If you're running the Unified Branch (For Testing) Please continue with the following commands:
+git branch
+git checkout unified
+git fetch origin unified
 
 # 2. Run the installer (downloads ~10-15GB)
 python ./installer.py
@@ -60,20 +72,25 @@ chmod +x ./jupyter.sh && ./jupyter.sh
 ```
 
 ## 📖 Usage Guide
+
 ### How to Launch Jupyter
+
 (If Jupyter is NOT running)
+
 ```bash
 jupyter notebook
 # Or: jupyter lab
 ```
 
 ### Notebook Workflow
+
 Your main starting point order for the notebooks is as follows:
 - `Dataset_Maker_Widget.ipynb` - Prepare images and captions
 - `Unified_LoRA_Trainer.ipynb` - Configure and run training
 - `LoRA_Calculator_Widget.ipynb` - Calculate optimal steps (optional)
 
 ### Data Ingestion
+
 Explain options for getting data into the system:
 - **URL/ZIP Download**: Download and extract datasets from URLs (e.g., Hugging Face, Civitai) or local ZIP files.
 - **Direct Image Upload**: Upload individual images directly into your dataset folder.
@@ -86,6 +103,7 @@ To use custom models or VAEs, you need to provide a direct download link. Here�
 #### From Civitai
 
 **Method 1: Using the Model Version ID**
+
 1.  Navigate to the model or VAE page.
 2.  Look at the URL in your browser's address bar. If it includes `?modelVersionId=XXXXXX`, you can copy the entire URL and paste it directly into the widget.
 3.  If you don't see this ID, try switching to a different version of the model and then back to your desired version. The ID should then appear in the URL.
@@ -117,22 +135,28 @@ Use this method if the model has only one version or if a version has multiple f
 </details>
 
 ### Image Utilities
+
 - **Image Resizing**: Easily resize images in your dataset to a target resolution, with options for quality.
 
 ### Tag Curation
+
 - **FiftyOne Integration**: Visually inspect and edit image tags using the FiftyOne interface. After making changes in FiftyOne, click 'Apply Curation Changes' to save them to your local caption files.
 
 ## 🛠️ Troubleshooting & Support
-- **Known Issues & Compatibility**:
-    - ⚠️ **Triton/ONNX Compatibility Warnings**: Docker/VastAI users may encounter issues with AdamW8bit optimizer. System will auto-fallback to AdamW.
-    - ⚠️ **Advanced LoRA Methods (EXPERIMENTAL)**: DoRA, GLoRA, BOFT (Butterfly) are currently under testing and validation. Use standard LoRA or LoCon for stable results.
-- **Getting Help**:
+
+**Known Issues & Compatibility**:
+
+- ⚠️ **Triton/ONNX Compatibility Warnings**: Docker/VastAI users may encounter issues with AdamW8bit optimizer.
+- ⚠️ **NO SUPPORT FOR LOCAL MACINTOSH ARM/M1-M4 MACHINES**
+
+**Getting Help**:
     - If you encounter issues or have questions, please:
         - Check our GitHub [Issues](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/issues) or [Discussions](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/discussions).
         - Join our [Discord Server](https://discord.gg/HhBSM9gBY) for community support.
     - We maintain a running tab of common issues and solutions in our [docs/](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/tree/main/docs) folder.
 
 ## 🙏 Credits & Acknowledgements
+
 - **Built on the Shoulders of Giants**
 This project builds upon and integrates the excellent work of:
 - **[Jelosus2's LoRA Easy Training Colab](https://github.com/Jelosus2/Lora_Easy_Training_Colab)** - Original Colab notebook that inspired this adaptation
@@ -150,12 +174,15 @@ Special thanks to these creators for making LoRA training accessible to everyone
 ---
 
 ## 🔒 Security
+
 Found a security issue? Check our [Security Policy](SECURITY.md) for responsible disclosure guidelines.
 
 ## 📄 License
+
 MIT License - Feel free to use, modify, and distribute. See [LICENSE](LICENSE) for details.
 
 ## 🤝 Contributing
+
 We welcome contributions! Check out our [Contributing Guide](CONTRIBUTING.md) for details on how to get involved. Feel free to open issues or submit pull requests on GitHub.
 
 ---
