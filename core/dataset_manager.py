@@ -252,7 +252,7 @@ class DatasetManager:
             # Use robust custom tagger for unstable rental GPU environments
             custom_tagger = os.path.join(self.project_root, "custom", "tag_images_by_wd14_tagger.py")
             if os.path.exists(custom_tagger):
-                print("🛡️ Using robust custom tagger for VastAI/rental environment")
+                print("🏷️ Using WD14 tagger")
                 return custom_tagger
         
         elif env_type == "jupyter_local":

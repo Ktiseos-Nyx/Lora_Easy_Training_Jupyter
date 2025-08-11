@@ -13,12 +13,11 @@ from tqdm import tqdm
 # Fix for truncated JPEG images - allows PIL to handle corrupted/truncated files gracefully
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
-import library.train_util as train_util
-from library.utils import setup_logging, resize_image
-
-setup_logging()
 import logging
+import glob
 
+# Simple logging setup (replaces library.utils.setup_logging)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # from wd14 tagger
@@ -47,8 +46,8 @@ def preprocess_image(image):
     pad_t = pad_y // 2
     image = np.pad(image, ((pad_t, pad_y - pad_t), (pad_l, pad_x - pad_l), (0, 0)), mode="constant", constant_values=255)
 
-    # Use Kohya's resize_image utility for better robustness
-    image = resize_image(image, image.shape[0], image.shape[1], IMAGE_SIZE, IMAGE_SIZE)
+    # Simple resize for inference (448x448 for WD14 models)
+    image = cv2.resize(image, (IMAGE_SIZE, IMAGE_SIZE), interpolation=cv2.INTER_LANCZOS4)
 
     image = image.astype(np.float32)
     return image
@@ -220,9 +219,21 @@ def main(args):
 
     # 画像を読み込む
 
-    # 画像を読み込む
+    # Find image files (replaces train_util.glob_images_pathlib)
     train_data_dir_path = Path(args.train_data_dir)
-    image_paths = train_util.glob_images_pathlib(train_data_dir_path, args.recursive)
+    image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.webp', '.tiff']
+    image_paths = []
+    
+    if args.recursive:
+        for ext in image_extensions:
+            image_paths.extend(train_data_dir_path.rglob(f"*{ext}"))
+            image_paths.extend(train_data_dir_path.rglob(f"*{ext.upper()}"))
+    else:
+        for ext in image_extensions:
+            image_paths.extend(train_data_dir_path.glob(f"*{ext}"))
+            image_paths.extend(train_data_dir_path.glob(f"*{ext.upper()}"))
+    
+    image_paths = sorted(list(set(image_paths)))  # Remove duplicates and sort
     logger.info(f"found {len(image_paths)} images.")
 
     tag_freq = {}
