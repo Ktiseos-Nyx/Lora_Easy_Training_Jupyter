@@ -25,9 +25,9 @@ class ConfigManager:
         Dead simple check: Are all required TOML files present?
         
         Returns:
-            bool: True if all files exist, False otherwise
+            bool: True if any TOML files exist (Kohya generates dynamic names)
         """
-        return self._find_all_toml_files() is not None
+        return self._find_any_toml_files() is not None
     
     def get_config_paths(self) -> Optional[Dict[str, str]]:
         """
@@ -36,7 +36,7 @@ class ConfigManager:
         Returns:
             Dict with file names as keys and full paths as values, or None if files missing
         """
-        return self._find_all_toml_files()
+        return self._find_any_toml_files()
     
     def get_training_status(self) -> Dict[str, any]:
         """
@@ -135,6 +135,32 @@ class ConfigManager:
             validation["message"] = f"❌ Validation failed ({len(validation['errors'])} errors)"
         
         return validation
+    
+    def _find_any_toml_files(self) -> Optional[Dict[str, str]]:
+        """
+        Internal method: Hunt for ANY TOML files (Kohya generates dynamic names)
+        
+        Returns:
+            Dict of filename -> path, or None if no TOML files found
+        """
+        if not os.path.exists(self.config_dir):
+            return None
+        
+        found_paths = {}
+        
+        # Find all TOML files in the config directory
+        import glob
+        toml_files = glob.glob(os.path.join(self.config_dir, "*.toml"))
+        
+        if not toml_files:
+            return None  # No TOML files found
+        
+        # Add all found TOML files
+        for file_path in toml_files:
+            filename = os.path.basename(file_path)
+            found_paths[filename] = file_path
+        
+        return found_paths
     
     def _find_all_toml_files(self) -> Optional[Dict[str, str]]:
         """
