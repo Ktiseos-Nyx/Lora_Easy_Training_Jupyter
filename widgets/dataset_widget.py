@@ -607,9 +607,6 @@ class DatasetWidget:
             self.image_utils_output
         ])
 
-        image_utils_box
-        ])
-
         # --- Tag Curation Section ---
         tag_curation_desc = widgets.HTML("""<h3>🏷️ Tag Curation (FiftyOne)</h3>
         <p>Visually inspect and edit image tags using the FiftyOne interface. After making changes in FiftyOne, click 'Apply Curation Changes' to save them to your local caption files.</p>
@@ -1109,11 +1106,11 @@ class DatasetWidget:
                     print(f"   - {tag}: {count}")
             if quality_metrics is not None:
                 print("🖼️ Image Quality Metrics:")
-                print(f"   - Min Resolution: {quality_metrics["min_resolution"]["width"]}x{quality_metrics["min_resolution"]["height"]}")
-                print(f"   - Max Resolution: {quality_metrics["max_resolution"]["width"]}x{quality_metrics["max_resolution"]["height"]}")
-                print(f"   - Average Aspect Ratio: {quality_metrics["avg_aspect_ratio"]:.2f}")
-                print(f"   - Common Formats: {quality_metrics["common_formats"]}")
-                print(f"   - Blurred Images (estimated): {quality_metrics["blurred_images"]}")
+                print(f"   - Min Resolution: {quality_metrics['min_resolution']['width']}x{quality_metrics['min_resolution']['height']}")
+                print(f"   - Max Resolution: {quality_metrics['max_resolution']['width']}x{quality_metrics['max_resolution']['height']}")
+                print(f"   - Average Aspect Ratio: {quality_metrics['avg_aspect_ratio']:.2f}")
+                print(f"   - Common Formats: {quality_metrics['common_formats']}")
+                print(f"   - Blurred Images (estimated): {quality_metrics['blurred_images']}")
             if lora_views is not None:
                 print("✨ LoRA-Specific Views available in FiftyOne:")
                 for view_name in lora_views.keys():
@@ -1207,7 +1204,7 @@ class DatasetWidget:
                     
             except Exception as e:
                 print(f"❌ Failed to run gallery-dl scraper: {e}")
-                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Scraper encountered an error.</div>"}
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Scraper encountered an error.</div>"
 
     def run_tagging(self, b):
         self.tagging_output.clear_output()

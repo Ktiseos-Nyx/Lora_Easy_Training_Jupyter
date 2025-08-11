@@ -491,8 +491,8 @@ class DatasetManager:
             print(f"Setting LD_LIBRARY_PATH for tagger: {env['LD_LIBRARY_PATH']}")
             if "PYTHONPATH" in env:
                 # The environment setup is reused, so we log the actual path being set
-        if "PYTHONPATH" in env and env["PYTHONPATH"]:
-            print(f"ℹ️  Setting PYTHONPATH for subprocess: {env['PYTHONPATH']}")
+                if "PYTHONPATH" in env and env["PYTHONPATH"]:
+                    print(f"ℹ️  Setting PYTHONPATH for subprocess: {env['PYTHONPATH']}")
 
             process = subprocess.Popen(
                 command,
@@ -2132,3 +2132,4 @@ Special thanks to [Linaqruf](https://github.com/Linaqruf) for their contribution
 
     def upload_dataset_to_huggingface(self, dataset_path, dataset_name, hf_token="", 
                                     orgs_name="", make_private=False, description=""):
+        pass  # TODO: Implement HuggingFace dataset upload

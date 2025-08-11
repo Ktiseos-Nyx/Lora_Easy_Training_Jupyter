@@ -151,18 +151,15 @@ class UnifiedInstaller:
         self.print_banner()
         
         if not self.setup_submodules():
-            print("
-❌ Halting installation due to submodule setup failure.")
+            print("❌ Halting installation due to submodule setup failure.")
             return
 
         if not self.install_dependencies():
-            print("
-❌ Halting installation due to dependency installation failure.")
+            print("❌ Halting installation due to dependency installation failure.")
             return
             
         if not self.apply_special_fixes_and_installs():
-            print("
-⚠️ Some special fixes or editable installs failed.")
+            print("⚠️ Some special fixes or editable installs failed.")
 
         print("\n" + "=" * 70)
         print("✅ Installation complete!")
