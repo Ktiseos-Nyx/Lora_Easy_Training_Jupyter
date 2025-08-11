@@ -80,7 +80,18 @@ class RefactoredTrainingManager:
         This is a compatibility method for the TrainingMonitorWidget.
         """
         import toml
-        config_path = config_paths.get('config.toml')
+        
+        # Find any config file (Kohya generates dynamic filenames)
+        config_path = None
+        for filename, path in config_paths.items():
+            if path and filename.endswith('_config.toml'):
+                config_path = path
+                break
+        
+        # Fallback to old behavior if no dynamic config found
+        if not config_path:
+            config_path = config_paths.get('config.toml')
+        
         if not config_path or not os.path.exists(config_path):
             logger.error(f"Config file not found at path: {config_path}")
             return
@@ -101,10 +112,18 @@ class RefactoredTrainingManager:
         """
         config_path = self.kohya_manager.create_config_toml(config)
         
-        return {
-            "config.toml": config_path,
-            "dataset.toml": None  # Handled by Kohya's unified config
-        }
+        # Use the actual filename instead of hardcoded "config.toml"
+        if config_path:
+            actual_filename = os.path.basename(config_path)
+            return {
+                actual_filename: config_path,
+                "dataset.toml": None  # Handled by Kohya's unified config
+            }
+        else:
+            return {
+                "config.toml": config_path,
+                "dataset.toml": None
+            }
     
     def validate_config(self, config):
         """Validate configuration using Kohya's validation"""
