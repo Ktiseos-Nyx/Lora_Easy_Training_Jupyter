@@ -518,7 +518,7 @@ class KohyaTrainingManager:
                 "clip_skip": config.get('clip_skip', 2),
             },
             "dataset_arguments": {
-                "train_data_dir": config.get('dataset_path', ''),
+                "train_data_dir": self._ensure_parent_dataset_dir(config.get('dataset_path', '')),
                 "resolution": f"{config.get('resolution', 512)},{config.get('resolution', 512)}",
                 "batch_size": config.get('batch_size', 1),
             },
@@ -936,9 +936,32 @@ class KohyaTrainingManager:
             },
             "dataset": {
                 "datasets": [{
-                    "image_dir": config.get('dataset_path', ''),
+                    "image_dir": self._ensure_parent_dataset_dir(config.get('dataset_path', '')),
                     "num_repeats": config.get('num_repeats', 10),
                     "resolution": f"{config.get('resolution', 1024)},{config.get('resolution', 1024)}"
                 }]
             }
         }
+    
+    def _ensure_parent_dataset_dir(self, dataset_path):
+        """
+        Ensure dataset path points to parent directory of numbered folders.
+        
+        Kohya expects: /path/to/datasets (parent containing 10_character_name/)
+        Not: /path/to/datasets/10_character_name (direct to images)
+        """
+        if not dataset_path:
+            return dataset_path
+        
+        import re
+        
+        # Check if the path ends with a numbered folder pattern (e.g., "10_character_name")
+        path_basename = os.path.basename(dataset_path)
+        
+        # Kohya folder pattern: starts with number followed by underscore
+        if re.match(r'^\d+_', path_basename):
+            # This looks like a numbered folder - return parent directory
+            return os.path.dirname(dataset_path)
+        else:
+            # This looks like a parent directory already - use as-is
+            return dataset_path

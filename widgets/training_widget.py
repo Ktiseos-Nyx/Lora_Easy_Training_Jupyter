@@ -532,7 +532,7 @@ class TrainingWidget:
             'clip_l_path': self.clip_l_path.value,
             'clip_g_path': self.clip_g_path.value,
             't5xxl_path': self.t5xxl_path.value,
-            'dataset_dir': self.dataset_dir.value,
+            'dataset_path': self.dataset_dir.value,
             'continue_from_lora': self.continue_from_lora.value,
             'wandb_key': self.wandb_key.value,
             'resolution': self.resolution.value,
