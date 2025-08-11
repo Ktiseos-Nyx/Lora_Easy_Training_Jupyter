@@ -1,4 +1,10 @@
 # widgets/training_widget.py
+
+# Suppress FutureWarnings at import time
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='diffusers')
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+
 import ipywidgets as widgets
 from IPython.display import display
 from core.refactored_training_manager import HybridTrainingManager

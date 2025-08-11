@@ -6,6 +6,11 @@ This provides the same interface as HybridTrainingManager but delegates to the
 new KohyaTrainingManager that leverages Kohya's library system.
 """
 
+# Suppress FutureWarnings at import time  
+import warnings
+warnings.filterwarnings('ignore', category=FutureWarning, module='diffusers')
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+
 from .kohya_training_manager import KohyaTrainingManager
 import logging
 
