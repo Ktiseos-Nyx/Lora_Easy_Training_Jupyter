@@ -519,7 +519,7 @@ class KohyaTrainingManager:
             },
             "dataset_arguments": {
                 "train_data_dir": config.get('dataset_path', ''),
-                "resolution": config.get('resolution', 512),
+                "resolution": f"{config.get('resolution', 512)},{config.get('resolution', 512)}",
                 "batch_size": config.get('batch_size', 1),
             },
             "training_arguments": {
@@ -938,7 +938,7 @@ class KohyaTrainingManager:
                 "datasets": [{
                     "image_dir": config.get('dataset_path', ''),
                     "num_repeats": config.get('num_repeats', 10),
-                    "resolution": config.get('resolution', 1024)
+                    "resolution": f"{config.get('resolution', 1024)},{config.get('resolution', 1024)}"
                 }]
             }
         }
