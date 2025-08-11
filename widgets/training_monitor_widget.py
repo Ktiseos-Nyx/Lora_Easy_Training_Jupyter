@@ -148,6 +148,14 @@ class TrainingMonitorWidget:
             )
         )
         
+        # Sample generation button
+        self.view_samples_button = widgets.Button(
+            description="🖼️ View Latest Samples",
+            button_style='info',
+            layout=widgets.Layout(width='200px')
+        )
+        self.view_samples_button.on_click(lambda b: self.generate_and_display_samples())
+        
         # Auto-save status (fix theme colors)
         self.autosave_status = widgets.HTML(
             value="<div style='padding: 8px; border: 1px solid #28a745; border-radius: 5px;'>"
@@ -165,6 +173,7 @@ class TrainingMonitorWidget:
             self.resource_info,
             widgets.HTML("<h4>📋 Training Log</h4>"),
             self.training_log,
+            self.view_samples_button,
             self.autosave_status
         ])
     
