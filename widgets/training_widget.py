@@ -454,7 +454,6 @@ class TrainingWidget:
             header_main,
             accordion,
             self.prepare_config_button, # Add the new button here
-            progress_desc,
             self.status_bar,
             self.training_output
         ])
