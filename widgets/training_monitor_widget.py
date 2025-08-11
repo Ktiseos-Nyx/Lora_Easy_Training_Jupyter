@@ -1,6 +1,6 @@
 # widgets/training_monitor_widget.py
 import ipywidgets as widgets
-from IPython.display import display
+from IPython.display import display, Image as IPImage
 import re
 import time
 import threading
@@ -12,6 +12,15 @@ class TrainingMonitorWidget:
     def __init__(self, training_manager_instance):
         self.training_manager = training_manager_instance
         self.training_config = None # To store the config passed from TrainingWidget
+        
+        # Initialize sidecar for sample images
+        try:
+            from sidecar import Sidecar
+            self.sample_sidecar = Sidecar(title='🎨 Training Sample Images', anchor='split-right')
+        except ImportError:
+            print("⚠️ Sidecar not available. Sample images will display in main notebook.")
+            self.sample_sidecar = None
+        
         self.create_widgets()
         self.current_epoch = 0
         self.total_epochs = 0
@@ -19,10 +28,10 @@ class TrainingMonitorWidget:
         self.total_steps = 0
         self.training_phase = "Initializing..."
         
-        # Inference parameters
+        # Inference parameters  
         self.sample_prompt = ""
-        self.sample_num_images = 0
-        self.sample_resolution = 512
+        self.sample_num_images = 3  # Generate 3 images every epoch
+        self.sample_resolution = 512  # Will be auto-detected based on model type
         self.sample_seed = 42
         self.base_model_path = ""
         self.output_dir = ""
@@ -354,6 +363,88 @@ class TrainingMonitorWidget:
         """Clear the training log"""
         with self.training_log:
             self.training_log.clear_output()
+    
+    def _get_resolution_for_model_type(self, model_path):
+        """Auto-detect resolution based on model type"""
+        if not model_path:
+            return 512  # Safe default
+        
+        model_name = os.path.basename(model_path).lower()
+        
+        # SDXL detection
+        if 'sdxl' in model_name or 'xl' in model_name:
+            return 1024
+        
+        # SD 2.x detection  
+        if 'sd2' in model_name or 'stable-diffusion-2' in model_name or 'v2-' in model_name:
+            return 768  # Whatever the fuck for 2.x 😂
+        
+        # Flux detection
+        if 'flux' in model_name:
+            return 1024  # Whatever the fuck for Flux
+        
+        # SD3 detection
+        if 'sd3' in model_name:
+            return 1024  # Whatever the fuck for SD3
+        
+        # Default to SD 1.5
+        return 512
+    
+    def generate_and_display_samples(self, callback=None):
+        """Generate sample images and display them in sidecar"""
+        try:
+            if not self.sample_prompt.strip():
+                print("⚠️ No sample prompt set. Skipping image generation.")
+                if callback:
+                    callback()
+                return
+            
+            # Auto-detect resolution
+            resolution = self._get_resolution_for_model_type(self.base_model_path)
+            
+            print(f"🎨 Generating {self.sample_num_images} sample images at {resolution}x{resolution}...")
+            
+            # Generate sample images (using existing inference_utils)
+            sample_images = generate_sample_images(
+                prompt=self.sample_prompt,
+                model_path=self.base_model_path,
+                lora_path=self.output_dir,
+                num_images=self.sample_num_images,
+                resolution=(resolution, resolution),
+                seed=self.sample_seed
+            )
+            
+            if sample_images and len(sample_images) > 0:
+                # Display in sidecar if available
+                if self.sample_sidecar:
+                    with self.sample_sidecar:
+                        print(f"🎨 Epoch {self.current_epoch} Sample Images")
+                        print(f"📝 Prompt: {self.sample_prompt}")
+                        print(f"📐 Resolution: {resolution}x{resolution}")
+                        print()
+                        
+                        for i, img_path in enumerate(sample_images):
+                            if os.path.exists(img_path):
+                                display(IPImage(img_path, width=300))
+                                print(f"Image {i+1}")
+                            else:
+                                print(f"❌ Image {i+1} not found: {img_path}")
+                else:
+                    # Fallback to main notebook
+                    print("🎨 Sample Images Generated:")
+                    for i, img_path in enumerate(sample_images):
+                        if os.path.exists(img_path):
+                            display(IPImage(img_path, width=300))
+                        else:
+                            print(f"❌ Image {i+1} not found: {img_path}")
+            else:
+                print("❌ No sample images were generated")
+                
+        except Exception as e:
+            print(f"❌ Error generating sample images: {e}")
+        finally:
+            if callback:
+                callback()
     
     def display(self):
         """Display the widget"""
