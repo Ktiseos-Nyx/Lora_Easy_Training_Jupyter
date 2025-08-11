@@ -44,7 +44,6 @@ class DatasetManager:
 
         dataset = fo.Dataset.from_images_dir(
             dataset_path,
-            tags_field="wd14_tags",  # Use WD14 tags as labels
             recursive=True
         )
         
@@ -344,15 +343,16 @@ class DatasetManager:
         self._ensure_tagger_model_available(tagger_model)
         
         # Try to find appropriate Python executable (cross-platform)
+        # First try Kohya's standard venv location
         if sys.platform == "win32":
             venv_python = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
         else:
             venv_python = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
             
         if not os.path.exists(venv_python):
-            # Fallback to system python if venv doesn't exist
+            # Use current Python executable (should be the active venv)
             venv_python = sys.executable
-            print(f"⚠️ Kohya venv not found, using system Python: {venv_python}")
+            print(f"🐍 Using current Python environment: {venv_python}")
         
         tagger_script = self._get_tagger_script_path()
         
@@ -428,9 +428,9 @@ class DatasetManager:
             venv_python = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
             
         if not os.path.exists(venv_python):
-            # Fallback to system python if venv doesn't exist
+            # Use current Python executable (should be the active venv)
             venv_python = sys.executable
-            print(f"⚠️ Kohya venv not found, using system Python: {venv_python}")
+            print(f"🐍 Using current Python environment: {venv_python}")
         
         blip_script = os.path.join(self.sd_scripts_dir, "finetune/make_captions.py")
         
