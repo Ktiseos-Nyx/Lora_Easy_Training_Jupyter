@@ -367,7 +367,10 @@ def main(args):
 
             image, image_path = data
             if image is not None:
-                image = image.detach().numpy()
+                # Handle both PyTorch tensors and numpy arrays
+                if hasattr(image, 'detach'):
+                    image = image.detach().numpy()
+                # If it's already numpy, leave it as is
             else:
                 try:
                     image = Image.open(image_path)
