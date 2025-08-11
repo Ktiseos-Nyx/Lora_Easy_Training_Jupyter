@@ -945,15 +945,19 @@ class KohyaTrainingManager:
     
     def _ensure_parent_dataset_dir(self, dataset_path):
         """
-        Ensure dataset path points to parent directory of numbered folders.
+        Ensure dataset path points to parent directory of numbered folders AND is absolute.
         
-        Kohya expects: /path/to/datasets (parent containing 10_character_name/)
-        Not: /path/to/datasets/10_character_name (direct to images)
+        Since sd_scripts runs from trainer/derrian_backend/sd_scripts/, we need absolute paths
+        to find datasets in the project root.
         """
         if not dataset_path:
             return dataset_path
         
         import re
+        
+        # Convert to absolute path if it's relative (relative to project root)
+        if not os.path.isabs(dataset_path):
+            dataset_path = os.path.join(self.project_root, dataset_path)
         
         # Check if the path ends with a numbered folder pattern (e.g., "10_character_name")
         path_basename = os.path.basename(dataset_path)
