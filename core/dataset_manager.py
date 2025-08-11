@@ -39,7 +39,11 @@ class DatasetManager:
 
     def create_fiftyone_dataset(self, dataset_path):
         """Convert our Kohya-format dataset to FiftyOne format for viewing"""
-        import fiftyone as fo
+        try:
+            import fiftyone as fo
+        except ImportError:
+            raise ImportError("FiftyOne is required for dataset exploration. Install with: pip install fiftyone")
+        
         import os
 
         dataset = fo.Dataset.from_images_dir(
@@ -60,9 +64,14 @@ class DatasetManager:
 
     def launch_dataset_explorer(self, dataset_path):
         """Launch FiftyOne in sidecar for dataset exploration"""
-        from sidecar import Sidecar
-        import fiftyone as fo
-        from ipywidgets import HTML, VBox
+        try:
+            from sidecar import Sidecar
+            import fiftyone as fo
+            from ipywidgets import HTML, VBox
+        except ImportError as e:
+            print("❌ FiftyOne dataset exploration requires additional packages:")
+            print("   pip install fiftyone sidecar")
+            return None
 
         # Create persistent sidecar for dataset exploration
         dataset_explorer = Sidecar(title='📊 Dataset Explorer - FiftyOne', anchor='split-right')
@@ -96,7 +105,12 @@ class DatasetManager:
         Performs basic image quality analysis on a FiftyOne dataset.
         Returns a dictionary of quality metrics.
         """
-        import fiftyone as fo
+        try:
+            import fiftyone as fo
+        except ImportError:
+            print("❌ Image quality analysis requires FiftyOne: pip install fiftyone")
+            return None
+        
         import numpy as np
         from PIL import Image
 
@@ -157,7 +171,11 @@ class DatasetManager:
         """
         Creates FiftyOne views for LoRA-specific analysis (repeat folders, concepts).
         """
-        import fiftyone as fo
+        try:
+            import fiftyone as fo
+        except ImportError:
+            print("❌ LoRA-specific views require FiftyOne: pip install fiftyone")
+            return None
 
         lora_views = {}
 
@@ -181,7 +199,12 @@ class DatasetManager:
         """
         Applies changes made in FiftyOne (e.g., tag edits) back to the local dataset files.
         """
-        import fiftyone as fo
+        try:
+            import fiftyone as fo
+        except ImportError:
+            print("❌ Curation requires FiftyOne: pip install fiftyone")
+            return False
+        
         import os
 
         print(f"💾 Applying FiftyOne curation to {dataset_path}...")

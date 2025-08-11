@@ -1,13 +1,18 @@
 import ipywidgets as widgets
 from IPython.display import display, Image as IPImage
-from sidecar import Sidecar
 from core.inference_manager import LoRAInferenceManager
 import os
 
 class InferenceWidget:
     def __init__(self):
+        try:
+            from sidecar import Sidecar
+            self.inference_sidecar = Sidecar(title='🎨 LoRA Inference Preview', anchor='split-bottom')
+        except ImportError:
+            print("⚠️ Sidecar not available. Inference will display in main notebook.")
+            self.inference_sidecar = None
+        
         self.inference_manager = LoRAInferenceManager()
-        self.inference_sidecar = Sidecar(title='🎨 LoRA Inference Preview', anchor='split-bottom')
         self.create_widgets()
 
     def create_widgets(self):
@@ -133,5 +138,9 @@ class InferenceWidget:
                 print(f"❌ Error during image generation: {e}")
 
     def display(self):
-        with self.inference_sidecar:
+        if self.inference_sidecar:
+            with self.inference_sidecar:
+                display(self.widget_box)
+        else:
+            # Fallback to main notebook display
             display(self.widget_box)
