@@ -2,6 +2,20 @@
 # This file provides shared manager instances for use across widgets
 # Uses lazy loading - only creates managers when actually needed
 
+# Suppress annoying startup warnings
+import warnings
+import logging
+import os
+
+# Suppress FutureWarnings from diffusers
+warnings.filterwarnings('ignore', category=FutureWarning, module='diffusers')
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
+
+# Reduce logging verbosity for startup
+logging.getLogger('diffusers').setLevel(logging.WARNING)
+logging.getLogger('transformers').setLevel(logging.WARNING)
+logging.getLogger('huggingface_hub').setLevel(logging.WARNING)
+
 # Global storage for manager instances (lazy loaded)
 _setup_manager = None
 _model_manager = None

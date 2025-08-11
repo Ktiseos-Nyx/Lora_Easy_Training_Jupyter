@@ -127,7 +127,9 @@ class KohyaTrainingManager:
         self.experimental_features = self._init_experimental_features()
         self.logging_options = self._init_logging_options()
         
-        logger.info("KohyaTrainingManager initialized with Kohya library system")
+        # Reduced verbosity for startup - only log if debug mode
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("KohyaTrainingManager initialized with Kohya library system")
     
     def _init_strategies(self):
         """Initialize Kohya's strategy system for different model architectures"""

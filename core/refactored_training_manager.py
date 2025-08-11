@@ -38,7 +38,9 @@ class RefactoredTrainingManager:
         self.advanced_optimizers = self._get_legacy_optimizers()
         self.standard_optimizers = self._get_legacy_standard_optimizers()
         
-        logger.info("RefactoredTrainingManager initialized with Kohya backend")
+        # Reduced verbosity for startup - only log if debug mode
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug("RefactoredTrainingManager initialized with Kohya backend")
     
     def _get_legacy_optimizers(self):
         """Provide legacy optimizer format for widget compatibility"""
