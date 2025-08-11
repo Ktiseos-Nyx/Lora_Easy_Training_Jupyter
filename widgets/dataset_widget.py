@@ -746,7 +746,8 @@ class DatasetWidget:
         self.create_folder_button.on_click(self.run_create_folder)
         self.upload_images_button.on_click(self.run_upload_images)
         self.upload_zip_button.on_click(self.run_upload_zip)
-        self.gelbooru_button.on_click(self.run_gallery_dl_scraper)
+        # Gallery-dl scraper functionality integrated into URL download
+        # self.gelbooru_button.on_click(self.run_gallery_dl_scraper)  # Button removed, functionality integrated
         self.preview_rename_button.on_click(self.run_preview_rename)
         self.rename_files_button.on_click(self.run_rename_files)
         self.tagging_button.on_click(self.run_tagging)
