@@ -453,6 +453,12 @@ class TrainingWidget:
         # Progress description (was missing!)
         progress_desc = widgets.HTML("""<h3>📊 Training Progress</h3>
         <p>Monitor your training progress and status below. The system will automatically update with real-time information.</p>""")
+        
+        # Status bar widget (was also missing!)
+        self.status_bar = widgets.HTML(value="<div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px;'><strong>📊 Status:</strong> Ready to configure training</div>")
+        
+        # Training output widget
+        self.training_output = widgets.Output()
 
         self.widget_box = widgets.VBox([
             header_main,
