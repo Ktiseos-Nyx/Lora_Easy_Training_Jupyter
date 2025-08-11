@@ -1,7 +1,7 @@
 # widgets/training_widget.py
 import ipywidgets as widgets
 from IPython.display import display
-from core.training_manager import HybridTrainingManager
+from core.refactored_training_manager import HybridTrainingManager
 from .training_monitor_widget import TrainingMonitorWidget
 
 class TrainingWidget:
@@ -29,11 +29,29 @@ class TrainingWidget:
         # --- Project Settings ---
         project_desc = widgets.HTML("<h3>▶️ Project Settings</h3><p>Define your project name, the path to your base model, and your dataset directory. You can also specify an existing LoRA to continue training from and your Weights & Biases API key for logging.</p>")
         self.project_name = widgets.Text(description="Project Name:", placeholder="e.g., my-awesome-lora (no spaces or special characters)", layout=widgets.Layout(width='99%'))
+        self.model_type = widgets.Dropdown(options=['SD1.5/2.0', 'SDXL', 'Flux', 'SD3'], value='SDXL', description='Model Type:', style={'description_width': 'initial'})
         self.model_path = widgets.Text(description="Model Path:", placeholder="Absolute path to your base model (e.g., /path/to/model.safetensors)", layout=widgets.Layout(width='99%'))
+        
+        # Flux/SD3 specific widgets
+        self.clip_l_path = widgets.Text(description="CLIP-L Path:", placeholder="Path to clip_l.safetensors", layout=widgets.Layout(width='99%'))
+        self.clip_g_path = widgets.Text(description="CLIP-G Path:", placeholder="Path to clip_g.safetensors (for SD3)", layout=widgets.Layout(width='99%'))
+        self.t5xxl_path = widgets.Text(description="T5-XXL Path:", placeholder="Path to t5xxl.safetensors", layout=widgets.Layout(width='99%'))
+        self.flux_sd3_widgets = widgets.VBox([self.clip_l_path, self.clip_g_path, self.t5xxl_path])
+        self.flux_sd3_widgets.layout.display = 'none' # Initially hidden
+
         self.dataset_dir = widgets.Text(description="Dataset Dir:", placeholder="Absolute path to your dataset directory (e.g., /path/to/my_dataset)", layout=widgets.Layout(width='99%'))
         self.continue_from_lora = widgets.Text(description="Continue from LoRA:", placeholder="Absolute path to an existing LoRA to continue training (optional)", layout=widgets.Layout(width='99%'))
         self.wandb_key = widgets.Password(description="WandB API Key:", placeholder="Your key will be hidden (e.g., ••••••••••••••••••••••••)", layout=widgets.Layout(width='99%'))
-        project_box = widgets.VBox([project_desc, self.project_name, self.model_path, self.dataset_dir, self.continue_from_lora, self.wandb_key])
+        
+        def _on_model_type_change(change):
+            if change['new'] in ['Flux', 'SD3']:
+                self.flux_sd3_widgets.layout.display = 'block'
+            else:
+                self.flux_sd3_widgets.layout.display = 'none'
+        
+        self.model_type.observe(_on_model_type_change, names='value')
+
+        project_box = widgets.VBox([project_desc, self.project_name, self.model_type, self.model_path, self.flux_sd3_widgets, self.dataset_dir, self.continue_from_lora, self.wandb_key])
 
         # --- Training Configuration (merged: Basic Settings + Learning Rate + Training Options) ---
         training_config_desc = widgets.HTML("""<h3>▶️ Training Configuration</h3>
@@ -417,17 +435,6 @@ class TrainingWidget:
         accordion.set_title(3, "▶️ Sample Generation Settings")
         accordion.set_title(4, "🚀 Additional Options")
 
-        # --- Status Summary (stays visible) ---
-        self.status_bar = widgets.HTML(value="<div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px;'><strong>📊 Status:</strong> Ready to configure training. Use the Training Progress section below to start training.</div>")
-        
-        # --- Detailed Training Log (scrollable) ---
-        self.training_output = widgets.Output(layout=widgets.Layout(height='400px', overflow='scroll', border='1px solid #ddd', margin='10px 0'))
-        
-        # --- Progress Summary ---
-        progress_desc = widgets.HTML("<h3>📊 Training Progress</h3><p>Status updates appear above, detailed logs below.</p>")
-        
-        # Start training button moved to the Training Progress Monitor widget
-
         # Attach observers for real-time validation (after all widgets are created)
         self.cache_text_encoder_outputs.observe(check_config_conflicts, names='value')
         self.shuffle_caption.observe(check_config_conflicts, names='value')
@@ -504,7 +511,11 @@ class TrainingWidget:
         """Helper method to gather all config settings from widget values"""
         return {
             'project_name': self.project_name.value,
+            'model_type': self.model_type.value.lower().replace('/', '_').replace('.', ''), # e.g. sd1.5/2.0 -> sd1_5_2_0
             'model_path': self.model_path.value,
+            'clip_l_path': self.clip_l_path.value,
+            'clip_g_path': self.clip_g_path.value,
+            't5xxl_path': self.t5xxl_path.value,
             'dataset_dir': self.dataset_dir.value,
             'continue_from_lora': self.continue_from_lora.value,
             'wandb_key': self.wandb_key.value,

@@ -310,19 +310,18 @@ class TrainingMonitorWidget:
                 
                 # Check if epoch has just completed and samples are enabled
                 if current_epoch > self.current_epoch and self.sample_num_images > 0:
-                    print(f"\n🎉 Epoch {self.current_epoch} completed! Generating samples...")
+                    print(f"\n🎉 Epoch {self.current_epoch} completed! Generating and displaying samples...")
+                    self.view_samples_button.disabled = True # Disable while generating
+                    self.view_samples_button.description = "🖼️ Generating..."
+                    
+                    # Define a callback to re-enable the button
+                    def on_generation_complete():
+                        self.view_samples_button.disabled = False
+                        self.view_samples_button.description = "🖼️ View Latest Samples"
+                        print("✅ Sample generation complete. Click 'View Latest Samples' to see results.")
+
                     # Call the inference function in a separate thread to not block training log
-                    threading.Thread(target=generate_sample_images,
-                                     args=(
-                                         os.path.join(self.output_dir, f"{config_manager.get_config().get('project_name', 'lora_model')}_epoch-{self.current_epoch:03d}.safetensors"),
-                                         self.base_model_path,
-                                         self.sample_prompt,
-                                         self.sample_num_images,
-                                         os.path.join(self.output_dir, "sample_images"), # Subdirectory for samples
-                                         self.current_epoch,
-                                         self.sample_resolution,
-                                         self.sample_seed
-                                     )).start()
+                    threading.Thread(target=self.generate_and_display_samples, args=(on_generation_complete,)).start()
 
                 # Try to extract total epochs from line or use stored value
                 total_match = re.search(r'epoch[:\s]+\d+[/\\s]+(\d+)', line.lower())

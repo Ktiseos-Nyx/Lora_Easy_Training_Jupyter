@@ -9,6 +9,7 @@ _dataset_manager = None
 _training_manager = None
 _utilities_manager = None
 _config_manager = None
+_inference_manager = None
 
 def get_setup_manager():
     """Get or create the setup manager"""
@@ -38,7 +39,7 @@ def get_training_manager():
     """Get or create the training manager (heavy imports - only load when needed!)"""
     global _training_manager
     if _training_manager is None:
-        from core.training_manager import HybridTrainingManager
+        from core.refactored_training_manager import HybridTrainingManager
         _training_manager = HybridTrainingManager()
     return _training_manager
 
@@ -57,6 +58,14 @@ def get_config_manager():
         from core.config_manager import ConfigManager
         _config_manager = ConfigManager()
     return _config_manager
+
+def get_inference_manager():
+    """Get or create the inference manager"""
+    global _inference_manager
+    if _inference_manager is None:
+        from core.refactored_inference_manager import InferenceManager
+        _inference_manager = InferenceManager()
+    return _inference_manager
 
 # File manager instance (lazy loaded)
 _file_manager = None

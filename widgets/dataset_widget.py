@@ -3,6 +3,11 @@ import ipywidgets as widgets
 from IPython.display import display
 from core.dataset_manager import DatasetManager
 from core.managers import ModelManager
+import os
+import re
+import glob
+import zipfile
+import sys
 
 class DatasetWidget:
     def __init__(self, dataset_manager=None):
@@ -30,7 +35,7 @@ class DatasetWidget:
         
         # Dataset method selection
         self.dataset_method = widgets.RadioButtons(
-            options=[('📥 URL/ZIP Download', 'url'), ('📁 Direct Image Upload', 'upload'), ('🔍 Gelbooru Scraper', 'gelbooru')],
+            options=[('📥 URL/ZIP Download', 'url'), ('📁 Direct Image Upload', 'upload'), ('🔍 Gallery-DL Scraper', 'gallery_dl')],
             description='Method:',
             style={'description_width': 'initial'},
             layout=widgets.Layout(width='99%')
@@ -72,8 +77,17 @@ class DatasetWidget:
         
         self.folder_name = widgets.Text(
             description="Folder Name:",
-            placeholder="e.g., my_character_dataset",
+            placeholder="e.g., character_name (repeat count will be added automatically)",
             layout=widgets.Layout(width='70%')
+        )
+        
+        self.folder_repeats = widgets.IntText(
+            description="Repeat Count:",
+            value=10,
+            min=1,
+            max=100,
+            layout=widgets.Layout(width='25%'),
+            style={'description_width': 'initial'}
         )
         
         self.create_folder_button = widgets.Button(
@@ -82,7 +96,11 @@ class DatasetWidget:
             layout=widgets.Layout(width='25%')
         )
         
-        folder_creation_box = widgets.HBox([self.folder_name, self.create_folder_button])
+        folder_creation_box = widgets.VBox([
+            widgets.HBox([self.folder_name, self.folder_repeats]),
+            widgets.HTML("<small><i>💡 Final folder will be: <strong>{repeat_count}_{folder_name}</strong> (Kohya format)</i></small>"),
+            self.create_folder_button
+        ])
         
         self.file_upload = widgets.FileUpload(
             accept='.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif,.zip', # Added .zip
@@ -120,50 +138,85 @@ class DatasetWidget:
         ])
         
         # Gelbooru Scraper Section
-        gelbooru_method_desc = widgets.HTML("""<h4>🔍 Gelbooru Image Scraper</h4>
-        <div style='background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #856404;'>
-        <strong>⚠️ Important Notes:</strong><br>
-        • Use appropriate tags like "1girl, character_name, blue_hair" - check Gelbooru first<br>
-        • Use minus tags to exclude content: "-nsfw, -explicit"<br>
-        • Downloads may take time depending on number of images<br>
-        • Images are filtered to common formats (jpg, png, webp)<br>
+        # Gallery-DL Scraper Section
+        gallery_dl_method_desc = widgets.HTML("""<h4>🔍 Gallery-DL Scraper</h4>
+        <div style='background: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <strong>🌐 Supported Sites:</strong> Gelbooru, Danbooru, Pixiv, Twitter, etc. (see <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md" target="_blank">supported sites</a>)<br>
+        <strong>💡 Tips:</strong> Use appropriate tags, specify limits, and consider subfolders for organization.
         </div>""")
         
-        self.gelbooru_tags = widgets.Text(
-            description="Gelbooru Tags:",
-            placeholder="e.g., 1girl, blue_hair, long_hair, -solo",
+        self.gallery_dl_site = widgets.Dropdown(
+            options=[('Gelbooru', 'gelbooru'), ('Danbooru', 'danbooru'), ('Pixiv', 'pixiv'), ('Twitter', 'twitter'), ('Custom URL (enter below)', 'custom')],
+            description='Site:',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='99%')
+        )
+
+        self.gallery_dl_tags = widgets.Text(
+            description="Tags:",
+            placeholder="e.g., 1girl, blue_hair, long_hair (comma separated)",
             layout=widgets.Layout(width='99%'),
             style={'description_width': 'initial'}
         )
         
-        self.gelbooru_limit = widgets.IntSlider(
-            value=100,
-            min=10,
-            max=1000,
-            step=10,
-            description='Max Images:',
+        self.gallery_dl_limit_range = widgets.Text(
+            value="1-100",
+            description='Limit Range:',
+            placeholder="e.g., 1-100 (downloads first 100 images)",
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='99%')
+        )
+
+        self.gallery_dl_custom_url = widgets.Text(
+            description="Custom URL:",
+            placeholder="Full URL for custom site (if 'Custom URL' selected above)",
+            layout=widgets.Layout(width='99%'),
             style={'description_width': 'initial'}
         )
-        
-        self.gelbooru_folder = widgets.Text(
-            description="Folder Name:",
-            placeholder="e.g., character_name_dataset",
-            layout=widgets.Layout(width='70%')
+
+        self.gallery_dl_sub_folder = widgets.Text(
+            description="Subfolder:",
+            placeholder="e.g., my_character (creates a subfolder within dataset dir)",
+            layout=widgets.Layout(width='99%'),
+            style={'description_width': 'initial'}
+        )
+
+        self.gallery_dl_additional_args = widgets.Text(
+            description="Additional Args:",
+            placeholder="e.g., --no-part --write-info-json",
+            layout=widgets.Layout(width='99%'),
+            style={'description_width': 'initial'}
+        )
+
+        self.gallery_dl_write_tags = widgets.Checkbox(
+            value=True,
+            description="Write Tags (creates .txt files)",
+            indent=False
+        )
+
+        self.gallery_dl_use_aria2c = widgets.Checkbox(
+            value=True,
+            description="Use aria2c (faster downloads)",
+            indent=False
         )
         
-        self.gelbooru_button = widgets.Button(
-            description="🔍 Scrape from Gelbooru",
+        self.gallery_dl_button = widgets.Button(
+            description="🔍 Start Gallery-DL Scrape",
             button_style='info',
             layout=widgets.Layout(width='25%')
         )
         
-        gelbooru_action_box = widgets.HBox([self.gelbooru_folder, self.gelbooru_button])
-        
-        self.gelbooru_method_box = widgets.VBox([
-            gelbooru_method_desc,
-            self.gelbooru_tags,
-            self.gelbooru_limit,
-            gelbooru_action_box
+        self.gallery_dl_method_box = widgets.VBox([
+            gallery_dl_method_desc,
+            self.gallery_dl_site,
+            self.gallery_dl_tags,
+            self.gallery_dl_limit_range,
+            self.gallery_dl_custom_url,
+            self.gallery_dl_sub_folder,
+            self.gallery_dl_additional_args,
+            self.gallery_dl_write_tags,
+            self.gallery_dl_use_aria2c,
+            self.gallery_dl_button
         ])
         
         # Status and output (shared)
@@ -179,16 +232,16 @@ class DatasetWidget:
             elif change['new'] == 'upload':
                 self.url_method_box.layout.display = 'none'
                 self.upload_method_box.layout.display = 'block'
-                self.gelbooru_method_box.layout.display = 'none'
-            else:  # gelbooru
+                self.gallery_dl_method_box.layout.display = 'none'
+            else:  # gallery_dl
                 self.url_method_box.layout.display = 'none'
                 self.upload_method_box.layout.display = 'none'
-                self.gelbooru_method_box.layout.display = 'block'
+                self.gallery_dl_method_box.layout.display = 'block'
         
         self.dataset_method.observe(on_method_change, names='value')
         # Initialize with URL method visible
         self.upload_method_box.layout.display = 'none'
-        self.gelbooru_method_box.layout.display = 'none'
+        self.gallery_dl_method_box.layout.display = 'none'
         
         dataset_setup_box = widgets.VBox([
             dataset_setup_desc,
@@ -196,10 +249,28 @@ class DatasetWidget:
             self.dataset_directory,
             self.url_method_box,
             self.upload_method_box,
-            self.gelbooru_method_box,
+            self.gallery_dl_method_box,
             self.dataset_status,
             self.dataset_output
         ])
+
+        # Add FiftyOne integration button
+        self.fiftyone_explorer_button = widgets.Button(
+            description="🔍 Open Visual Explorer", 
+            button_style='info',
+            layout=widgets.Layout(width='99%')
+        )
+        self.fiftyone_explorer_button.on_click(self.launch_fiftyone_explorer)
+
+        # Add Apply Curation Changes button
+        self.apply_curation_button = widgets.Button(
+            description="💾 Apply Curation Changes",
+            button_style='success',
+            layout=widgets.Layout(width='99%')
+        )
+        self.apply_curation_button.on_click(self.apply_fiftyone_curation)
+
+        dataset_setup_box.children = list(dataset_setup_box.children) + [self.fiftyone_explorer_button, self.apply_curation_button]
 
         # --- File Renaming Section ---
         rename_desc = widgets.HTML("""<h3>📝 File Renaming</h3>
@@ -481,6 +552,77 @@ class DatasetWidget:
             self.upload_output
         ])
 
+        # --- Image Utilities Section ---
+        image_utils_desc = widgets.HTML("""<h3>🖼️ Image Utilities</h3>
+        <p>Tools for processing and optimizing your dataset images.</p>
+        """)
+
+        self.resize_resolution_selector = widgets.Dropdown(
+            options=[('512x512 (SD 1.5)', 512), ('1024x1024 (SDXL)', 1024), ('Custom', 'custom')],
+            value=512,
+            description='Target Resolution:',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='99%')
+        )
+
+        self.custom_resize_resolution = widgets.IntText(
+            description='Custom Resolution:',
+            placeholder='e.g., 768',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='99%')
+        )
+        self.custom_resize_resolution.layout.display = 'none' # Initially hidden
+
+        def on_resolution_selector_change(change):
+            if change['new'] == 'custom':
+                self.custom_resize_resolution.layout.display = 'block'
+            else:
+                self.custom_resize_resolution.layout.display = 'none'
+        self.resize_resolution_selector.observe(on_resolution_selector_change, names='value')
+
+        self.resize_quality = widgets.IntSlider(
+            value=90,
+            min=0,
+            max=100,
+            step=1,
+            description='JPEG Quality:',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='99%')
+        )
+
+        self.resize_images_button = widgets.Button(
+            description="📏 Resize Images",
+            button_style='info'
+        )
+        self.resize_images_button.on_click(self.run_resize_images)
+
+        self.image_utils_output = widgets.Output()
+
+        image_utils_box = widgets.VBox([
+            image_utils_desc,
+            self.resize_resolution_selector,
+            self.custom_resize_resolution, # Added custom resolution input
+            self.resize_quality,
+            self.resize_images_button,
+            self.image_utils_output
+        ])
+
+        image_utils_box
+        ])
+
+        # --- Tag Curation Section ---
+        tag_curation_desc = widgets.HTML("""<h3>🏷️ Tag Curation (FiftyOne)</h3>
+        <p>Visually inspect and edit image tags using the FiftyOne interface. After making changes in FiftyOne, click 'Apply Curation Changes' to save them to your local caption files.</p>
+        """)
+
+        self.tag_curation_output = widgets.Output()
+
+        tag_curation_box = widgets.VBox([
+            tag_curation_desc,
+            self.apply_curation_button, # Re-use the existing button
+            self.tag_curation_output
+        ])
+
         # --- Advanced Caption Management ---
         caption_desc = widgets.HTML("""<h3>▶️ Advanced Caption Management</h3>
         <p>Professional tag curation tools for cleaning and organizing your caption files.</p>
@@ -587,7 +729,9 @@ class DatasetWidget:
             tagging_box,
             caption_box,
             cleanup_box,
-            upload_box
+            upload_box,
+            image_utils_box,
+            tag_curation_box
         ])
         self.accordion.set_title(0, "📁 Dataset Setup")
         self.accordion.set_title(1, "📝 File Renaming")
@@ -595,6 +739,8 @@ class DatasetWidget:
         self.accordion.set_title(3, "📝 Advanced Caption Management")
         self.accordion.set_title(4, "🧹 Dataset Cleanup")
         self.accordion.set_title(5, "🤗 HuggingFace Upload")
+        self.accordion.set_title(6, "🖼️ Image Utilities")
+        self.accordion.set_title(7, "🏷️ Tag Curation")
 
         self.widget_box = widgets.VBox([header_main, self.accordion])
 
@@ -603,7 +749,7 @@ class DatasetWidget:
         self.create_folder_button.on_click(self.run_create_folder)
         self.upload_images_button.on_click(self.run_upload_images)
         self.upload_zip_button.on_click(self.run_upload_zip)
-        self.gelbooru_button.on_click(self.run_gelbooru_scraper)
+        self.gelbooru_button.on_click(self.run_gallery_dl_scraper)
         self.preview_rename_button.on_click(self.run_preview_rename)
         self.rename_files_button.on_click(self.run_rename_files)
         self.tagging_button.on_click(self.run_tagging)
@@ -620,14 +766,18 @@ class DatasetWidget:
         
         # Reset upload button event handler (button created earlier)
         self.reset_upload_button.on_click(self.reset_upload_widget)
+        
+        # Auto-detect existing dataset directories on init
+        self.auto_detect_existing_datasets()
 
     def on_file_upload_change(self, change):
         """Handle file upload selection changes"""
         if change['new']:  # Files have been selected
             file_count = len(change['new'])
             if file_count > 0:
-                # Check if a folder is created
-                folder_exists = bool(self.dataset_directory.value)
+                # Check if a folder is created AND exists on disk
+                folder_path = self.dataset_directory.value.strip()
+                folder_exists = bool(folder_path) and os.path.exists(folder_path)
                 
                 # Determine if any selected file is a ZIP
                 is_zip_selected = any(f['name'].endswith('.zip') for f in change['new'])
@@ -637,20 +787,32 @@ class DatasetWidget:
                     self.upload_zip_button.disabled = not is_zip_selected # Enable zip upload only if zip is selected
                     
                     if is_zip_selected:
-                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP.</div>"
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP to '{folder_path}'.</div>"
                     else:
-                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images.</div>"
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images to '{folder_path}'.</div>"
                 else:
+                    # If no folder exists but files are selected, auto-suggest creating folder
                     self.upload_images_button.disabled = True
                     self.upload_zip_button.disabled = True
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> {file_count} file(s) selected. Please create a folder first.</div>"
+                    # Try to suggest a folder name based on the files
+                    suggested_name = "uploaded_dataset"
+                    if is_zip_selected:
+                        zip_name = next(f['name'] for f in change['new'] if f['name'].endswith('.zip'))
+                        suggested_name = zip_name.replace('.zip', '_dataset')
+                    
+                    if not self.folder_name.value.strip():
+                        self.folder_name.value = suggested_name
+                    
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>📁 Status:</strong> {file_count} file(s) selected. Click 'Create Folder' first, then upload.</div>"
             else:
                 self.upload_images_button.disabled = True
                 self.upload_zip_button.disabled = True
         else:
-            # No files selected
+            # No files selected - reset everything
             self.upload_images_button.disabled = True
             self.upload_zip_button.disabled = True
+            if not self.dataset_directory.value.strip():
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>Status:</strong> Select images/ZIP or create a folder to start uploading.</div>"
 
     def run_url_download(self, b):
         """Handle URL/ZIP download method"""
@@ -671,7 +833,6 @@ class DatasetWidget:
                 return
             
             # Sanitize project name
-            import re
             clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', project_name)
             if clean_name != project_name:
                 print(f"📝 Cleaned project name: '{project_name}' → '{clean_name}'")
@@ -680,7 +841,6 @@ class DatasetWidget:
             project_dir = f"datasets/{project_name}"
             
             # Create project directory
-            import os
             os.makedirs(project_dir, exist_ok=True)
             
             success = self.manager.extract_dataset(dataset_url, project_dir)
@@ -703,40 +863,50 @@ class DatasetWidget:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Download and extraction failed. Check logs.</div>"
 
     def run_create_folder(self, b):
-        """Create a new folder for image upload"""
+        """Create a new folder for image upload using Kohya's repeat count format"""
         self.dataset_output.clear_output()
         folder_name = self.folder_name.value.strip()
+        repeat_count = self.folder_repeats.value
         
         if not folder_name:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a folder name.</div>"
             return
         
         # Sanitize folder name
-        import re
-        import os
         clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', folder_name)
         if clean_name != folder_name:
             folder_name = clean_name
         
-        # Create folder in datasets directory
-        folder_path = f"datasets/{folder_name}"
+        # Create folder in Kohya's expected format: {repeat_count}_{folder_name}
+        kohya_folder_name = f"{repeat_count}_{folder_name}"
+        folder_path = f"datasets/{kohya_folder_name}"
         
         with self.dataset_output:
             try:
                 os.makedirs(folder_path, exist_ok=True)
-                print(f"✅ Created folder: {folder_path}")
+                print(f"✅ Created Kohya-compatible folder: {folder_path}")
+                print(f"📊 Repeat count: {repeat_count} (auto-detected by training)")
                 
                 # Update shared dataset directory
                 self.dataset_directory.value = folder_path
                 
-                # Enable upload button only if files are already selected
+                # Check if files are already selected and enable appropriate buttons
                 if self.file_upload.value:
-                    self.upload_images_button.disabled = False
                     file_count = len(self.file_upload.value)
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! {file_count} file(s) ready to upload.</div>"
+                    is_zip_selected = any(f['name'].endswith('.zip') for f in self.file_upload.value)
+                    
+                    # Enable the right button based on file type
+                    self.upload_images_button.disabled = is_zip_selected
+                    self.upload_zip_button.disabled = not is_zip_selected
+                    
+                    if is_zip_selected:
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! {file_count} file(s) ready to upload (ZIP detected).</div>"
+                    else:
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! {file_count} file(s) ready to upload.</div>"
                 else:
                     self.upload_images_button.disabled = True
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder created! Now select images to upload.</div>"
+                    self.upload_zip_button.disabled = True
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder '{folder_path}' created! Now select images/ZIP to upload.</div>"
                 
             except Exception as e:
                 print(f"❌ Failed to create folder: {e}")
@@ -760,7 +930,6 @@ class DatasetWidget:
         self.dataset_status.value = f"⚙️ Status: Uploading {len(uploaded_files)} images..."
         
         with self.dataset_output:
-            import os
             uploaded_count = 0
             total_size = 0
             
@@ -803,10 +972,8 @@ class DatasetWidget:
             if uploaded_count > 0:
                 self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
                 
-                # Clear the file upload widget for next use and force state refresh
+                # Clear the file upload widget for next use - don't force notify_change
                 self.file_upload.value = ()
-                # Trigger widget observers to properly clear internal state
-                self.file_upload.notify_change({'name': 'value', 'old': self.file_upload.value, 'new': (), 'type': 'change'})
             else:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
     
@@ -843,9 +1010,6 @@ class DatasetWidget:
         self.dataset_status.value = f"⚙️ Status: Uploading and extracting {zip_filename}..."
         
         with self.dataset_output:
-            import os
-            import zipfile
-            
             temp_zip_path = os.path.join(upload_folder, zip_filename)
             
             try:
@@ -872,9 +1036,8 @@ class DatasetWidget:
                     print(f"⚠️ Image counting error: {e}")
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}.</div>"
                 
-                # Clear the file upload widget for next use and force state refresh
+                # Clear the file upload widget for next use
                 self.file_upload.value = ()
-                self.file_upload.notify_change({'name': 'value', 'old': self.file_upload.value, 'new': ()})
                 self.upload_images_button.disabled = True
                 self.upload_zip_button.disabled = True
                 
@@ -887,89 +1050,164 @@ class DatasetWidget:
 
     def reset_upload_widget(self, b):
         """Reset the file upload widget to clear any cached state"""
+        # Clear the upload widget value
         self.file_upload.value = ()
-        self.file_upload.notify_change({'name': 'value', 'old': (), 'new': (), 'type': 'change'})
+        
+        # Reset button states
         self.upload_images_button.disabled = True
-        self.upload_zip_button.disabled = True # Disable zip upload button on reset
-        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔄 Status:</strong> Upload widget reset. Select new files to upload.</div>"
-        print("🔄 Upload widget cache cleared!")
+        self.upload_zip_button.disabled = True
+        
+        # Clear folder name if it was auto-suggested
+        if self.folder_name.value in ['uploaded_dataset'] or '_dataset' in self.folder_name.value:
+            self.folder_name.value = ""
+        
+        # Update status
+        if self.dataset_directory.value.strip():
+            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔄 Status:</strong> Upload reset. Folder '{self.dataset_directory.value}' ready for new files.</div>"
+        else:
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔄 Status:</strong> Upload reset. Create a folder and select files to upload.</div>"
+        
+        print("🔄 Upload widget reset! Ready for new file selection.")
 
-    def run_gelbooru_scraper(self, b):
-        """Handle Gelbooru image scraping"""
+    def auto_detect_existing_datasets(self):
+        """Auto-detect existing dataset directories and set the first one as default"""
+        
+        # Look for existing datasets directories
+        datasets_pattern = "datasets/*"
+        existing_dirs = [d for d in glob.glob(datasets_pattern) if os.path.isdir(d)]
+        
+        if existing_dirs:
+            # Sort by modification time (most recent first)
+            existing_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+            most_recent = existing_dirs[0]
+            
+            # Auto-populate if dataset directory is empty
+            if not self.dataset_directory.value.strip():
+                self.dataset_directory.value = most_recent
+                print(f"📁 Auto-detected existing dataset: {most_recent}")
+                
+                # Update status to show detection
+                self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔍 Status:</strong> Auto-detected dataset folder '{most_recent}'. Select files to upload here.</div>"
+
+    def launch_fiftyone_explorer(self, b):
+        """Launch FiftyOne dataset explorer in sidecar"""
+        dataset_path = self.dataset_directory.value
+        if not dataset_path or not os.path.exists(dataset_path):
+            print("❌ Please set up a dataset first")
+            return
+            
+        try:
+            # Assuming launch_dataset_explorer is in self.manager (DatasetManager)
+            session, duplicates, stats, quality_metrics, lora_views = self.manager.launch_dataset_explorer(dataset_path)
+            print("✅ FiftyOne dataset explorer launched in side panel")
+            print(f"📊 Dataset stats: {len(session.dataset)} images")
+            if duplicates is not None:
+                print(f"🔍 Found {len(duplicates.matches)} potential duplicates.")
+            if stats is not None:
+                print("🏷️ Top 10 Tags:")
+                for tag, count in sorted(stats.items(), key=lambda item: item[1], reverse=True)[:10]:
+                    print(f"   - {tag}: {count}")
+            if quality_metrics is not None:
+                print("🖼️ Image Quality Metrics:")
+                print(f"   - Min Resolution: {quality_metrics["min_resolution"]["width"]}x{quality_metrics["min_resolution"]["height"]}")
+                print(f"   - Max Resolution: {quality_metrics["max_resolution"]["width"]}x{quality_metrics["max_resolution"]["height"]}")
+                print(f"   - Average Aspect Ratio: {quality_metrics["avg_aspect_ratio"]:.2f}")
+                print(f"   - Common Formats: {quality_metrics["common_formats"]}")
+                print(f"   - Blurred Images (estimated): {quality_metrics["blurred_images"]}")
+            if lora_views is not None:
+                print("✨ LoRA-Specific Views available in FiftyOne:")
+                for view_name in lora_views.keys():
+                    print(f"   - {view_name}")
+        except Exception as e:
+            print(f"❌ Failed to launch FiftyOne: {e}")
+
+    def apply_fiftyone_curation(self, b):
+        """Apply changes made in FiftyOne back to the local dataset."""
+        dataset_path = self.dataset_directory.value
+        if not dataset_path or not os.path.exists(dataset_path):
+            print("❌ Please set up a dataset first")
+            return
+
+        print("💾 Applying FiftyOne curation changes to local dataset...")
+        try:
+            # This will call the new method in DatasetManager
+            success = self.manager.apply_curation_to_dataset(dataset_path)
+            if success:
+                print("✅ Curation changes applied successfully!")
+            else:
+                print("❌ Failed to apply curation changes.")
+        except Exception as e:
+            print(f"❌ Error applying curation: {e}")
+
+    def run_gallery_dl_scraper(self, b):
+        """Handle image scraping using gallery-dl"""
         self.dataset_output.clear_output()
-        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Preparing Gelbooru scraper...</div>"
+        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Preparing gallery-dl scrape...</div>"
         
         with self.dataset_output:
-            tags = self.gelbooru_tags.value.strip()
-            folder_name = self.gelbooru_folder.value.strip()
-            limit = self.gelbooru_limit.value
-            
-            if not tags:
-                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter Gelbooru tags.</div>"
-                print("❌ Please enter tags to search for on Gelbooru.")
+            site = self.gallery_dl_site.value
+            tags = self.gallery_dl_tags.value.strip()
+            limit_range = self.gallery_dl_limit_range.value.strip()
+            custom_url = self.gallery_dl_custom_url.value.strip()
+            sub_folder = self.gallery_dl_sub_folder.value.strip()
+            additional_args = self.gallery_dl_additional_args.value.strip()
+            write_tags = self.gallery_dl_write_tags.value
+            use_aria2c = self.gallery_dl_use_aria2c.value
+
+            # Determine the final dataset directory
+            # Use the folder_name and repeat_count from the direct upload section
+            # This ensures Kohya-compatible folder naming for scraped datasets
+            folder_name_base = self.folder_name.value.strip() if self.folder_name.value.strip() else "scraped_dataset"
+            repeat_count = self.folder_repeats.value
+            kohya_folder_name = f"{repeat_count}_{folder_name_base}"
+            dataset_dir = f"datasets/{kohya_folder_name}"
+
+            # If custom URL is selected, ensure it's provided
+            if site == 'custom' and not custom_url:
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please provide a Custom URL when 'Custom URL' site is selected.</div>"
+                print("❌ Please provide a Custom URL when 'Custom URL' site is selected.")
                 return
-                
-            if not folder_name:
-                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a folder name.</div>"
-                print("❌ Please enter a folder name.")
+
+            if not tags and not custom_url:
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter tags or a Custom URL.</div>"
+                print("❌ Please enter tags or a Custom URL.")
                 return
-            
-            # Sanitize folder name
-            import re
-            import os
-            clean_name = re.sub(r'[^a-zA-Z0-9_-]', '_', folder_name)
-            if clean_name != folder_name:
-                print(f"📝 Cleaned folder name: '{folder_name}' → '{clean_name}'")
-                folder_name = clean_name
-            
-            # Create folder in datasets directory
-            dataset_dir = f"datasets/{folder_name}"
-            
-            # Ask for user confirmation
-            def confirm_download():
-                print(f"\n🔍 About to search Gelbooru for: {tags}")
-                print(f"📁 Images will be saved to: {dataset_dir}")
-                print(f"📊 Maximum images: {limit}")
-                print(f"\n⚠️ This will download images from the internet.")
-                
-                # For now, we'll proceed automatically in the widget
-                # In a real implementation, you might want a confirmation dialog
-                return True
-            
+
             try:
                 os.makedirs(dataset_dir, exist_ok=True)
+                self.dataset_directory.value = dataset_dir # Update shared dataset directory
                 
-                # Update shared dataset directory immediately
-                self.dataset_directory.value = dataset_dir
+                self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Scraping with gallery-dl...</div>"
                 
-                self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Scraping Gelbooru... ({limit} max images)</div>"
-                
-                # Run the scraper
-                success = self.manager.scrape_from_gelbooru(
+                success = self.manager.scrape_with_gallery_dl(
+                    site=site,
                     tags=tags,
                     dataset_dir=dataset_dir,
-                    limit=limit,
-                    confirm_callback=confirm_download
+                    limit_range=limit_range,
+                    write_tags=write_tags,
+                    use_aria2c=use_aria2c,
+                    custom_url=custom_url,
+                    sub_folder=sub_folder,
+                    additional_args=additional_args
                 )
                 
                 if success:
-                    # Count images after download
                     try:
                         from core.image_utils import count_images_in_directory
                         image_count = count_images_in_directory(dataset_dir)
                         print(f"\n📁 Total images in dataset: {image_count}")
                         print(f"📝 Dataset directory set: {dataset_dir}")
                         
-                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Downloaded {image_count} images from Gelbooru</div>"
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Scrape complete. Found {image_count} images.</div>"
                     except Exception as e:
                         print(f"⚠️ Image counting error: {e}")
-                        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Gelbooru scraping complete.</div>"
+                        self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Scrape complete.</div>"
                 else:
-                    self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Gelbooru scraping failed. Check logs.</div>"
+                    self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Gallery-DL scrape failed. Check logs.</div>"
                     
             except Exception as e:
-                print(f"❌ Failed to create dataset directory: {e}")
-                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create dataset directory.</div>"
+                print(f"❌ Failed to run gallery-dl scraper: {e}")
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Scraper encountered an error.</div>"}
 
     def run_tagging(self, b):
         self.tagging_output.clear_output()
@@ -1011,9 +1249,6 @@ class DatasetWidget:
                 return
                 
             print(f"🧩 Cleaning dataset: {dataset_dir}")
-            
-            import os
-            import glob
             
             if not os.path.exists(dataset_dir):
                 self.cleanup_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Dataset directory does not exist.</div>"
@@ -1377,6 +1612,41 @@ class DatasetWidget:
                 print(f"💥 Unexpected error during upload: {str(e)}")
                 print("💡 Please check your token permissions and try again.")
     
+    def run_resize_images(self, b):
+        """Resizes images in the current dataset directory."""
+        self.image_utils_output.clear_output()
+        dataset_path = self.dataset_directory.value.strip()
+        
+        selected_resolution = self.resize_resolution_selector.value
+        if selected_resolution == 'custom':
+            target_resolution = self.custom_resize_resolution.value
+        else:
+            target_resolution = selected_resolution
+
+        quality = self.resize_quality.value
+
+        if not dataset_path:
+            self.image_utils_output.append_stdout("❌ Please set up a dataset directory first.\n")
+            return
+
+        if not os.path.exists(dataset_path):
+            self.image_utils_output.append_stdout(f"❌ Dataset directory not found: {dataset_path}\n")
+            return
+
+        if not isinstance(target_resolution, int) or target_resolution <= 0:
+            self.image_utils_output.append_stdout("❌ Please enter a valid positive integer for resolution.\n")
+            return
+
+        self.image_utils_output.append_stdout(f"📏 Starting image resizing for {dataset_path} to {target_resolution}x{target_resolution}...\n")
+        try:
+            success = self.manager.resize_images_in_dataset(dataset_path, target_resolution, quality)
+            if success:
+                self.image_utils_output.append_stdout("✅ Image resizing complete.\n")
+            else:
+                self.image_utils_output.append_stdout("❌ Image resizing failed. Check logs.\n")
+        except Exception as e:
+            self.image_utils_output.append_stdout(f"❌ An error occurred during image resizing: {e}\n")
+
     def run_review_tags(self, b):
         """Display the generated tags for review"""
         self.caption_output.clear_output()

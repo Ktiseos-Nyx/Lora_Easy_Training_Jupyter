@@ -1,3 +1,6 @@
+# Deprecated/archived code - do not use
+archive/
+
 # macOS (comprehensive - all directories)
 **/.DS_Store
 **/.DS_Store?
@@ -57,6 +60,9 @@ venv.bak/
 # Development documentation (private)
 docs/development/
 
+# Gemini research (private)
+docs/research/
+
 # Work-in-progress documentation (private)
 wip_documentation/
 
@@ -98,6 +104,7 @@ config.json
 secrets.json
 api_keys.txt
 hf_token.txt
+GEMINI.md
 
 # Claude Code project instructions (private)
 CLAUDE.md

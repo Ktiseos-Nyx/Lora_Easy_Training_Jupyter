@@ -115,7 +115,7 @@ class SetupWidget:
         # Lambda Labs Detection (Cloud GPU instances)
         lambda_indicators = [
             'lambda' in os.environ.get('HOSTNAME', '').lower(),
-            os.path.exists('/home/ubuntu/lambda'),
+            os.path.exists(os.path.expanduser('~/lambda')),
             os.environ.get('LAMBDA_INSTANCE_TYPE')
         ]
         if any(lambda_indicators):
@@ -129,8 +129,8 @@ class SetupWidget:
             os.environ.get('SM_MODEL_DIR'),
             os.environ.get('SM_CHANNELS'),
             os.environ.get('SAGEMAKER_JOB_NAME'),
-            '/opt/ml' in os.getcwd(),
-            os.path.exists('/opt/ml/code'),
+            os.path.join(os.sep, 'opt', 'ml') in os.getcwd(),
+            os.path.exists(os.path.join(os.sep, 'opt', 'ml', 'code')),
             'sagemaker' in os.environ.get('HOSTNAME', '').lower()
         ]
         if any(sagemaker_indicators):
@@ -492,7 +492,9 @@ class SetupWidget:
             
             # Check required commands
             print("\n🔧 Checking required commands...")
-            required_commands = ['git', 'aria2c', 'python3', 'pip', 'curl', 'wget']
+            # Detect current Python command instead of hardcoding python3
+            python_cmd = sys.executable.split(os.sep)[-1]  # Extract just the command name
+            required_commands = ['git', 'aria2c', python_cmd, 'pip', 'curl', 'wget']
             missing = []
             
             for cmd in required_commands:
@@ -602,7 +604,7 @@ class SetupWidget:
             
             for url in test_urls:
                 try:
-                    result = subprocess.run(['curl', '-s', '-o', '/dev/null', '-w', '%{http_code}', 
+                    result = subprocess.run(['curl', '-s', '-o', os.devnull, '-w', '%{http_code}', 
                                            '--connect-timeout', '5', url], 
                                           capture_output=True, text=True, timeout=10)
                     if result.returncode == 0 and result.stdout.strip() == '200':

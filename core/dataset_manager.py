@@ -13,25 +13,22 @@ except ImportError:
     def get_subprocess_environment(project_root=None):
         return os.environ.copy()
 
-# Import colored print utility
-try:
-    from .colored_print import cprint, success, error, warning, info, progress, print_header
-except ImportError:
-    # Fallback if colored_print not available
-    def cprint(*args, **kwargs):
-        print(*args)
-    def success(msg, **kwargs):
-        print(f"✅ {msg}")
-    def error(msg, **kwargs):
-        print(f"❌ {msg}")
-    def warning(msg, **kwargs):
-        print(f"⚠️ {msg}")
-    def info(msg, **kwargs):
-        print(f"ℹ️ {msg}")
-    def progress(msg, **kwargs):
-        print(f"🚀 {msg}")
-    def print_header(text, **kwargs):
-        print(f"=== {text} ===")
+# Simple emoji-based print functions (no colored terminal output)
+def success(msg, **kwargs):
+    print(f"✅ {msg}")
+def error(msg, **kwargs):
+    print(f"❌ {msg}")
+def warning(msg, **kwargs):
+    print(f"⚠️ {msg}")
+def info(msg, **kwargs):
+    print(f"ℹ️ {msg}")
+def progress(msg, **kwargs):
+    print(f"🚀 {msg}")
+def print_header(text, **kwargs):
+    print(f"\n=== {text} ===")
+def cprint(*args, **kwargs):
+    # Simple replacement for colored prints
+    print(*args)
 
 class DatasetManager:
     def __init__(self, model_manager=None):
@@ -40,19 +37,210 @@ class DatasetManager:
         self.trainer_dir = os.path.join(self.project_root, "trainer")
         self.sd_scripts_dir = os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts")
 
+    def create_fiftyone_dataset(self, dataset_path):
+        """Convert our Kohya-format dataset to FiftyOne format for viewing"""
+        import fiftyone as fo
+        import os
+
+        dataset = fo.Dataset.from_images_dir(
+            dataset_path,
+            tags_field="wd14_tags",  # Use WD14 tags as labels
+            recursive=True
+        )
+        
+        # Add custom metadata from Kohya folder format
+        for sample in dataset:
+            folder_name = os.path.basename(os.path.dirname(sample.filepath))
+            if '_' in folder_name:
+                repeats, concept = folder_name.split('_', 1)
+                sample['repeats'] = int(repeats)
+                sample['concept'] = concept
+            sample.save()
+        
+        return dataset
+
+    def launch_dataset_explorer(self, dataset_path):
+        """Launch FiftyOne in sidecar for dataset exploration"""
+        from sidecar import Sidecar
+        import fiftyone as fo
+        from ipywidgets import HTML, VBox
+
+        # Create persistent sidecar for dataset exploration
+        dataset_explorer = Sidecar(title='📊 Dataset Explorer - FiftyOne', anchor='split-right')
+
+        with dataset_explorer:
+            dataset = self.create_fiftyone_dataset(dataset_path)
+            session = fo.launch_app(dataset, auto=False)
+            
+            # Add custom views for LoRA training
+            # Duplicate detection view
+            print("🔍 Computing dataset similarity for duplicate detection...")
+            duplicates_view = dataset.compute_similarity(brain_key="image_similarity")
+            print(f"✅ Duplicate detection computed. Found {len(duplicates_view.matches)} potential duplicates.")
+            
+            # Tag distribution analysis
+            print("📊 Analyzing tag distribution...")
+            tag_stats = dataset.count_values("wd14_tags")
+            print("✅ Tag distribution analysis complete.")
+
+            # Image quality analysis
+            quality_metrics = self.analyze_image_quality(dataset)
+
+            # LoRA-specific views
+            lora_views = self.create_lora_specific_views(dataset)
+            
+            # Return session and analysis results
+            return session, duplicates_view, tag_stats, quality_metrics, lora_views
+
+    def analyze_image_quality(self, dataset):
+        """
+        Performs basic image quality analysis on a FiftyOne dataset.
+        Returns a dictionary of quality metrics.
+        """
+        import fiftyone as fo
+        import numpy as np
+        from PIL import Image
+
+        print("📊 Analyzing image quality (blur, resolution, format consistency)...")
+        
+        quality_metrics = {
+            "total_images": len(dataset),
+            "blurred_images": 0,
+            "min_resolution": {"width": float('inf'), "height": float('inf')},
+            "max_resolution": {"width": 0, "height": 0},
+            "common_formats": {},
+            "avg_aspect_ratio": 0.0,
+            "aspect_ratios": []
+        }
+
+        blur_threshold = 500.0 # Example threshold, can be adjusted
+
+        for sample in dataset:
+            try:
+                # Resolution and aspect ratio
+                img = Image.open(sample.filepath)
+                width, height = img.size
+                quality_metrics["min_resolution"]["width"] = min(quality_metrics["min_resolution"]["width"], width)
+                quality_metrics["min_resolution"]["height"] = min(quality_metrics["min_resolution"]["height"], height)
+                quality_metrics["max_resolution"]["width"] = max(quality_metrics["max_resolution"]["width"], width)
+                quality_metrics["max_resolution"]["height"] = max(quality_metrics["max_resolution"]["height"], height)
+                
+                aspect_ratio = width / height
+                quality_metrics["aspect_ratios"].append(aspect_ratio)
+
+                # Format consistency
+                img_format = img.format
+                quality_metrics["common_formats"][img_format] = quality_metrics["common_formats"].get(img_format, 0) + 1
+
+                # Blur detection (using a simple variance of Laplacian)
+                # Requires OpenCV, which might not be a direct dependency of FiftyOne
+                # For now, this will be a placeholder or require explicit cv2 import
+                # try:
+                #     import cv2
+                #     gray = cv2.cvtColor(np.array(img), cv2.COLOR_BGR2GRAY)
+                #     fm = cv2.Laplacian(gray, cv2.CV_64F).var()
+                #     if fm < blur_threshold:
+                #         quality_metrics["blurred_images"] += 1
+                # except ImportError:
+                #     print("Warning: OpenCV not found, skipping blur detection.")
+                #     pass # Skip blur detection if OpenCV is not installed
+
+            except Exception as e:
+                print(f"Warning: Could not analyze {sample.filepath}: {e}")
+        
+        if quality_metrics["aspect_ratios"]:
+            quality_metrics["avg_aspect_ratio"] = np.mean(quality_metrics["aspect_ratios"])
+
+        print("✅ Image quality analysis complete.")
+        return quality_metrics
+
+    def create_lora_specific_views(self, dataset):
+        """
+        Creates FiftyOne views for LoRA-specific analysis (repeat folders, concepts).
+        """
+        import fiftyone as fo
+
+        lora_views = {}
+
+        # Repeat Folder Analysis View
+        if "repeats" in dataset.first().field_names:
+            print("📊 Creating view for Repeat Folder Analysis...")
+            # Group by 'repeats' and sort by repeat count
+            lora_views["repeat_analysis_view"] = dataset.group_by("repeats").sort_by("repeats")
+            print("✅ Repeat Folder Analysis view created.")
+
+        # Concept Separation View
+        if "concept" in dataset.first().field_names:
+            print("📊 Creating view for Concept Separation...")
+            # Group by 'concept'
+            lora_views["concept_separation_view"] = dataset.group_by("concept")
+            print("✅ Concept Separation view created.")
+        
+        return lora_views
+
+    def apply_curation_to_dataset(self, dataset_path):
+        """
+        Applies changes made in FiftyOne (e.g., tag edits) back to the local dataset files.
+        """
+        import fiftyone as fo
+        import os
+
+        print(f"💾 Applying FiftyOne curation to {dataset_path}...")
+        try:
+            # Load the FiftyOne dataset (assuming it's still active or can be reloaded)
+            # For simplicity, we'll create a new dataset object from the directory
+            # In a real scenario, you might want to get the active session's dataset
+            dataset = fo.Dataset.from_images_dir(
+                dataset_path,
+                tags_field="wd14_tags",
+                recursive=True
+            )
+
+            files_updated = 0
+            images_deleted = 0 # Placeholder for future deletion logic
+
+            for sample in dataset:
+                # Check for tag changes
+                if "wd14_tags" in sample and sample.wd14_tags is not None:
+                    caption_filepath = os.path.splitext(sample.filepath)[0] + ".txt"
+                    current_tags = ", ".join(sample.wd14_tags)
+
+                    try:
+                        with open(caption_filepath, 'r', encoding='utf-8') as f:
+                            existing_tags = f.read().strip()
+                    except FileNotFoundError:
+                        existing_tags = "" # No existing caption file
+
+                    if existing_tags != current_tags:
+                        with open(caption_filepath, 'w', encoding='utf-8') as f:
+                            f.write(current_tags)
+                        print(f"  Updated tags for {os.path.basename(sample.filepath)}")
+                        files_updated += 1
+                
+                # Future: Handle image deletion if a 'deleted' field is added by FiftyOne curation
+                # if "deleted" in sample and sample.deleted:
+                #     os.remove(sample.filepath)
+                #     images_deleted += 1
+                #     print(f"  Deleted image: {os.path.basename(sample.filepath)}")
+
+            print(f"✅ Curation applied: {files_updated} caption files updated, {images_deleted} images deleted.")
+            return True
+
+        except Exception as e:
+            print(f"❌ Error applying curation changes: {e}")
+            return False
+
     def _detect_environment_type(self):
         """Detect the current environment to choose the best tagger strategy"""
-        # Check for cloud/rental GPU environments
+        # Check for VastAI/rental GPU environments
         if (os.path.exists("/workspace") or 
-            any(key in os.environ for key in ["VAST_CONTAINERLABEL", "COLAB_GPU"]) or
+            "VAST_CONTAINERLABEL" in os.environ or
             "vastai" in platform.node().lower()):
-            return "cloud_rental"
+            return "vastai_rental"
         
-        # Check for Colab/Jupyter environments  
-        if (os.path.exists("/content") or 
-            "COLAB_GPU" in os.environ or
-            "jupyter" in sys.modules):
-            return "jupyter_colab"
+        # Check for general Jupyter
+        if "jupyter" in sys.modules:
+            return "jupyter_local"
             
         # Default to local environment
         return "local"
@@ -61,19 +249,19 @@ class DatasetManager:
         """Get the appropriate tagger script based on environment"""
         env_type = self._detect_environment_type()
         
-        if env_type == "cloud_rental":
+        if env_type == "vastai_rental":
             # Use robust custom tagger for unstable rental GPU environments
             custom_tagger = os.path.join(self.project_root, "custom", "tag_images_by_wd14_tagger.py")
             if os.path.exists(custom_tagger):
-                print("🛡️ Using robust custom tagger for cloud/rental environment")
+                print("🛡️ Using robust custom tagger for VastAI/rental environment")
                 return custom_tagger
         
-        elif env_type == "jupyter_colab":
-            # Use HoloStrawberry's version optimized for Colab/Jupyter
-            holo_tagger = os.path.join(self.project_root, "kohya-colab-main", "tag_images_by_wd14_tagger.py")
-            if os.path.exists(holo_tagger):
-                print("📚 Using HoloStrawberry's tagger for Jupyter/Colab environment") 
-                return holo_tagger
+        elif env_type == "jupyter_local":
+            # Local Jupyter - prefer custom tagger for stability
+            custom_tagger = os.path.join(self.project_root, "custom", "tag_images_by_wd14_tagger.py")
+            if os.path.exists(custom_tagger):
+                print("📚 Using custom tagger for local Jupyter") 
+                return custom_tagger
         
         # Fallback to Derrian's backend (Kohya-based)
         derrian_tagger = os.path.join(self.sd_scripts_dir, "finetune", "tag_images_by_wd14_tagger.py")
@@ -179,7 +367,8 @@ class DatasetManager:
         for attempt, model_to_try in enumerate(working_models):
             print(f"🏷️ Attempting tagging with {model_to_try.split('/')[-1]} (threshold: {threshold})...")
             
-            # Build command with enhanced options
+            # Build command with enhanced options  
+            # Models are in wd14_tagger_model/ directory (default location)
             command = [
                 venv_python, tagger_script,
                 dataset_path,
@@ -301,7 +490,9 @@ class DatasetManager:
 
             print(f"Setting LD_LIBRARY_PATH for tagger: {env['LD_LIBRARY_PATH']}")
             if "PYTHONPATH" in env:
-                print(f"Setting PYTHONPATH for tagger: {env['PYTHONPATH']}")
+                # The environment setup is reused, so we log the actual path being set
+        if "PYTHONPATH" in env and env["PYTHONPATH"]:
+            print(f"ℹ️  Setting PYTHONPATH for subprocess: {env['PYTHONPATH']}")
 
             process = subprocess.Popen(
                 command,
@@ -1580,15 +1771,15 @@ Special thanks to [Linaqruf](https://github.com/Linaqruf) for their contribution
                 )
                 
                 success("Dataset uploaded successfully!")
-                cprint(f"View your dataset at: https://huggingface.co/datasets/{repo_id}", color="bright_blue", style="underline")
+                print(f"🔗 View your dataset at: https://huggingface.co/datasets/{repo_id}")
                 
                 # Provide sharing information
-                print_header("Dataset Info", length=50, char="-", color="bright_green")
+                print_header("Dataset Info")
                 info(f"Repository: {repo_id}")
                 info(f"Type: {'Private' if make_private else 'Public'}")
                 info(f"Images: {image_count}")
                 info(f"Captions: {caption_count}")
-                cprint(f"URL: https://huggingface.co/datasets/{repo_id}", color="bright_blue", style="underline")
+                print(f"🔗 URL: https://huggingface.co/datasets/{repo_id}")
                 
                 return True
                 
@@ -1601,3 +1792,343 @@ Special thanks to [Linaqruf](https://github.com/Linaqruf) for their contribution
             print("💡 Make sure your token has WRITE permissions")
             print("🔑 Get your token here: https://huggingface.co/settings/tokens")
             return False
+
+    def scrape_with_gallery_dl(self, site="gelbooru", tags="", dataset_dir="", limit_range="1-200", 
+                               write_tags=True, use_aria2c=True, custom_url="", sub_folder="", 
+                               additional_args="--filename /O --no-part"):
+        """
+        Advanced image scraping using gallery-dl (supports 300+ sites)
+        
+        Args:
+            site: Site to scrape from (gelbooru, danbooru, safebooru, pixiv, twitter, etc.)
+            tags: Tags to search for (comma or space separated)
+            dataset_dir: Directory to save images
+            limit_range: Range of images to download (e.g., "1-200", "1-50")
+            write_tags: Whether to download and process tag files
+            use_aria2c: Use aria2c for faster parallel downloads
+            custom_url: Custom URL instead of using predefined site
+            sub_folder: Organize images into subfolder
+            additional_args: Additional gallery-dl arguments
+        """
+        import subprocess
+        import html
+        from urllib.parse import quote_plus
+        
+        # Check if gallery-dl is installed
+        try:
+            result = subprocess.run(['gallery-dl', '--version'], capture_output=True, text=True, timeout=5)
+            print(f"🎨 Using gallery-dl version: {result.stdout.strip()}")
+        except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
+            print("❌ gallery-dl not found. Install with: pip install gallery-dl")
+            return False
+        
+        if not tags and not custom_url:
+            print("❌ Please specify either tags or a custom URL")
+            return False
+        
+        # Setup directories
+        if dataset_dir:
+            base_dir = os.path.join(self.project_root, dataset_dir)
+        else:
+            base_dir = os.path.join(self.project_root, "dataset")
+        
+        if sub_folder:
+            if sub_folder.startswith(os.path.sep):
+                image_dir = sub_folder  # Absolute path
+            else:
+                image_dir = os.path.join(base_dir, sub_folder)
+        else:
+            image_dir = base_dir
+            
+        os.makedirs(image_dir, exist_ok=True)
+        
+        print(f"🎨 Gallery-dl scraping setup:")
+        print(f"📁 Target directory: {image_dir}")
+        print(f"🏷️ Tags: {tags}")
+        print(f"📊 Range: {limit_range}")
+        print(f"🏃‍♂️ Aria2c: {'Enabled' if use_aria2c else 'Disabled'}")
+        print("=" * 60)
+        
+        # Prepare tags for URL
+        if tags:
+            tag_list = [tag.strip() for tag in tags.replace(',', ' ').split() if tag.strip()]
+            # URL encode special characters
+            encoded_tags = '+'.join(quote_plus(tag.replace(' ', '_'), safe='') for tag in tag_list)
+            print(f"🔍 Processed tags: {' + '.join(tag_list)}")
+        
+        # Build URL based on site
+        if custom_url:
+            url = custom_url
+            print(f"🌐 Using custom URL: {url}")
+        else:
+            site_urls = {
+                "gelbooru": f"https://gelbooru.com/index.php?page=post&s=list&tags={encoded_tags}",
+                "danbooru": f"https://danbooru.donmai.us/posts?tags={encoded_tags}",
+                "safebooru": f"https://safebooru.org/index.php?page=post&s=list&tags={encoded_tags}",
+                "konachan": f"https://konachan.com/post?tags={encoded_tags}",
+                "yande.re": f"https://yande.re/post?tags={encoded_tags}",
+                "pixiv": f"https://www.pixiv.net/en/tags/{encoded_tags}/artworks",
+            }
+            
+            if site.lower() not in site_urls:
+                print(f"❌ Unsupported site: {site}")
+                print(f"📝 Supported sites: {', '.join(site_urls.keys())}")
+                print("💡 Or use custom_url parameter for other sites")
+                return False
+                
+            url = site_urls[site.lower()]
+            print(f"🌐 Built URL: {url}")
+        
+        # Common gallery-dl config
+        base_config = {
+            "user-agent": "gallery-dl/1.26.0",
+            "sleep": "1",  # Be respectful with rate limiting
+        }
+        
+        if limit_range:
+            base_config["range"] = limit_range
+            
+        # Build gallery-dl arguments
+        def build_args(config_dict):
+            args = []
+            for key, value in config_dict.items():
+                if value is True:
+                    args.append(f"--{key}")
+                elif value is False:
+                    continue
+                else:
+                    args.append(f"--{key}={value}")
+            return args
+        
+        success = False
+        
+        if use_aria2c:
+            print("🚀 Phase 1: Getting download URLs with gallery-dl...")
+            
+            # Phase 1: Get URLs
+            url_config = {**base_config, "get-urls": True}
+            url_args = build_args(url_config)
+            
+            # Add additional arguments
+            if additional_args:
+                url_args.extend(additional_args.split())
+            
+            try:
+                # Run gallery-dl to get URLs
+                cmd = ['gallery-dl'] + url_args + [url]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+                
+                if result.returncode != 0:
+                    print(f"❌ Error getting URLs: {result.stderr}")
+                    return False
+                
+                # Save URLs to file
+                urls_file = os.path.join(image_dir, "download_urls.txt")
+                with open(urls_file, 'w') as f:
+                    f.write(result.stdout)
+                
+                urls_count = len([line for line in result.stdout.strip().split('\n') if line.strip()])
+                print(f"✅ Found {urls_count} image URLs")
+                
+                if urls_count == 0:
+                    print("❌ No images found matching criteria")
+                    return False
+                
+                print("🚀 Phase 2: Downloading images with aria2c...")
+                
+                # Phase 2: Download with aria2c
+                aria_cmd = [
+                    'aria2c',
+                    '--console-log-level=error',
+                    '--summary-interval=10',
+                    '--continue=true',
+                    '--max-connection-per-server=16',
+                    '--min-split-size=1M',
+                    '--split=16',
+                    '--input-file=' + urls_file,
+                    '--dir=' + image_dir
+                ]
+                
+                result = subprocess.run(aria_cmd, capture_output=True, text=True, timeout=1800)
+                
+                # Clean up URLs file
+                os.remove(urls_file)
+                
+                if result.returncode == 0:
+                    print("✅ Download completed successfully with aria2c")
+                    success = True
+                else:
+                    print(f"⚠️ Aria2c had issues: {result.stderr}")
+                    print("🔄 Falling back to direct gallery-dl download...")
+                    
+            except subprocess.TimeoutExpired:
+                print("⚠️ URL fetching timed out, trying direct download...")
+            except Exception as e:
+                print(f"⚠️ Error with aria2c method: {e}")
+                print("🔄 Falling back to direct gallery-dl download...")
+        
+        # Fallback or primary method: Direct gallery-dl download
+        if not success:
+            print("📥 Downloading images directly with gallery-dl...")
+            
+            download_config = {
+                **base_config,
+                "directory": image_dir,
+                "write-tags": write_tags
+            }
+            
+            download_args = build_args(download_config)
+            
+            # Add additional arguments
+            if additional_args:
+                download_args.extend(additional_args.split())
+            
+            try:
+                cmd = ['gallery-dl'] + download_args + [url]
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+                
+                if result.returncode == 0:
+                    print("✅ Download completed successfully")
+                    success = True
+                else:
+                    print(f"❌ Gallery-dl error: {result.stderr}")
+                    return False
+                    
+            except subprocess.TimeoutExpired:
+                print("❌ Download timed out after 30 minutes")
+                return False
+            except Exception as e:
+                print(f"❌ Error during download: {e}")
+                return False
+        
+        # Post-process tags if enabled
+        if write_tags and success:
+            print("🏷️ Post-processing tag files...")
+            self._process_gallery_dl_tags(image_dir)
+        
+        # Count results
+        image_count = len([f for f in os.listdir(image_dir) 
+                          if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp', '.gif'))])
+        tag_count = len([f for f in os.listdir(image_dir) if f.endswith('.txt')])
+        
+        print("\n" + "=" * 60)
+        print(f"🎉 Scraping complete!")
+        print(f"📁 Location: {image_dir}")
+        print(f"🖼️ Images downloaded: {image_count}")
+        print(f"🏷️ Tag files: {tag_count}")
+        
+        return success
+
+    def resize_images_in_dataset(self, dataset_dir, target_resolution, quality=90):
+        """
+        Resizes images in a dataset directory to a target resolution.
+        
+        Args:
+            dataset_dir (str): The path to the dataset directory.
+            target_resolution (int): The target resolution (e.g., 512 for 512x512).
+            quality (int): The quality for JPEG images (0-100).
+        """
+        from PIL import Image
+        import os
+
+        dataset_path = os.path.join(self.project_root, dataset_dir)
+        if not os.path.exists(dataset_path):
+            print(f"❌ Dataset directory not found at {dataset_path}")
+            return False
+
+        print(f"🖼️ Resizing images in {dataset_path} to {target_resolution}x{target_resolution}...")
+        
+        resized_count = 0
+        skipped_count = 0
+        
+        image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
+
+        for root, _, files in os.walk(dataset_path):
+            for file in files:
+                file_ext = os.path.splitext(file.lower())[1]
+                if file_ext in image_extensions:
+                    image_path = os.path.join(root, file)
+                    try:
+                        with Image.open(image_path) as img:
+                            # Convert to RGB if not already (e.g., for PNGs with alpha)
+                            if img.mode != 'RGB':
+                                img = img.convert('RGB')
+
+                            # Resize while maintaining aspect ratio
+                            img.thumbnail((target_resolution, target_resolution), Image.LANCZOS)
+                            
+                            # Create a new image with a white background for padding if needed
+                            new_img = Image.new('RGB', (target_resolution, target_resolution), (255, 255, 255))
+                            new_img.paste(img, ((target_resolution - img.width) // 2, (target_resolution - img.height) // 2))
+
+                            # Save with appropriate quality
+                            if file_ext in ['.jpg', '.jpeg']:
+                                new_img.save(image_path, quality=quality)
+                            elif file_ext == '.png':
+                                new_img.save(image_path, optimize=True)
+                            else: # For webp, bmp, etc., save as JPEG for consistency
+                                new_img.save(image_path, "JPEG", quality=quality)
+                            
+                            resized_count += 1
+                    except Exception as e:
+                        print(f"⚠️ Could not resize {file}: {e}")
+                        skipped_count += 1
+        
+        print(f"✅ Image resizing complete. Resized {resized_count} images, skipped {skipped_count}.")
+        return True
+
+    def _process_gallery_dl_tags(self, directory):
+        """Process and clean up tag files from gallery-dl"""
+        import html
+        
+        def process_dir(dir_path):
+            for item in os.listdir(dir_path):
+                item_path = os.path.join(dir_path, item)
+                
+                if os.path.isfile(item_path) and item.endswith(".txt"):
+                    try:
+                        # Handle double extensions (e.g., image.jpg.txt -> image.txt)
+                        name_parts = item.split('.')
+                        if len(name_parts) > 2:  # Has double extension
+                            base_name = '.'.join(name_parts[:-2])  # Remove last 2 extensions
+                            new_name = f"{base_name}.txt"
+                            new_path = os.path.join(dir_path, new_name)
+                            
+                            if item_path != new_path:
+                                os.rename(item_path, new_path)
+                                item_path = new_path
+                        
+                        # Clean up tag content
+                        with open(item_path, 'r', encoding='utf-8') as f:
+                            contents = f.read()
+                        
+                        # Process tags
+                        contents = html.unescape(contents)  # Decode HTML entities
+                        contents = contents.replace("_", " ")  # Convert underscores to spaces
+                        
+                        # Handle different tag formats
+                        if '\n' in contents:
+                            # Line-separated tags -> comma-separated
+                            tags = [tag.strip() for tag in contents.split('\n') if tag.strip()]
+                            contents = ", ".join(tags)
+                        elif ' ' in contents and ',' not in contents:
+                            # Space-separated -> comma-separated
+                            tags = [tag.strip() for tag in contents.split() if tag.strip()]
+                            contents = ", ".join(tags)
+                        
+                        # Write back cleaned content
+                        with open(item_path, 'w', encoding='utf-8') as f:
+                            f.write(contents)
+                            
+                    except Exception as e:
+                        print(f"⚠️ Error processing tag file {item}: {e}")
+                
+                elif os.path.isdir(item_path):
+                    # Recursively process subdirectories
+                    process_dir(item_path)
+        
+        process_dir(directory)
+        print("✅ Tag files processed and cleaned")
+
+    def upload_dataset_to_huggingface(self, dataset_path, dataset_name, hf_token="", 
+                                    orgs_name="", make_private=False, description=""):

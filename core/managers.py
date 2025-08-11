@@ -8,14 +8,81 @@ import toml
 import shutil
 from huggingface_hub import HfApi, login
 
-def get_venv_python_path(base_dir):
-    """Get cross-platform virtual environment Python path"""
+def detect_python_environment():
+    """Detect what type of Python environment we're running in"""
+    current_python = sys.executable
+    
+    # Check for conda
+    if 'conda' in current_python.lower() or 'anaconda' in current_python.lower():
+        return 'conda'
+    
+    # Check for virtual environment
+    if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+        if 'venv' in current_python:
+            return 'venv'
+        elif 'env' in current_python:
+            return 'virtualenv'
+        else:
+            return 'virtual_env'  # Generic virtual environment
+    
+    # Check for pyenv
+    if 'pyenv' in current_python:
+        return 'pyenv'
+    
+    # Check for system install locations
     if sys.platform == "win32":
-        # Windows: venv/Scripts/python.exe
-        return os.path.join(base_dir, "venv", "Scripts", "python.exe")
+        if 'Program Files' in current_python or 'AppData' in current_python:
+            return 'system'
     else:
-        # Unix/Linux/Mac: venv/bin/python
-        return os.path.join(base_dir, "venv", "bin", "python")
+        if current_python.startswith(('/usr/bin', '/usr/local/bin', '/bin')):
+            return 'system'
+    
+    return 'unknown'
+
+def get_venv_python_path(base_dir):
+    """Get cross-platform virtual environment Python path with flexible detection"""
+    
+    # Try multiple common environment structures in order of preference
+    python_candidates = []
+    
+    if sys.platform == "win32":
+        # Windows environments
+        python_candidates = [
+            os.path.join(base_dir, "venv", "Scripts", "python.exe"),  # Standard venv
+            os.path.join(base_dir, "env", "Scripts", "python.exe"),   # Alternative venv name
+            os.path.join(base_dir, ".venv", "Scripts", "python.exe"), # Hidden venv
+            os.path.join(base_dir, "conda", "python.exe"),            # Conda in subdir
+            os.path.join(base_dir, "python.exe"),                     # Direct python
+        ]
+    else:
+        # Unix/Linux/Mac environments  
+        python_candidates = [
+            os.path.join(base_dir, "venv", "bin", "python"),          # Standard venv
+            os.path.join(base_dir, "venv", "bin", "python3"),         # Python3 explicit
+            os.path.join(base_dir, "env", "bin", "python"),           # Alternative venv name
+            os.path.join(base_dir, "env", "bin", "python3"),          # Alt venv python3
+            os.path.join(base_dir, ".venv", "bin", "python"),         # Hidden venv
+            os.path.join(base_dir, ".venv", "bin", "python3"),        # Hidden venv python3
+            os.path.join(base_dir, "conda", "bin", "python"),         # Conda in subdir
+            os.path.join(base_dir, "conda", "bin", "python3"),        # Conda python3
+            os.path.join(base_dir, "python"),                         # Direct python
+            os.path.join(base_dir, "python3"),                        # Direct python3
+        ]
+    
+    # Try each candidate and return first existing executable
+    for candidate in python_candidates:
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    
+    # If no virtual environment found, fall back to current Python
+    # This handles conda environments, pyenv, system installs, etc.
+    current_env = detect_python_environment()
+    if current_env != 'system':
+        # We're already in a managed environment, use it directly
+        return sys.executable
+    
+    # Last resort: use current Python executable
+    return sys.executable
 
 def get_subprocess_environment(project_root=None):
     """
@@ -47,7 +114,7 @@ def get_subprocess_environment(project_root=None):
         cuda_path = env.get("CUDA_PATH", "/usr/local/cuda")
         new_ld_library_path = f"{cuda_path}/lib64:{cuda_path}/extras/CUPTI/lib64"
         
-        # Add common CuDNN paths
+        # Add common CuDNN paths - these ARE supposed to be hardcoded system paths!
         cudnn_paths = [
             f"{cuda_path}/lib",
             f"{cuda_path}/targets/x86_64-linux/lib", 
@@ -109,34 +176,40 @@ class SetupManager:
     
     def _detect_current_pip(self):
         """Detect the pip executable for the current Python environment"""
-        import sys
-        import os
+        # Use our new flexible detection system
+        python_path = get_venv_python_path(os.path.dirname(sys.executable))
+        env_type = detect_python_environment()
         
-        # Get current Python executable
-        current_python = sys.executable
+        # Convert python path to pip path for direct pip execution
+        pip_candidates = []
         
-        # Determine corresponding pip and environment type
-        if 'conda' in current_python or 'miniconda' in current_python or 'anaconda' in current_python:
-            # Conda environment - use python -m pip to ensure same env
-            pip_cmd = [current_python, '-m', 'pip']
-            env_type = "conda"
-            env_name = os.environ.get('CONDA_DEFAULT_ENV', 'unknown')
-        elif 'venv' in current_python or '.venv' in current_python:
-            # Virtual environment
-            pip_cmd = [current_python, '-m', 'pip'] 
-            env_type = "venv"
-            env_name = os.path.basename(os.path.dirname(os.path.dirname(current_python)))
+        if sys.platform == "win32":
+            # Windows pip locations
+            if python_path.endswith('python.exe'):
+                direct_pip = python_path.replace('python.exe', 'pip.exe')
+            else:
+                direct_pip = os.path.join(os.path.dirname(python_path), 'pip.exe')
+            pip_candidates.append(direct_pip)
         else:
-            # System Python (fallback)
-            pip_cmd = ['pip']
-            env_type = "system"
-            env_name = "system"
+            # Unix pip locations
+            if python_path.endswith(('python', 'python3')):
+                direct_pip = python_path.replace('python3', 'pip3').replace('python', 'pip')
+            else:
+                direct_pip = os.path.join(os.path.dirname(python_path), 'pip')
+            pip_candidates.extend([
+                direct_pip,
+                direct_pip + '3',  # pip3 variant
+            ])
         
-        print(f"🐍 Environment detected: {env_type} ({env_name})")
-        print(f"🔧 Using Python: {current_python}")
+        # Try direct pip first, fall back to python -m pip
+        for pip_path in pip_candidates:
+            if os.path.isfile(pip_path) and os.access(pip_path, os.X_OK):
+                print(f"🐍 {env_type.title()} environment detected - using pip: {pip_path}")
+                return pip_path
         
-        # Return pip command as list for subprocess
-        return pip_cmd
+        # Fallback to python -m pip (most reliable)
+        print(f"🐍 {env_type.title()} environment detected - using python -m pip")
+        return f"{python_path} -m pip"
     
     def validate_and_fix_deep_dependencies(self):
         """Comprehensive dependency validation and auto-fixing"""
@@ -1062,8 +1135,10 @@ class SetupManager:
                 # Get proper venv python and environment
                 venv_python = get_venv_python_path(self.project_root)
                 if not os.path.exists(venv_python):
-                    print(f"⚠️ Virtual environment python not found at {venv_python}, using system python")
-                    venv_python = "python"
+                    print(f"⚠️ Virtual environment python not found at {venv_python}")
+                    # Try current Python executable as fallback
+                    venv_python = sys.executable
+                    print(f"🔄 Using current Python executable: {venv_python}")
                 
                 # Get standardized subprocess environment (fixes CAME import issues!)
                 env = get_subprocess_environment(self.project_root)
@@ -1267,7 +1342,7 @@ class SetupManager:
             print("📦 Installing Derrian's custom optimizers...")
             try:
                 # Install in editable mode
-                subprocess.run(["pip", "install", "-e", "."], check=True, cwd=setup_py)
+                subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], check=True, cwd=setup_py)
                 print("✅ Custom optimizers installed successfully")
                 
                 # Test imports
@@ -1334,158 +1409,208 @@ class SetupManager:
         return sd_scripts_found
 
     def setup_environment(self):
-        """Clean submodule-based setup: Official Kohya + LyCORIS + Derrian's optimizers"""
-        print("🏗️ Setting up training environment with clean submodule architecture...")
-        
-        # Check for system dependencies
-        if not self._check_and_install_packages():
+        """
+        The new, unified master setup method.
+        Orchestrates the entire backend installation process.
+        """
+        print("Checking environment setup...")
+
+        if not self._is_environment_setup():
+            print("\n🚨 Environment not fully set up!")
+            print("   Please run `python installer.py` in your terminal to complete the setup.")
+            print("   This will install all necessary components and dependencies.")
             return False
-            
-        # Setup all submodules
-        if not self._setup_all_submodules():
-            print("❌ Failed to setup required submodules")
-            return False
-            
-        # Setup custom optimizers from Derrian's backend
-        if not self._setup_custom_optimizers():
-            print("⚠️ Custom optimizers not available, continuing with standard optimizers")
-            
-        # Install requirements for SD scripts
-        self._install_sd_scripts_requirements()
-        
-        # Final verification
-        print("\n🔍 Verifying installation...")
-        self._verify_installation()
-        
-        print("🎉 Clean submodule setup complete!")
-        return True
-        
-    def _install_sd_scripts_requirements(self):
-        """Install requirements for SD scripts and additional optimizers"""
-        requirements_file = os.path.join(self.sd_scripts_dir, "requirements.txt")
-        
-        # Determine the correct pip path for sd_scripts venv (same logic as _fix_triton_installation)
-        if sys.platform == "win32":
-            sd_venv_pip = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "pip.exe")
         else:
-            sd_venv_pip = os.path.join(self.sd_scripts_dir, "venv", "bin", "pip")
-        
-        # Check if sd_scripts venv exists, otherwise use system/VastAI pip
-        if os.path.exists(sd_venv_pip):
-            pip_cmd = sd_venv_pip
-            print(f"🎯 Using SD scripts venv pip: {pip_cmd}")
-        else:
-            pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
-            print(f"🎯 Using system pip: {pip_cmd}")
-        
-        if os.path.exists(requirements_file):
-            print("📦 Installing SD scripts requirements...")
-            
-            try:
-                # Install from the correct working directory so -e . resolves properly
-                print(f"🔧 Installing requirements from {self.sd_scripts_dir} directory...")
-                
-                # Handle both list and string pip commands
-                if isinstance(pip_cmd, list):
-                    install_cmd = pip_cmd + ['install', '-r', 'requirements.txt']
-                else:
-                    install_cmd = [pip_cmd, 'install', '-r', 'requirements.txt']
-                
-                subprocess.run(install_cmd, check=True, cwd=self.sd_scripts_dir)
-                print("✅ SD scripts requirements installed")
-            except subprocess.CalledProcessError as e:
-                print(f"⚠️ Requirements install failed: {e}")
-                print("🔧 Attempting to install requirements individually (skipping problematic ones)...")
-                
-                # Try to install line by line, skipping problematic ones
-                try:
-                    with open(requirements_file, 'r') as f:
-                        lines = f.readlines()
-                    
-                    for line in lines:
-                        line = line.strip()
-                        if line and not line.startswith('#') and not line.startswith('file://'):
-                            try:
-                                subprocess.run([pip_cmd, 'install', line], check=True, capture_output=True)
-                                print(f"  ✅ {line}")
-                            except subprocess.CalledProcessError:
-                                print(f"  ⚠️ Skipped: {line} (problematic)")
-                    
-                    print("✅ Requirements installed (with some skipped)")
-                except Exception as read_error:
-                    print(f"⚠️ Could not process requirements file: {read_error}")
-        
-        # Install additional optimizers and dependencies that might be missing
-        print("📦 Installing additional optimizers and dependencies...")
-        additional_packages = [
-            "pytorch_optimizer>=3.1.0",  # For CAME, Prodigy, etc.
-            "schedulefree",  # For schedule-free optimizers
-            "prodigy-plus-schedule-free",  # For Prodigy Plus
-            "onnx==1.15.0",  # For ONNX model format support (Kohya version)
-            "onnxruntime==1.17.1",  # For ONNX runtime CPU (required for WD14 taggers)
-            "protobuf==3.20.3"  # Required for ONNX compatibility
-        ]
-        
-        for package in additional_packages:
-            try:
-                subprocess.run([pip_cmd, 'install', package], check=True)
-                print(f"✅ {package} installed")
-            except subprocess.CalledProcessError as e:
-                print(f"⚠️ Failed to install {package}: {e}")
-        
-        # Try to install GPU-accelerated ONNX runtime if CUDA is available
-        try:
-            print("🎮 Checking for CUDA to install GPU-accelerated ONNX runtime...")
-            # Check if CUDA is available
-            result = subprocess.run(['nvidia-smi'], capture_output=True, text=True)
-            if result.returncode == 0:
-                print("✅ NVIDIA GPU detected, installing ONNX runtime GPU...")
-                # Try CUDA 12 version first (matches modern setups)
-                try:
-                    subprocess.run([pip_cmd, 'install', 'onnxruntime-gpu==1.17.1', 
-                                  '--extra-index-url', 'https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/'], 
-                                  check=True)
-                    print("✅ ONNX runtime GPU (CUDA 12) installed")
-                except subprocess.CalledProcessError:
-                    # Fallback to standard GPU version
-                    try:
-                        subprocess.run([pip_cmd, 'install', 'onnxruntime-gpu==1.17.1'], check=True)
-                        print("✅ ONNX runtime GPU (standard) installed")
-                    except subprocess.CalledProcessError as e:
-                        print(f"⚠️ GPU ONNX runtime install failed: {e}")
+            print("\n✅ Environment appears to be set up.")
+            print("   Displaying PyTorch and GPU status:")
+            gpu_info = self._detect_gpu_type()
+            print(f"   GPU Type: {gpu_info['type'].upper()}")
+            if gpu_info['devices']:
+                for i, device in enumerate(gpu_info['devices']):
+                    print(f"     Device {i}: {device}")
             else:
-                print("ℹ️ No NVIDIA GPU detected, using CPU-only ONNX runtime")
-        except FileNotFoundError:
-            print("ℹ️ nvidia-smi not found, using CPU-only ONNX runtime")
+                print("     No specific GPU devices detected or listed.")
+            print(f"   Acceleration: {gpu_info['acceleration'].upper() if gpu_info['acceleration'] else 'N/A'}")
+            
+            try:
+                import torch
+                print(f"   PyTorch Version: {torch.__version__}")
+                print(f"   CUDA Available: {torch.cuda.is_available()}")
+                if torch.cuda.is_available():
+                    print(f"   CUDA Version: {torch.version.cuda}")
+            except ImportError:
+                print("   PyTorch not installed or not detectable.")
+            
+            print("\n🎉 Environment is ready for use!")
+            return True
+
+    def _apply_special_fixes_and_installs(self):
+        """
+        Applies necessary platform-specific patches and performs editable installs.
+        This logic was consolidated from the old installer scripts.
+        """
+        print("🔧 Applying special fixes and performing editable installs...")
+        all_success = True
         
-        # Fix Triton installation for Docker/VastAI compatibility
+        # Get the correct pip command for editable installs
+        pip_cmd_str = self._detect_current_pip()
+        if isinstance(pip_cmd_str, str) and " -m pip" in pip_cmd_str:
+            pip_cmd = pip_cmd_str.split()
+        else:
+            pip_cmd = [pip_cmd_str]
+
+        # --- Editable Installs ---
+        editable_installs = {
+            "LyCORIS": self.lycoris_dir,
+            "Custom Optimizers": os.path.join(self.derrian_dir, "custom_scheduler"),
+            "Kohya's SD Scripts": self.sd_scripts_dir
+        }
+        
+        for name, path in editable_installs.items():
+            if os.path.exists(os.path.join(path, 'setup.py')):
+                print(f"  - Performing editable install for {name}...")
+                try:
+                    install_cmd = pip_cmd + ['install', '-e', '.']
+                    subprocess.run(install_cmd, cwd=path, check=True, capture_output=True)
+                    print(f"    ✅ {name} installed successfully.")
+                except subprocess.CalledProcessError as e:
+                    print(f"    ❌ Failed to install {name} in editable mode: {e.stderr.decode('utf-8', errors='ignore')}")
+                    all_success = False
+            else:
+                print(f"  - Skipping editable install for {name} (setup.py not found).")
+
+        # --- Platform-Specific Fixes ---
+        
+        # 1. Windows bitsandbytes fix
+        if sys.platform == "win32":
+            print("  - Applying Windows-specific fix for bitsandbytes...")
+            try:
+                # This logic is based on the old derrian_backend/installer.py
+                bnb_src_dir = os.path.join(self.sd_scripts_dir, 'bitsandbytes_windows')
+                # Find site-packages directory
+                result = subprocess.run([sys.executable, '-c', 'import site; print(site.getsitepackages()[0])'], capture_output=True, text=True, check=True)
+                site_packages = result.stdout.strip()
+                bnb_dest_dir = os.path.join(site_packages, 'bitsandbytes')
+                
+                if os.path.exists(bnb_dest_dir):
+                    # TODO: Add logic to select the correct CUDA version DLL
+                    # For now, we'll assume a common one. This can be improved later.
+                    dll_to_copy = 'libbitsandbytes_cuda118.dll' 
+                    src_file = os.path.join(bnb_src_dir, dll_to_copy)
+                    dest_file = os.path.join(bnb_dest_dir, 'libbitsandbytes_cudaall.dll') # The name it expects
+                    if os.path.exists(src_file):
+                        shutil.copy2(src_file, dest_file)
+                        print(f"    ✅ Copied {dll_to_copy} to {dest_file}")
+                    else:
+                        print(f"    ⚠️ Could not find source DLL: {src_file}")
+                        all_success = False
+                else:
+                    print(f"    ⚠️ bitsandbytes directory not found in site-packages. Cannot apply fix.")
+                    all_success = False
+            except Exception as e:
+                print(f"    ❌ Error applying bitsandbytes fix: {e}")
+                all_success = False
+
+        # 2. PyTorch version file fix
+        print("  - Checking if PyTorch version patch is needed...")
+        try:
+            import torch
+            if torch.__version__ in ["2.0.0", "2.0.1"]:
+                print(f"  - Applying patch for PyTorch {torch.__version__}...")
+                fix_script_path = os.path.join(self.derrian_dir, 'fix_torch.py')
+                if os.path.exists(fix_script_path):
+                    subprocess.run([sys.executable, fix_script_path], check=True, capture_output=True)
+                    print("    ✅ PyTorch patch applied successfully.")
+                else:
+                    print("    ⚠️ fix_torch.py script not found. Cannot apply patch.")
+                    all_success = False
+            else:
+                print(f"  - PyTorch version is {torch.__version__}. No patch needed.")
+        except ImportError:
+            print("  - ⚠️ PyTorch not imported. Skipping version patch check.")
+        except Exception as e:
+            print(f"    ❌ Error applying PyTorch patch: {e}")
+            all_success = False
+            
+        # 3. Triton installation fix
         self._fix_triton_installation()
+
+        return all_success
+        
+    def _install_backend_requirements(self):
+        """
+        Install all backend dependencies from the unified requirements-backend.txt file.
+        This is the single source of truth for Python packages.
+        """
+        requirements_file = os.path.join(self.project_root, "requirements-backend.txt")
         
         if not os.path.exists(requirements_file):
-            print("⚠️ SD scripts requirements.txt not found")
+            print(f"❌ CRITICAL: Unified requirements file not found at {requirements_file}")
+            print("   Cannot proceed with installation.")
+            return False
+
+        print(f"📦 Installing all backend dependencies from {requirements_file}...")
+
+        # Use our robust pip detection to get the correct pip command
+        pip_cmd_str = self._detect_current_pip()
+        if isinstance(pip_cmd_str, str) and " -m pip" in pip_cmd_str:
+            pip_cmd = pip_cmd_str.split()
+        else:
+            pip_cmd = [pip_cmd_str]
+        
+        print(f"🎯 Using pip command: {' '.join(pip_cmd)}")
+
+        try:
+            install_cmd = pip_cmd + ['install', '-r', requirements_file]
+            subprocess.run(install_cmd, check=True, capture_output=True)
+            print("✅ All backend dependencies installed successfully.")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"🔥 Pip install failed. This is often due to a version conflict or a missing system library.")
+            print(f"   ❌ Error installing from {requirements_file}: {e}")
+            print("\n" + "="*80)
+            print("🔥 STDOUT from pip:")
+            print(e.stdout.decode('utf-8', errors='ignore'))
+            print("\n" + "="*80)
+            print("🔥 STDERR from pip:")
+            print(e.stderr.decode('utf-8', errors='ignore'))
+            print("="*80)
+            print("\n💡 Common Fixes:")
+            print("   - Check the error log above for specific package issues (e.g., 'failed building wheel').")
+            print("   - Ensure you have build tools installed (e.g., `sudo apt-get install build-essential` on Debian/Ubuntu).")
+            print("   - For CUDA-related errors, ensure your NVIDIA driver and CUDA toolkit versions are compatible.")
+            return False
     
     def _fix_triton_installation(self):
         """Fix Triton installation for bitsandbytes AdamW8bit compatibility"""
         print("🔧 Installing Triton for bitsandbytes (AdamW8bit) compatibility...")
         
-        # Determine the correct pip path for sd_scripts venv
-        if sys.platform == "win32":
-            sd_venv_pip = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "pip.exe")
+        # Use our robust pip detection for sd_scripts directory
+        sd_venv_python = get_venv_python_path(self.sd_scripts_dir)
+        if os.path.exists(sd_venv_python):
+            # Found sd_scripts specific venv, use python -m pip for reliability
+            pip_cmd = [sd_venv_python, "-m", "pip"]
+            print(f"🎯 Using SD scripts venv: {sd_venv_python} -m pip")
         else:
-            sd_venv_pip = os.path.join(self.sd_scripts_dir, "venv", "bin", "pip")
-        
-        # Check if sd_scripts venv exists, otherwise use system/VastAI pip
-        if os.path.exists(sd_venv_pip):
-            pip_cmd = sd_venv_pip
-            print(f"🎯 Using SD scripts venv pip: {pip_cmd}")
-        else:
-            pip_cmd = self.correct_venv_path if self.is_vastai else 'pip'
-            print(f"🎯 Using system pip: {pip_cmd}")
+            # Fall back to current environment pip
+            current_pip = self._detect_current_pip()
+            if isinstance(current_pip, str) and " -m pip" in current_pip:
+                # It's a "python -m pip" command
+                pip_cmd = current_pip.split()
+            else:
+                # It's a direct pip path
+                pip_cmd = [current_pip]
+            print(f"🎯 Using current environment pip: {' '.join(pip_cmd)}")
         
         # Test if Triton is already working in the target environment
         try:
-            test_cmd = [pip_cmd.replace('pip', 'python') if 'bin' in pip_cmd or 'Scripts' in pip_cmd else sys.executable, 
-                       '-c', 'import triton; print("Triton version:", triton.__version__)']
+            # Get python executable from our pip command
+            if len(pip_cmd) > 2 and pip_cmd[1] == '-m':
+                python_executable = pip_cmd[0]  # It's [python, -m, pip]
+            else:
+                python_executable = sys.executable  # Fallback
+            
+            test_cmd = [python_executable, '-c', 'import triton; print("Triton version:", triton.__version__)']
             result = subprocess.run(test_cmd, check=True, capture_output=True, text=True)
             print(f"✅ Triton already working: {result.stdout.strip()}")
             return
@@ -1495,17 +1620,17 @@ class SetupManager:
         # Install Triton with CUDA 12.4 compatibility (matches Kohya's PyTorch)
         triton_install_methods = [
             # Method 1: PyTorch CUDA 12.4 index (matches Kohya exactly)
-            [pip_cmd, 'install', '--force-reinstall', 'triton', '--index-url=https://download.pytorch.org/whl/cu124'],
+            pip_cmd + ['install', '--force-reinstall', 'triton', '--index-url=https://download.pytorch.org/whl/cu124'],
             
             # Method 2: Force Linux x86_64 platform with CUDA 12.4
-            [pip_cmd, 'install', '--force-reinstall', 'triton', '--platform=linux_x86_64', '--only-binary=:all:', 
+            pip_cmd + ['install', '--force-reinstall', 'triton', '--platform=linux_x86_64', '--only-binary=:all:', 
              '--index-url=https://download.pytorch.org/whl/cu124'],
             
             # Method 3: Specific Triton version known to work with PyTorch 2.5.1
-            [pip_cmd, 'install', '--force-reinstall', 'triton==3.0.0'],
+            pip_cmd + ['install', '--force-reinstall', 'triton==3.0.0'],
             
             # Method 4: Fallback to PyPI with no cache
-            [pip_cmd, 'install', '--force-reinstall', '--no-cache-dir', 'triton']
+            pip_cmd + ['install', '--force-reinstall', '--no-cache-dir', 'triton']
         ]
         
         for i, method in enumerate(triton_install_methods):
@@ -1514,14 +1639,22 @@ class SetupManager:
                 subprocess.run(method, check=True, cwd=self.sd_scripts_dir if os.path.exists(self.sd_scripts_dir) else None)
                 
                 # Test if it works in the target environment
-                test_cmd = [pip_cmd.replace('pip', 'python') if 'bin' in pip_cmd or 'Scripts' in pip_cmd else sys.executable,
+                if len(pip_cmd) > 2 and pip_cmd[1] == '-m':
+                    python_executable = pip_cmd[0]
+                else:
+                    python_executable = sys.executable # Fallback
+                test_cmd = [python_executable,
                            '-c', 'import triton; print("✅ Triton working!")']
                 subprocess.run(test_cmd, check=True, capture_output=True)
                 print(f"✅ Triton installation method {i+1} succeeded!")
                 
                 # Also test bitsandbytes import since that's what we really care about
                 try:
-                    test_bnb_cmd = [pip_cmd.replace('pip', 'python') if 'bin' in pip_cmd or 'Scripts' in pip_cmd else sys.executable,
+                    if len(pip_cmd) > 2 and pip_cmd[1] == '-m':
+                        python_executable = pip_cmd[0]
+                    else:
+                        python_executable = sys.executable # Fallback
+                    test_bnb_cmd = [python_executable,
                                    '-c', 'import bitsandbytes; print("✅ bitsandbytes can use Triton!")']
                     subprocess.run(test_bnb_cmd, check=True, capture_output=True)
                     print("✅ bitsandbytes + Triton integration working!")
@@ -1625,16 +1758,55 @@ class ModelManager:
             print("Invalid URL provided.")
             return None
 
+        filename = os.path.basename(validated_url.split('?')[0])
+        destination_path = os.path.join(dest_dir, filename)
+
+        print(f"Downloading from {validated_url}...")
+
+        # Check if it's a Hugging Face URL and hf-transfer is available
+        if "huggingface.co" in validated_url and shutil.which("hf-transfer"):
+            print("Attempting download with hf-transfer...")
+            try:
+                # hf-transfer uses environment variables for token
+                env = os.environ.copy()
+                if api_token:
+                    env["HF_HUB_TOKEN"] = api_token
+
+                # hf-transfer download command
+                # It downloads directly to the current directory, so we'll move it later
+                hf_download_cmd = ["hf-transfer", "download", validated_url, "--local-dir", dest_dir]
+                
+                process = subprocess.Popen(
+                    hf_download_cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    env=env
+                )
+
+                for line in iter(process.stdout.readline, ''):
+                    print(line, end='')
+                
+                process.stdout.close()
+                return_code = process.wait()
+
+                if return_code == 0:
+                    print(f"\nDownload complete with hf-transfer: {destination_path}")
+                    return destination_path
+                else:
+                    print(f"\nhf-transfer failed with exit code {return_code}. Falling back to aria2c.")
+
+            except Exception as e:
+                print(f"\nError with hf-transfer: {e}. Falling back to aria2c.")
+
+        # Fallback to aria2c if hf-transfer fails or is not used
         header = ""
         if "civitai.com" in validated_url and api_token and not "hf" in api_token:
             validated_url = f"{validated_url}?token={api_token}"
         elif "huggingface.co" in validated_url and api_token:
             header = f"Authorization: Bearer {api_token}"
 
-        filename = os.path.basename(validated_url.split('?')[0])
-        destination_path = os.path.join(dest_dir, filename)
-
-        print(f"Downloading from {validated_url}...")
         command = [
             "aria2c", validated_url,
             "--console-log-level=warn",
