@@ -13,6 +13,7 @@ warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
 
 from .kohya_training_manager import KohyaTrainingManager
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
