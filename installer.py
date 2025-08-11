@@ -90,6 +90,49 @@ class UnifiedInstaller:
             
         return self.run_command(self.pip_cmd + ['install', '-r', requirements_file], "Installing Python packages")
 
+    def check_system_dependencies(self):
+        """Check and attempt to install required system packages like aria2c"""
+        print("🔧 Checking system dependencies...")
+        
+        # Check for aria2c
+        if not shutil.which('aria2c'):
+            print("   - aria2c not found. Attempting to install...")
+            
+            system = platform.system().lower()
+            if system == "linux":
+                # Try different package managers
+                for pm_cmd, install_cmd in [
+                    (['apt', '--version'], ['sudo', 'apt', 'update', '&&', 'sudo', 'apt', 'install', '-y', 'aria2']),
+                    (['yum', '--version'], ['sudo', 'yum', 'install', '-y', 'aria2']),
+                    (['dnf', '--version'], ['sudo', 'dnf', 'install', '-y', 'aria2'])
+                ]:
+                    try:
+                        subprocess.run(pm_cmd, capture_output=True, check=True)
+                        print(f"     ✅ Installing with {pm_cmd[0]}...")
+                        result = subprocess.run(install_cmd, shell=True)
+                        if result.returncode == 0:
+                            break
+                    except (subprocess.CalledProcessError, FileNotFoundError):
+                        continue
+                else:
+                    print("     ⚠️  Could not auto-install aria2c. Please install manually:")
+                    print("        Ubuntu/Debian: sudo apt install aria2")
+                    print("        CentOS/RHEL: sudo yum install aria2")
+            
+            elif system == "darwin":
+                if shutil.which('brew'):
+                    print("     ✅ Installing with Homebrew...")
+                    subprocess.run(['brew', 'install', 'aria2'])
+                else:
+                    print("     ⚠️  Please install aria2c: brew install aria2")
+            
+            elif system == "windows":
+                print("     ⚠️  Windows: Please install aria2c manually or use package manager")
+        else:
+            print("   - aria2c: ✅ Found")
+        
+        return True
+
     def apply_special_fixes_and_installs(self):
         print("🔧 Applying special fixes and performing editable installs...")
         
@@ -152,6 +195,10 @@ class UnifiedInstaller:
         
         if not self.setup_submodules():
             print("❌ Halting installation due to submodule setup failure.")
+            return
+
+        if not self.check_system_dependencies():
+            print("❌ System dependency check failed.")
             return
 
         if not self.install_dependencies():
