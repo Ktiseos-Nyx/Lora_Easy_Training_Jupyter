@@ -63,42 +63,73 @@ class DatasetManager:
         return dataset
 
     def launch_dataset_explorer(self, dataset_path):
-        """Launch FiftyOne in sidecar for dataset exploration"""
+        """Launch FiftyOne with server-optimized configuration"""
         try:
-            from sidecar import Sidecar
             import fiftyone as fo
-            from ipywidgets import HTML, VBox
-        except ImportError as e:
-            print("❌ FiftyOne dataset exploration requires additional packages:")
-            print("   pip install fiftyone sidecar")
+        except ImportError:
+            print("❌ FiftyOne dataset exploration requires FiftyOne:")
+            print("   pip install fiftyone")
             return None
 
-        # Create persistent sidecar for dataset exploration
-        dataset_explorer = Sidecar(title='📊 Dataset Explorer - FiftyOne', anchor='split-right')
-
-        with dataset_explorer:
+        # Use server-friendly configuration
+        try:
+            from .fiftyone_server_config import create_server_friendly_dataset_launcher
+            launcher = create_server_friendly_dataset_launcher()
+            session, server_config = launcher(dataset_path)
+        except ImportError:
+            print("⚠️ Server config not available, using basic FiftyOne setup...")
+            # Fallback to basic setup
             dataset = self.create_fiftyone_dataset(dataset_path)
             session = fo.launch_app(dataset, auto=False)
-            
-            # Add custom views for LoRA training
-            # Duplicate detection view
+            server_config = {}
+        
+        # Add custom views and analysis for LoRA training
+        dataset = session.dataset
+        results = {}
+        
+        try:
+            # Duplicate detection view (optional - can be resource intensive)
             print("🔍 Computing dataset similarity for duplicate detection...")
             duplicates_view = dataset.compute_similarity(brain_key="image_similarity")
+            results['duplicates'] = duplicates_view
             print(f"✅ Duplicate detection computed. Found {len(duplicates_view.matches)} potential duplicates.")
+        except Exception as e:
+            print(f"⚠️ Duplicate detection failed: {e}")
+            results['duplicates'] = None
             
+        try:
             # Tag distribution analysis
             print("📊 Analyzing tag distribution...")
-            tag_stats = dataset.count_values("wd14_tags")
+            tag_stats = dataset.count_values("wd14_tags") if dataset.has_sample_field("wd14_tags") else {}
+            results['tag_stats'] = tag_stats
             print("✅ Tag distribution analysis complete.")
+        except Exception as e:
+            print(f"⚠️ Tag analysis failed: {e}")
+            results['tag_stats'] = {}
 
+        try:
             # Image quality analysis
             quality_metrics = self.analyze_image_quality(dataset)
+            results['quality_metrics'] = quality_metrics
+        except Exception as e:
+            print(f"⚠️ Quality analysis failed: {e}")
+            results['quality_metrics'] = None
 
+        try:
             # LoRA-specific views
             lora_views = self.create_lora_specific_views(dataset)
+            results['lora_views'] = lora_views
+        except Exception as e:
+            print(f"⚠️ LoRA views failed: {e}")
+            results['lora_views'] = None
             
-            # Return session and analysis results
-            return session, duplicates_view, tag_stats, quality_metrics, lora_views
+        # Print server access information
+        if server_config.get('external_url'):
+            print(f"\n🌍 Access FiftyOne at: {server_config['external_url']}")
+        elif server_config.get('address') and server_config.get('port'):
+            print(f"\n🔗 Access FiftyOne at: http://{server_config['address']}:{server_config['port']}")
+            
+        return session, results['duplicates'], results['tag_stats'], results['quality_metrics'], results['lora_views']
 
     def analyze_image_quality(self, dataset):
         """
@@ -195,7 +226,7 @@ class DatasetManager:
         
         return lora_views
 
-    def apply_curation_to_dataset(self, dataset_path):
+    def apply_curation_to_dataset(self, dataset_path, fiftyone_dataset=None):
         """
         Applies changes made in FiftyOne (e.g., tag edits) back to the local dataset files.
         """
@@ -209,14 +240,20 @@ class DatasetManager:
 
         print(f"💾 Applying FiftyOne curation to {dataset_path}...")
         try:
-            # Load the FiftyOne dataset (assuming it's still active or can be reloaded)
-            # For simplicity, we'll create a new dataset object from the directory
-            # In a real scenario, you might want to get the active session's dataset
-            dataset = fo.Dataset.from_images_dir(
-                dataset_path,
-                tags_field="wd14_tags",
-                recursive=True
-            )
+            # Use provided FiftyOne dataset or load from directory
+            if fiftyone_dataset is not None:
+                dataset = fiftyone_dataset
+                print("📊 Using active FiftyOne session dataset")
+            else:
+                print("📁 Loading dataset from directory...")
+                # Load the FiftyOne dataset (assuming it's still active or can be reloaded)
+                # For simplicity, we'll create a new dataset object from the directory
+                # In a real scenario, you might want to get the active session's dataset
+                dataset = fo.Dataset.from_images_dir(
+                    dataset_path,
+                    tags_field="wd14_tags",
+                    recursive=True
+                )
 
             files_updated = 0
             images_deleted = 0 # Placeholder for future deletion logic
