@@ -525,8 +525,8 @@ class KohyaTrainingManager:
             "training_arguments": {
                 "output_dir": config.get('output_dir', self.output_dir),
                 "output_name": config.get('output_name', 'lora'),
-                "learning_rate": config.get('unet_lr', 0.0001),
-                "text_encoder_lr": config.get('text_encoder_lr', 0.0001),
+                "learning_rate": config.get('unet_lr'),
+                "text_encoder_lr": config.get('text_encoder_lr'),
                 "lr_scheduler": config.get('lr_scheduler', 'cosine'),
                 "optimizer_type": config.get('optimizer', 'AdamW8bit'),
                 "max_train_epochs": config.get('epochs', 10),
