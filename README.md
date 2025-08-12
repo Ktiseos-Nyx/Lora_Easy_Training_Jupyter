@@ -90,7 +90,7 @@ jupyter notebook
 Your main workflow:
 - `Dataset_Maker_Widget.ipynb` - Prepare images and captions
 - `Unified_LoRA_Trainer.ipynb` - Train SDXL, SD 1.5, or experimental Flux/SD3 models
-- `LoRA_Calculator_Widget.ipynb` - Calculate optimal training parameters (optional)
+- `Utilities_Notebooks.ipynb` - Calculate optimal training parameters, Resize Lora & More.
 
 <details><summary>📊 Data Ingestion Options</summary>
 
@@ -144,7 +144,7 @@ Use this method if the model has only one version or if a version has multiple f
 ### Image Utilities
 - **Image Resizing**: Easily resize images in your dataset to a target resolution, with options for quality.
 
-### Tag Curation  
+### Tag Curation
 - **FiftyOne Integration**: Visually inspect and edit image tags using the FiftyOne interface. After making changes in FiftyOne, click 'Apply Curation Changes' to save them to your local caption files.
 
 </details>
@@ -153,7 +153,7 @@ Use this method if the model has only one version or if a version has multiple f
 
 Our system now features:
 - **Automatic Model Detection**: Unified trainer automatically detects SDXL vs SD 1.5 models
-- **Kohya Backend Integration**: Leverages battle-tested Kohya training strategies  
+- **Kohya Backend Integration**: Leverages battle-tested Kohya training strategies
 - **Environment-Agnostic**: Works across conda, venv, and system Python installations
 - **Memory Optimization**: Automatic VRAM detection and profile selection
 - **Cross-Platform**: Proper subprocess handling for Windows/Linux/macOS development

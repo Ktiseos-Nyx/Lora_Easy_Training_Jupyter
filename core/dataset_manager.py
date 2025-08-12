@@ -2181,17 +2181,16 @@ Special thanks to [Linaqruf](https://github.com/Linaqruf) for their contribution
 
         return success
 
-    def resize_images_in_dataset(self, dataset_dir, target_resolution, quality=90):
+    def convert_image_formats(self, dataset_dir, target_format, quality=95):
         """
-        Resizes images in a dataset directory to a target resolution.
+        Convert image formats in a dataset directory without resizing.
         
         Args:
             dataset_dir (str): The path to the dataset directory.
-            target_resolution (int): The target resolution (e.g., 512 for 512x512).
-            quality (int): The quality for JPEG images (0-100).
+            target_format (str): The target format ('jpg', 'png', 'webp').
+            quality (int): The quality for lossy formats (85-100).
         """
         import os
-
         from PIL import Image
 
         dataset_path = os.path.join(self.project_root, dataset_dir)
@@ -2199,45 +2198,54 @@ Special thanks to [Linaqruf](https://github.com/Linaqruf) for their contribution
             print(f"❌ Dataset directory not found at {dataset_path}")
             return False
 
-        print(f"🖼️ Resizing images in {dataset_path} to {target_resolution}x{target_resolution}...")
+        print(f"🔄 Converting images in {dataset_path} to {target_format.upper()}...")
 
-        resized_count = 0
+        converted_count = 0
         skipped_count = 0
 
-        image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
+        source_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
+        target_ext = f'.{target_format}'
 
         for root, _, files in os.walk(dataset_path):
             for file in files:
                 file_ext = os.path.splitext(file.lower())[1]
-                if file_ext in image_extensions:
+                if file_ext in source_extensions and file_ext != target_ext:
                     image_path = os.path.join(root, file)
+                    base_name = os.path.splitext(file)[0]
+                    new_path = os.path.join(root, f"{base_name}{target_ext}")
+                    
                     try:
                         with Image.open(image_path) as img:
-                            # Convert to RGB if not already (e.g., for PNGs with alpha)
-                            if img.mode != 'RGB':
-                                img = img.convert('RGB')
-
-                            # Resize while maintaining aspect ratio
-                            img.thumbnail((target_resolution, target_resolution), Image.LANCZOS)
-
-                            # Create a new image with a white background for padding if needed
-                            new_img = Image.new('RGB', (target_resolution, target_resolution), (255, 255, 255))
-                            new_img.paste(img, ((target_resolution - img.width) // 2, (target_resolution - img.height) // 2))
-
-                            # Save with appropriate quality
-                            if file_ext in ['.jpg', '.jpeg']:
-                                new_img.save(image_path, quality=quality)
-                            elif file_ext == '.png':
-                                new_img.save(image_path, optimize=True)
-                            else: # For webp, bmp, etc., save as JPEG for consistency
-                                new_img.save(image_path, "JPEG", quality=quality)
-
-                            resized_count += 1
+                            # Convert mode if needed
+                            if target_format == 'jpg' and img.mode in ('RGBA', 'LA', 'P'):
+                                # Convert to RGB for JPEG (no transparency)
+                                background = Image.new('RGB', img.size, (255, 255, 255))
+                                if img.mode == 'P':
+                                    img = img.convert('RGBA')
+                                background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                                img = background
+                            elif target_format == 'png' and img.mode not in ('RGBA', 'LA', 'P'):
+                                # Keep original mode for PNG
+                                pass
+                            
+                            # Save in new format
+                            save_kwargs = {}
+                            if target_format in ['jpg', 'webp']:
+                                save_kwargs['quality'] = quality
+                            elif target_format == 'png':
+                                save_kwargs['optimize'] = True
+                            
+                            img.save(new_path, target_format.upper(), **save_kwargs)
+                            
+                            # Remove original file after successful conversion
+                            os.remove(image_path)
+                            converted_count += 1
+                            
                     except Exception as e:
-                        print(f"⚠️ Could not resize {file}: {e}")
+                        print(f"⚠️ Could not convert {file}: {e}")
                         skipped_count += 1
 
-        print(f"✅ Image resizing complete. Resized {resized_count} images, skipped {skipped_count}.")
+        print(f"✅ Format conversion complete. Converted {converted_count} images, skipped {skipped_count}.")
         return True
 
     def _process_gallery_dl_tags(self, directory):

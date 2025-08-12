@@ -146,8 +146,7 @@ class TrainingMonitorWidget:
 
         # Resource Monitoring (optional placeholders)
         self.resource_info = widgets.HTML(
-            value="<div style='background: #f8f9fa; padding: 10px; border-radius: 5px; font-family: monospace;'>"
-                  "<strong>💾 Resources:</strong> Monitoring will begin when training starts</div>"
+            value="<p><strong>💾 Resources:</strong> Monitoring will begin when training starts</p>"
         )
 
         # Training Log Output

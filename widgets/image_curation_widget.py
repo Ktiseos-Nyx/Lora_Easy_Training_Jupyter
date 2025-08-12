@@ -204,7 +204,7 @@ class ImageCurationWidget:
         """Create status and progress display"""
 
         self.status_display = widgets.HTML("""
-        <div style='background: #f8f9fa; padding: 15px; border-radius: 5px; margin-top: 20px;'>
+        <div style='background: #007acc; color: white; padding: 15px; border-radius: 5px; margin-top: 20px;'>
             <h4>📋 Workflow Status</h4>
             <p>Ready to begin image curation workflow.</p>
         </div>

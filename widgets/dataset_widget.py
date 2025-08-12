@@ -31,12 +31,12 @@ class DatasetWidget:
         # --- Unified Dataset Setup Section ---
         dataset_setup_desc = widgets.HTML("""<h3>📁 Dataset Setup</h3>
         <p><strong>🎯 Choose your preferred method to set up your training dataset.</strong></p>
-        <div style='background: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
-        <strong>📋 Available Methods:</strong><br>
-        • <strong>URL/ZIP Download:</strong> Download and extract from URLs or file paths<br>
-        • <strong>Direct Image Upload:</strong> Upload individual images directly (perfect for small datasets)<br>
-        • <strong>Gelbooru Scraper:</strong> Download images from Gelbooru using tags (anime/character datasets)<br>
-        </div>""")
+        <p><strong>📋 Available Methods:</strong></p>
+        <ul>
+        <li><strong>URL/ZIP Download:</strong> Download and extract from URLs or file paths</li>
+        <li><strong>Direct Image Upload:</strong> Upload individual images directly (perfect for small datasets)</li>
+        <li><strong>Gallery-DL Scraper:</strong> Download images from various sites using gallery-dl (anime/character datasets)</li>
+        </ul>""")
 
         # Dataset method selection
         self.dataset_method = widgets.RadioButtons(
@@ -280,13 +280,13 @@ class DatasetWidget:
         # --- File Renaming Section ---
         rename_desc = widgets.HTML("""<h3>📝 File Renaming</h3>
         <p>Rename your dataset files to fix UTF-8 issues and create consistent naming. <strong>Caption files are automatically renamed too!</strong></p>
-        <div style='background: #fff8dc; padding: 10px; border-radius: 5px; margin: 10px 0;'>
-        <strong>📋 Naming Patterns:</strong><br>
-        • <strong>Simple Numbering:</strong> MyProject_001.jpg, MyProject_002.jpg<br>
-        • <strong>Sanitized Original:</strong> MyProject_CleanedName.jpg (removes special chars)<br>
-        • <strong>With Timestamp:</strong> MyProject_20240807_001.jpg<br><br>
-        <em>💡 This fixes common training issues with special characters and UTF-8!</em>
-        </div>""")
+        <p><strong>📋 Naming Patterns:</strong></p>
+        <ul>
+        <li><strong>Simple Numbering:</strong> MyProject_001.jpg, MyProject_002.jpg</li>
+        <li><strong>Sanitized Original:</strong> MyProject_CleanedName.jpg (removes special chars)</li>
+        <li><strong>With Timestamp:</strong> MyProject_20240807_001.jpg</li>
+        </ul>
+        <p><em>💡 This fixes common training issues with special characters and UTF-8!</em></p>""")
 
         self.rename_project_name = widgets.Text(
             description="Project Name:",
@@ -431,14 +431,14 @@ class DatasetWidget:
         cleanup_desc = widgets.HTML("""<h3>▶️ Dataset Cleanup</h3>
         <p>Clean up old files when re-tagging datasets or starting fresh.</p>
         
-        <div style='background: #fff3cd; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #856404;'>
-        <strong>⚠️ What gets cleaned:</strong><br>
-        • <strong>.txt files:</strong> Caption files from previous tagging<br>
-        • <strong>.npz files:</strong> Cached latents from previous training<br>
-        • <strong>.caption files:</strong> Alternative caption format<br>
-        • <strong>Non-image files:</strong> Model files (.safetensors, .ckpt), configs (.json, .yaml), etc.<br>
-        <em>🎯 Use this when you want to re-tag a dataset or clean up accidentally extracted files</em>
-        </div>""")
+        <p><strong>⚠️ What gets cleaned:</strong></p>
+        <ul>
+        <li><strong>.txt files:</strong> Caption files from previous tagging</li>
+        <li><strong>.npz files:</strong> Cached latents from previous training</li>
+        <li><strong>.caption files:</strong> Alternative caption format</li>
+        <li><strong>Non-image files:</strong> Model files (.safetensors, .ckpt), configs (.json, .yaml), etc.</li>
+        </ul>
+        <p><em>🎯 Use this when you want to re-tag a dataset or clean up accidentally extracted files</em></p>""")
 
         # Dataset directory will be auto-populated from setup section
 
@@ -558,83 +558,59 @@ class DatasetWidget:
         ])
 
         # --- Image Utilities Section ---
-        image_utils_desc = widgets.HTML("""<h3>🖼️ Image Utilities</h3>
-        <p>Tools for processing and optimizing your dataset images.</p>
+        image_utils_desc = widgets.HTML("""<h3>🖼️ Image Format Conversion</h3>
+        <p>Convert image formats for better compatibility and storage optimization.</p>
+        <p><strong>⚠️ Note:</strong> This only converts formats (WebP ↔ JPG ↔ PNG). No resizing or cropping is performed to preserve training data quality.</p>
         """)
 
-        self.resize_resolution_selector = widgets.Dropdown(
-            options=[('512x512 (SD 1.5)', 512), ('1024x1024 (SDXL)', 1024), ('Custom', 'custom')],
-            value=512,
-            description='Target Resolution:',
+        self.format_selector = widgets.Dropdown(
+            options=[('Convert to JPG', 'jpg'), ('Convert to PNG', 'png'), ('Convert to WebP', 'webp')],
+            value='jpg',
+            description='Target Format:',
             style={'description_width': 'initial'},
             layout=widgets.Layout(width='99%')
         )
 
-        self.custom_resize_resolution = widgets.IntText(
-            description='Custom Resolution:',
-            placeholder='e.g., 768',
-            style={'description_width': 'initial'},
-            layout=widgets.Layout(width='99%')
-        )
-        self.custom_resize_resolution.layout.display = 'none' # Initially hidden
+        # Format conversion only - no resizing
 
-        def on_resolution_selector_change(change):
-            if change['new'] == 'custom':
-                self.custom_resize_resolution.layout.display = 'block'
-            else:
-                self.custom_resize_resolution.layout.display = 'none'
-        self.resize_resolution_selector.observe(on_resolution_selector_change, names='value')
-
-        self.resize_quality = widgets.IntSlider(
-            value=90,
-            min=0,
+        self.conversion_quality = widgets.IntSlider(
+            value=95,
+            min=85,
             max=100,
-            step=1,
-            description='JPEG Quality:',
+            step=5,
+            description='Quality:',
             style={'description_width': 'initial'},
             layout=widgets.Layout(width='99%')
         )
 
-        self.resize_images_button = widgets.Button(
-            description="📏 Resize Images",
+        self.convert_images_button = widgets.Button(
+            description="🔄 Convert Image Formats",
             button_style='info'
         )
-        self.resize_images_button.on_click(self.run_resize_images)
+        self.convert_images_button.on_click(self.run_format_conversion)
 
         self.image_utils_output = widgets.Output()
 
         image_utils_box = widgets.VBox([
             image_utils_desc,
-            self.resize_resolution_selector,
-            self.custom_resize_resolution, # Added custom resolution input
-            self.resize_quality,
-            self.resize_images_button,
+            self.format_selector,
+            self.conversion_quality,
+            self.convert_images_button,
             self.image_utils_output
         ])
 
-        # --- Tag Curation Section ---
-        tag_curation_desc = widgets.HTML("""<h3>🏷️ Tag Curation (FiftyOne)</h3>
-        <p>Visually inspect and edit image tags using the FiftyOne interface. After making changes in FiftyOne, click 'Apply Curation Changes' to save them to your local caption files.</p>
-        """)
-
-        self.tag_curation_output = widgets.Output()
-
-        tag_curation_box = widgets.VBox([
-            tag_curation_desc,
-            self.apply_curation_button, # Re-use the existing button
-            self.tag_curation_output
-        ])
+        # Tag Curation functionality is integrated into Dataset Setup section
 
         # --- Advanced Caption Management ---
         caption_desc = widgets.HTML("""<h3>▶️ Advanced Caption Management</h3>
         <p>Professional tag curation tools for cleaning and organizing your caption files.</p>
-        <div style='background: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
-        <strong>🎯 Available Tools:</strong><br>
-        • <strong>Trigger Words:</strong> Add activation tags to all captions<br>
-        • <strong>Tag Removal:</strong> Remove unwanted tags from all captions<br>
-        • <strong>Search & Replace:</strong> Advanced bulk tag replacement with AND/OR logic<br>
-        • <strong>Sort & Deduplicate:</strong> Organize tags alphabetically and remove duplicates<br>
-        </div>""")
+        <p><strong>🎯 Available Tools:</strong></p>
+        <ul>
+        <li><strong>Trigger Words:</strong> Add activation tags to all captions</li>
+        <li><strong>Tag Removal:</strong> Remove unwanted tags from all captions</li>
+        <li><strong>Search & Replace:</strong> Advanced bulk tag replacement with AND/OR logic</li>
+        <li><strong>Sort & Deduplicate:</strong> Organize tags alphabetically and remove duplicates</li>
+        </ul>""")
 
         # Basic trigger word management
         basic_management_desc = widgets.HTML("<h4>🎯 Basic Tag Management</h4>")
@@ -732,8 +708,7 @@ class DatasetWidget:
             caption_box,
             cleanup_box,
             upload_box,
-            image_utils_box,
-            tag_curation_box
+            image_utils_box
         ])
         self.accordion.set_title(0, "📁 Dataset Setup")
         self.accordion.set_title(1, "📝 File Renaming")
@@ -742,7 +717,6 @@ class DatasetWidget:
         self.accordion.set_title(4, "🧹 Dataset Cleanup")
         self.accordion.set_title(5, "🤗 HuggingFace Upload")
         self.accordion.set_title(6, "🖼️ Image Utilities")
-        self.accordion.set_title(7, "🏷️ Tag Curation")
 
         self.widget_box = widgets.VBox([header_main, self.accordion])
 
@@ -1694,18 +1668,13 @@ class DatasetWidget:
                 print(f"💥 Unexpected error during upload: {str(e)}")
                 print("💡 Please check your token permissions and try again.")
 
-    def run_resize_images(self, b):
-        """Resizes images in the current dataset directory."""
+    def run_format_conversion(self, b):
+        """Convert image formats in the current dataset directory."""
         self.image_utils_output.clear_output()
         dataset_path = self.dataset_directory.value.strip()
 
-        selected_resolution = self.resize_resolution_selector.value
-        if selected_resolution == 'custom':
-            target_resolution = self.custom_resize_resolution.value
-        else:
-            target_resolution = selected_resolution
-
-        quality = self.resize_quality.value
+        target_format = self.format_selector.value
+        quality = self.conversion_quality.value
 
         if not dataset_path:
             self.image_utils_output.append_stdout("❌ Please set up a dataset directory first.\n")
@@ -1715,19 +1684,16 @@ class DatasetWidget:
             self.image_utils_output.append_stdout(f"❌ Dataset directory not found: {dataset_path}\n")
             return
 
-        if not isinstance(target_resolution, int) or target_resolution <= 0:
-            self.image_utils_output.append_stdout("❌ Please enter a valid positive integer for resolution.\n")
-            return
-
-        self.image_utils_output.append_stdout(f"📏 Starting image resizing for {dataset_path} to {target_resolution}x{target_resolution}...\n")
+        self.image_utils_output.append_stdout(f"🔄 Starting format conversion to {target_format.upper()} (quality: {quality})...\n")
         try:
-            success = self.manager.resize_images_in_dataset(dataset_path, target_resolution, quality)
+            # Use the existing image conversion functionality (need to implement in manager)
+            success = self.manager.convert_image_formats(dataset_path, target_format, quality)
             if success:
-                self.image_utils_output.append_stdout("✅ Image resizing complete.\n")
+                self.image_utils_output.append_stdout("✅ Format conversion complete.\n")
             else:
-                self.image_utils_output.append_stdout("❌ Image resizing failed. Check logs.\n")
+                self.image_utils_output.append_stdout("❌ Format conversion failed. Check logs.\n")
         except Exception as e:
-            self.image_utils_output.append_stdout(f"❌ An error occurred during image resizing: {e}\n")
+            self.image_utils_output.append_stdout(f"❌ An error occurred during format conversion: {e}\n")
 
     def run_review_tags(self, b):
         """Display the generated tags for review"""
