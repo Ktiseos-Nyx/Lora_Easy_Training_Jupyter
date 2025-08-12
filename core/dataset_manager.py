@@ -38,7 +38,7 @@ class DatasetManager:
         self.sd_scripts_dir = os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts")
 
     def create_fiftyone_dataset(self, dataset_path):
-        """Convert our Kohya-format dataset to FiftyOne format for viewing"""
+        """Convert real WD14-tagged dataset to FiftyOne format for viewing"""
         try:
             import fiftyone as fo
         except ImportError:
@@ -46,20 +46,81 @@ class DatasetManager:
         
         import os
 
+        # Load images first
         dataset = fo.Dataset.from_images_dir(
             dataset_path,
             recursive=True
         )
         
-        # Add custom metadata from Kohya folder format
+        print(f"📁 Loaded {len(dataset)} images, integrating captions...")
+        
+        # Integrate real caption data from .txt files
         for sample in dataset:
-            folder_name = os.path.basename(os.path.dirname(sample.filepath))
-            if '_' in folder_name:
-                repeats, concept = folder_name.split('_', 1)
-                sample['repeats'] = int(repeats)
-                sample['concept'] = concept
+            image_path = sample.filepath
+            caption_path = os.path.splitext(image_path)[0] + '.txt'
+            
+            # Add folder metadata if in Kohya format (e.g., "10_character_name/")
+            folder_name = os.path.basename(os.path.dirname(image_path))
+            if '_' in folder_name and folder_name.split('_')[0].isdigit():
+                parts = folder_name.split('_', 1)
+                sample['repeats'] = int(parts[0])
+                sample['concept'] = parts[1] if len(parts) > 1 else 'unknown'
+            else:
+                # Flat directory - no folder structure
+                sample['repeats'] = 1
+                sample['concept'] = os.path.basename(dataset_path)
+            
+            # Load caption file if it exists
+            if os.path.exists(caption_path):
+                try:
+                    with open(caption_path, 'r', encoding='utf-8') as f:
+                        caption_content = f.read().strip()
+                    
+                    # Store raw caption
+                    sample['caption_raw'] = caption_content
+                    
+                    # Parse tags (real format: "trigger, tag1, tag2, tag3")
+                    if caption_content:
+                        # Split on comma+space (real WD14 format)
+                        all_tags = [tag.strip() for tag in caption_content.split(', ') if tag.strip()]
+                        
+                        # First tag is typically the trigger word
+                        if all_tags:
+                            sample['trigger_word'] = all_tags[0]
+                            sample['wd14_tags'] = all_tags[1:] if len(all_tags) > 1 else []
+                            sample['all_tags'] = all_tags
+                            sample['tag_count'] = len(all_tags)
+                        else:
+                            sample['trigger_word'] = ''
+                            sample['wd14_tags'] = []
+                            sample['all_tags'] = []
+                            sample['tag_count'] = 0
+                    else:
+                        # Empty caption file
+                        sample['caption_raw'] = ''
+                        sample['trigger_word'] = ''
+                        sample['wd14_tags'] = []
+                        sample['all_tags'] = []
+                        sample['tag_count'] = 0
+                        
+                except Exception as e:
+                    print(f"⚠️ Error reading caption {caption_path}: {e}")
+                    sample['caption_raw'] = ''
+                    sample['trigger_word'] = ''
+                    sample['wd14_tags'] = []
+                    sample['all_tags'] = []
+                    sample['tag_count'] = 0
+            else:
+                # No caption file found
+                sample['caption_raw'] = ''
+                sample['trigger_word'] = ''
+                sample['wd14_tags'] = []
+                sample['all_tags'] = []
+                sample['tag_count'] = 0
+            
             sample.save()
         
+        print(f"✅ Caption integration complete")
         return dataset
 
     def launch_dataset_explorer(self, dataset_path):
@@ -98,14 +159,31 @@ class DatasetManager:
             results['duplicates'] = None
             
         try:
-            # Tag distribution analysis
+            # Tag distribution analysis (using real field names)
             print("📊 Analyzing tag distribution...")
-            tag_stats = dataset.count_values("wd14_tags") if dataset.has_sample_field("wd14_tags") else {}
-            results['tag_stats'] = tag_stats
-            print("✅ Tag distribution analysis complete.")
+            
+            # Count all tags across all samples
+            all_tags_counter = {}
+            trigger_words_counter = {}
+            
+            for sample in dataset:
+                # Count individual WD14 tags
+                if hasattr(sample, 'wd14_tags') and sample.wd14_tags:
+                    for tag in sample.wd14_tags:
+                        all_tags_counter[tag] = all_tags_counter.get(tag, 0) + 1
+                
+                # Count trigger words
+                if hasattr(sample, 'trigger_word') and sample.trigger_word:
+                    trigger_words_counter[sample.trigger_word] = trigger_words_counter.get(sample.trigger_word, 0) + 1
+            
+            results['tag_stats'] = all_tags_counter
+            results['trigger_stats'] = trigger_words_counter
+            
+            print(f"✅ Tag analysis complete: {len(all_tags_counter)} unique tags, {len(trigger_words_counter)} trigger words")
         except Exception as e:
             print(f"⚠️ Tag analysis failed: {e}")
             results['tag_stats'] = {}
+            results['trigger_stats'] = {}
 
         try:
             # Image quality analysis
@@ -259,22 +337,41 @@ class DatasetManager:
             images_deleted = 0 # Placeholder for future deletion logic
 
             for sample in dataset:
-                # Check for tag changes
-                if "wd14_tags" in sample and sample.wd14_tags is not None:
-                    caption_filepath = os.path.splitext(sample.filepath)[0] + ".txt"
-                    current_tags = ", ".join(sample.wd14_tags)
+                # Check for tag changes using real field structure
+                caption_filepath = os.path.splitext(sample.filepath)[0] + ".txt"
+                
+                # Reconstruct caption from FiftyOne fields
+                if hasattr(sample, 'all_tags') and sample.all_tags:
+                    # Use all_tags if available (preserves order)
+                    current_tags = ", ".join(sample.all_tags)
+                elif hasattr(sample, 'trigger_word') or hasattr(sample, 'wd14_tags'):
+                    # Reconstruct from trigger + wd14_tags
+                    tags_list = []
+                    if hasattr(sample, 'trigger_word') and sample.trigger_word:
+                        tags_list.append(sample.trigger_word)
+                    if hasattr(sample, 'wd14_tags') and sample.wd14_tags:
+                        tags_list.extend(sample.wd14_tags)
+                    current_tags = ", ".join(tags_list)
+                elif hasattr(sample, 'caption_raw') and sample.caption_raw:
+                    # Use raw caption if available
+                    current_tags = sample.caption_raw
+                else:
+                    # No tags available
+                    continue
 
-                    try:
-                        with open(caption_filepath, 'r', encoding='utf-8') as f:
-                            existing_tags = f.read().strip()
-                    except FileNotFoundError:
-                        existing_tags = "" # No existing caption file
+                # Compare with existing caption file
+                try:
+                    with open(caption_filepath, 'r', encoding='utf-8') as f:
+                        existing_tags = f.read().strip()
+                except FileNotFoundError:
+                    existing_tags = "" # No existing caption file
 
-                    if existing_tags != current_tags:
-                        with open(caption_filepath, 'w', encoding='utf-8') as f:
-                            f.write(current_tags)
-                        print(f"  Updated tags for {os.path.basename(sample.filepath)}")
-                        files_updated += 1
+                # Update if changed
+                if existing_tags != current_tags:
+                    with open(caption_filepath, 'w', encoding='utf-8') as f:
+                        f.write(current_tags)
+                    print(f"  ✅ Updated tags for {os.path.basename(sample.filepath)}")
+                    files_updated += 1
                 
                 # Future: Handle image deletion if a 'deleted' field is added by FiftyOne curation
                 # if "deleted" in sample and sample.deleted:

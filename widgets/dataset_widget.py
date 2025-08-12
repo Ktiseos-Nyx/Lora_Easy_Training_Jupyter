@@ -1136,36 +1136,42 @@ class DatasetWidget:
                 self.current_fo_session = session
                 print("✅ FiftyOne launched in browser tab")
                 
-            # Add optional analysis (non-blocking)
+            # Add optional analysis (using real data structure)
             try:
                 print("📊 Running dataset analysis...")
                 
                 # Basic stats
                 print(f"   📁 Total images: {len(dataset)}")
                 
-                # Check for existing tags
-                if dataset.has_sample_field("wd14_tags"):
-                    tag_stats = dataset.count_values("wd14_tags")
-                    if tag_stats:
-                        print("   🏷️ Top 5 Tags:")
-                        for tag, count in sorted(tag_stats.items(), key=lambda x: x[1], reverse=True)[:5]:
-                            print(f"      - {tag}: {count}")
-                else:
-                    print("   ℹ️ No WD14 tags found - run tagging first")
-                    
-                # Check folder structure (Kohya format)
-                concepts = {}
+                # Check for captions
+                captioned_samples = 0
+                total_tags = 0
+                trigger_words = set()
+                
                 for sample in dataset:
-                    folder_name = os.path.basename(os.path.dirname(sample.filepath))
-                    if '_' in folder_name:
-                        parts = folder_name.split('_', 1)
-                        concept = parts[1] if len(parts) > 1 else folder_name
-                        concepts[concept] = concepts.get(concept, 0) + 1
-                        
-                if concepts:
-                    print("   🎯 Concepts found:")
-                    for concept, count in concepts.items():
-                        print(f"      - {concept}: {count} images")
+                    if hasattr(sample, 'tag_count') and sample.tag_count > 0:
+                        captioned_samples += 1
+                        total_tags += sample.tag_count
+                    if hasattr(sample, 'trigger_word') and sample.trigger_word:
+                        trigger_words.add(sample.trigger_word)
+                
+                print(f"   📝 Captioned images: {captioned_samples}/{len(dataset)} ({captioned_samples/len(dataset)*100:.1f}%)")
+                print(f"   🏷️ Total tags: {total_tags}")
+                print(f"   🎯 Unique triggers: {len(trigger_words)}")
+                
+                # Show trigger words
+                if trigger_words:
+                    print("   🔥 Trigger words found:")
+                    for trigger in sorted(trigger_words):
+                        print(f"      - {trigger}")
+                
+                # Show top tags if available
+                if len(dataset) > 0:
+                    first_sample = dataset.first()
+                    if hasattr(first_sample, 'wd14_tags') and first_sample.wd14_tags:
+                        print("   ✅ WD14 tags loaded and available for editing")
+                    else:
+                        print("   ℹ️ No WD14 tags found - may need to run tagging first")
                         
             except Exception as e:
                 print(f"   ⚠️ Analysis failed: {e}")
