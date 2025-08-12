@@ -221,7 +221,7 @@ class SetupWidget:
                 'RunPod: Volume persistence configured',
                 'RunPod: Network volumes available'
             ])
-        elif info['is_colab']:
+        elif info.get('is_colab', False):
             info['optimization_hints'].extend([
                 'Colab: Session timeout ~12 hours',
                 'Colab: Mount Drive for model storage'
@@ -253,13 +253,13 @@ class SetupWidget:
         elif self.container_info['is_sagemaker']:
             return f"<div style='padding: 10px; border: 1px solid #ff9500; border-radius: 5px; margin: 10px 0;'><strong>☁️ {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Enterprise ML platform</small></div>"
         
-        elif self.container_info['is_paperspace']:
+        elif self.container_info.get('is_paperspace', False):
             return f"<div style='padding: 10px; border: 1px solid #6c5ce7; border-radius: 5px; margin: 10px 0;'><strong>📄 {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Gradient platform active</small></div>"
         
-        elif self.container_info['is_kaggle']:
+        elif self.container_info.get('is_kaggle', False):
             return f"<div style='padding: 10px; border: 1px solid #20beff; border-radius: 5px; margin: 10px 0;'><strong>🏆 {provider} Detected</strong><br>{gpu_emoji} {gpu_info}{storage_info}<br><small>Competition environment</small></div>"
         
-        elif self.container_info['is_colab']:
+        elif self.container_info.get('is_colab', False):
             return f"<div style='padding: 10px; border: 1px solid #dc3545; border-radius: 5px; margin: 10px 0;'><strong>⚠️ {provider}</strong><br>❌ This environment is not supported!<br><small>Use RunPod, VastAI, or proper container instead</small></div>"
         
         elif self.container_info['is_container']:
