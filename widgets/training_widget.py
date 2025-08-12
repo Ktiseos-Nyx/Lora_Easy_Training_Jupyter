@@ -36,7 +36,27 @@ class TrainingWidget:
         project_desc = widgets.HTML("<h3>▶️ Project Settings</h3><p>Define your project name, the path to your base model, and your dataset directory. You can also specify an existing LoRA to continue training from and your Weights & Biases API key for logging.</p>")
         self.project_name = widgets.Text(description="Project Name:", placeholder="e.g., my-awesome-lora (no spaces or special characters)", layout=widgets.Layout(width='99%'))
         self.model_type = widgets.Dropdown(options=['SD1.5/2.0', 'SDXL', 'Flux', 'SD3'], value='SDXL', description='Model Type:', style={'description_width': 'initial'})
-        self.model_path = widgets.Text(description="Model Path:", placeholder="Absolute path to your base model (e.g., /path/to/model.safetensors)", layout=widgets.Layout(width='99%'))
+        # Model selection with auto-populated dropdown
+        self.model_dropdown = widgets.Dropdown(
+            options=[('Select a model...', '')],
+            description='Base Model:',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='400px')
+        )
+        self.model_refresh_btn = widgets.Button(description="🔄 Refresh", button_style='info', layout=widgets.Layout(width='100px'))
+        self.model_path = widgets.Text(description="Or custom path:", placeholder="Full path to model file", layout=widgets.Layout(width='99%'))
+        
+        # Auto-populate models on widget creation
+        self._refresh_model_list()
+        
+        # Connect refresh button
+        self.model_refresh_btn.on_click(lambda b: self._refresh_model_list())
+        
+        # Update model_path when dropdown changes
+        def on_model_selected(change):
+            if change['new']:
+                self.model_path.value = change['new']
+        self.model_dropdown.observe(on_model_selected, names='value')
         
         # Flux/SD3 specific widgets
         self.clip_l_path = widgets.Text(description="CLIP-L Path:", placeholder="Path to clip_l.safetensors", layout=widgets.Layout(width='99%'))
@@ -57,7 +77,10 @@ class TrainingWidget:
         
         self.model_type.observe(_on_model_type_change, names='value')
 
-        project_box = widgets.VBox([project_desc, self.project_name, self.model_type, self.model_path, self.flux_sd3_widgets, self.dataset_dir, self.continue_from_lora, self.wandb_key])
+        # Model selection layout
+        model_selection_box = widgets.HBox([self.model_dropdown, self.model_refresh_btn])
+        
+        project_box = widgets.VBox([project_desc, self.project_name, self.model_type, model_selection_box, self.model_path, self.flux_sd3_widgets, self.dataset_dir, self.continue_from_lora, self.wandb_key])
 
         # --- Training Configuration (merged: Basic Settings + Learning Rate + Training Options) ---
         training_config_desc = widgets.HTML("""<h3>▶️ Training Configuration</h3>
@@ -929,6 +952,48 @@ class TrainingWidget:
                     features[f'experimental_{i}'] = child.value
             return features
         return {}
+
+    def _refresh_model_list(self):
+        """Scan pretrained_model directory and populate dropdown"""
+        try:
+            import glob
+            
+            # Look for models in common locations
+            search_paths = [
+                "pretrained_model/*.safetensors",
+                "pretrained_model/*.ckpt", 
+                "pretrained_model/*.pth",
+                "models/*.safetensors",
+                "models/*.ckpt",
+                "*/pretrained_model/*.safetensors",  # Check subdirectories
+            ]
+            
+            found_models = []
+            for pattern in search_paths:
+                found_models.extend(glob.glob(pattern))
+            
+            # Remove duplicates and sort
+            found_models = sorted(list(set(found_models)))
+            
+            if found_models:
+                # Create dropdown options with friendly names
+                options = [('Select a model...', '')]
+                for model_path in found_models:
+                    model_name = os.path.basename(model_path)
+                    # Truncate long names for dropdown display
+                    display_name = model_name if len(model_name) <= 50 else model_name[:47] + "..."
+                    options.append((display_name, model_path))
+                
+                self.model_dropdown.options = options
+                print(f"✅ Found {len(found_models)} models in pretrained_model directory")
+            else:
+                self.model_dropdown.options = [('No models found - use custom path below', '')]
+                print("📁 No models found in pretrained_model/ directory")
+                print("💡 Place your .safetensors/.ckpt files in pretrained_model/ folder or use custom path")
+                
+        except Exception as e:
+            print(f"⚠️ Error scanning for models: {e}")
+            self.model_dropdown.options = [('Error scanning - use custom path', '')]
 
     def display(self):
         display(self.widget_box)
