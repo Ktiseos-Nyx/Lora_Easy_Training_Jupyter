@@ -1,6 +1,6 @@
 # LoRA Easy Training - Jupyter Widget Edition 🚀
 
-A user-friendly LoRA training system based on KohyaSS, powered by interactive Jupyter widgets. Train on your local computer or rented GPU servers with ease.
+A user-friendly LoRA training system powered by Kohya's proven training backend and interactive Jupyter widgets. Features unified model detection and streamlined workflows for VastAI, RunPod, and local environments.
 
 | Python Version | License | Discord | Twitch | Support |
 |---|---|---|---|---|
@@ -14,12 +14,12 @@ A user-friendly LoRA training system based on KohyaSS, powered by interactive Ju
     - **🧮 Training calculator**: Shows roughly how long training could take.
     - **🛠️ Easy setup**: Works with VastAI, RunPod, and local computers.
     - **📊 Dataset tools**: Auto-tag images, upload files, manage captions.
-    - **🚀 Multiple options**: SDXL, SD 1.5, Flux & SD3 support plus various optimizers and LoRA types.
+    - **🚀 Multiple architectures**: SDXL, SD 1.5 (production-ready), plus experimental Flux & SD3 support with various optimizers and LoRA types.
 
 <details><summary>What You Need</summary>
 
 - **GPU**: Nvidia (For built-in CUDA support) or AMD Cards for ROCm. (Future Support for ARC and otherwise coming)
-- **Python**: Version 3.10.6 (compatible with Kohya-ss training)
+- **Python**: Version 3.10+ (3.10.6 recommended for maximum compatibility)
 - **Platform**: Windows or Linux based Operating Systems.
 </details>
 
@@ -29,14 +29,15 @@ Our trainer directly handles the task of installing major requirements depending
 
 - **Note for Cloud Users**: If you are on platforms like Vast.AI or RunPod, Jupyter is often launched automatically after your instance starts. You can usually proceed directly to the "Usage Guide" once your environment is ready.
 
-**Prerequisites:**
-You will need Git and Python 3.10.6.
+<details><summary>📋 Installation Prerequisites</summary>
+
+You will need Git and Python 3.10+.
 
 **Check your Python version first:**
 
 ```bash
 python --version
-# Need: Python 3.10.6 (other versions may break dependencies)
+# Need: Python 3.10+ (3.10.6 recommended for maximum compatibility)
 ```
 
 You can install Python 3.10.6 directly from Python's [main website here](https://www.python.org/downloads/release/python-3106/).
@@ -51,6 +52,8 @@ git --version  # If this fails, install Git first
 - **Windows**: Download from [git-scm.com](https://git-scm.com/download/win)
 - **Mac**: `xcode-select --install` in Terminal
 - **Linux**: `sudo apt install git` (Ubuntu/Debian)
+
+</details>
 
 **Main Installation Steps:**
 
@@ -84,17 +87,19 @@ jupyter notebook
 
 ### Notebook Workflow
 
-Your main starting point order for the notebooks is as follows:
+Your main workflow:
 - `Dataset_Maker_Widget.ipynb` - Prepare images and captions
-- `Unified_LoRA_Trainer.ipynb` - Configure and run training
-- `LoRA_Calculator_Widget.ipynb` - Calculate optimal steps (optional)
+- `Unified_LoRA_Trainer.ipynb` - Train SDXL, SD 1.5, or experimental Flux/SD3 models
+- `LoRA_Calculator_Widget.ipynb` - Calculate optimal training parameters (optional)
 
-### Data Ingestion
+<details><summary>📊 Data Ingestion Options</summary>
 
-Explain options for getting data into the system:
+Options for getting data into the system:
 - **URL/ZIP Download**: Download and extract datasets from URLs (e.g., Hugging Face, Civitai) or local ZIP files.
 - **Direct Image Upload**: Upload individual images directly into your dataset folder.
 - **Gallery-DL Scraper**: Utilize the advanced `gallery-dl` integration to scrape images and their tags from over 300 supported websites.
+
+</details>
 
 <details><summary>How to Get Model/VAE Links</summary>
 
@@ -134,13 +139,26 @@ Use this method if the model has only one version or if a version has multiple f
 ![How to get a link from Hugging Face by copying the direct file address](./assets/model_url_hf_2.png)
 </details>
 
-### Image Utilities
+<details><summary>🛠️ Advanced Features</summary>
 
+### Image Utilities
 - **Image Resizing**: Easily resize images in your dataset to a target resolution, with options for quality.
 
-### Tag Curation
-
+### Tag Curation  
 - **FiftyOne Integration**: Visually inspect and edit image tags using the FiftyOne interface. After making changes in FiftyOne, click 'Apply Curation Changes' to save them to your local caption files.
+
+</details>
+
+<details><summary>🏗️ New Unified Architecture</summary>
+
+Our system now features:
+- **Automatic Model Detection**: Unified trainer automatically detects SDXL vs SD 1.5 models
+- **Kohya Backend Integration**: Leverages battle-tested Kohya training strategies  
+- **Environment-Agnostic**: Works across conda, venv, and system Python installations
+- **Memory Optimization**: Automatic VRAM detection and profile selection
+- **Cross-Platform**: Proper subprocess handling for Windows/Linux/macOS development
+
+</details>
 
 ## 🛠️ Troubleshooting & Support
 

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Ktiseos Nyx
+# Contributors: See README.md Credits section for full acknowledgements
+
 # shared_managers.py
 # This file provides shared manager instances for use across widgets
 # Uses lazy loading - only creates managers when actually needed
@@ -105,7 +109,8 @@ def create_widgets():
         'training': create_widget('training'),
         'utilities': create_widget('utilities'),
         'calculator': create_widget('calculator'),
-        'file_manager': create_widget('file_manager')
+        'file_manager': create_widget('file_manager'),
+        'image_curation': create_widget('image_curation')
     }
 
 def create_widget(widget_name):
@@ -128,6 +133,9 @@ def create_widget(widget_name):
     elif widget_name == 'file_manager':
         from widgets.file_manager_widget import create_file_manager_widget
         return create_file_manager_widget()  # Returns widget directly
+    elif widget_name == 'image_curation':
+        from widgets.image_curation_widget import ImageCurationWidget
+        return ImageCurationWidget(shared_managers=None)  # Self-contained widget
     else:
-        available = ['setup', 'dataset', 'training', 'utilities', 'calculator', 'file_manager']
+        available = ['setup', 'dataset', 'training', 'utilities', 'calculator', 'file_manager', 'image_curation']
         raise ValueError(f"Unknown widget: {widget_name}. Available: {available}")

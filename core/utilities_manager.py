@@ -1,9 +1,16 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Ktiseos Nyx
+# Contributors: See README.md Credits section for full acknowledgements
+
 # core/utilities_manager.py
-import subprocess
 import os
+import subprocess
 import sys
+
 from huggingface_hub import HfApi, login
-from .managers import get_venv_python_path, get_subprocess_environment
+
+from .managers import get_subprocess_environment
+
 
 class UtilitiesManager:
     def __init__(self):
@@ -26,7 +33,7 @@ class UtilitiesManager:
             print("❌ Error: Repository name is required.")
             print("💡 Example: 'my-awesome-loras' (no spaces, lowercase preferred)")
             return False
-        
+
         # Validate file extension
         if not model_path.lower().endswith(('.safetensors', '.ckpt', '.pt', '.pth')):
             print("⚠️ Warning: File doesn't appear to be a model file (.safetensors, .ckpt, .pt, .pth)")
@@ -35,7 +42,7 @@ class UtilitiesManager:
         try:
             login(token=hf_token)
             api = HfApi()
-            
+
             filename = os.path.basename(model_path)
             repo_id = f"{api.whoami()['name']}/{repo_name}"
 
@@ -47,7 +54,7 @@ class UtilitiesManager:
                 commit_message=f"Upload {filename}",
                 repo_type="model"
             )
-            print(f"✅ Upload complete!")
+            print("✅ Upload complete!")
             print(f"🔗 View your model at: https://huggingface.co/{repo_id}")
             print(f"📁 Direct file link: https://huggingface.co/{repo_id}/blob/main/{filename}")
             return True
@@ -76,24 +83,24 @@ class UtilitiesManager:
             venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
         else:
             venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
-            
+
         if os.path.exists(venv_python_path):
             venv_python = venv_python_path
         else:
             venv_python = "python"  # Use system python (common in containers)
-        
+
         # Try Derrian's enhanced resize script first, fallback to Kohya's
-        derrian_resize_script = os.path.join(self.trainer_dir, "derrian_backend", "utils", "resize_lora.py") 
+        derrian_resize_script = os.path.join(self.trainer_dir, "derrian_backend", "utils", "resize_lora.py")
         kohya_resize_script = os.path.join(self.sd_scripts_dir, "networks/resize_lora.py")
-        
+
         if os.path.exists(derrian_resize_script):
             resize_script = derrian_resize_script
             print("🔧 Using Derrian's enhanced resize script with dynamic ranking")
         elif os.path.exists(kohya_resize_script):
-            resize_script = kohya_resize_script  
+            resize_script = kohya_resize_script
             print("🔧 Using Kohya's standard resize script")
         else:
-            print(f"❌ Error: No LoRA resize script found")
+            print("❌ Error: No LoRA resize script found")
             print(f"   Looked for: {derrian_resize_script}")
             print(f"   Looked for: {kohya_resize_script}")
             print("💡 Please ensure the trainer environment setup completed successfully.")
@@ -109,10 +116,10 @@ class UtilitiesManager:
         ]
 
         print(f"Resizing LoRA from {input_path} to {output_path} with dim={new_dim}, alpha={new_alpha}...")
-        
+
         # Get standardized subprocess environment (fixes CAME import issues!)
         env = get_subprocess_environment(self.project_root)
-        
+
         try:
             process = subprocess.Popen(
                 command,
@@ -126,7 +133,7 @@ class UtilitiesManager:
 
             for line in iter(process.stdout.readline, ''):
                 print(line, end='')
-            
+
             process.stdout.close()
             return_code = process.wait()
 
@@ -165,17 +172,17 @@ class UtilitiesManager:
                         caption_count += 1
                     else:
                         other_files += 1
-            
+
             print(f"\nResults for {dataset_path}:")
             print(f"  Images: {image_count}")
             print(f"  Captions: {caption_count}")
             print(f"  Other files: {other_files}")
             return True
-            
+
         except Exception as e:
             print(f"Error counting files: {e}")
             return False
-    
+
     def optimize_dataset_images(self, dataset_path, target_format="webp", max_file_size_mb=2, quality=95, max_dimension=None):
         """
         Optimize all images in a dataset directory
@@ -190,27 +197,28 @@ class UtilitiesManager:
         if not os.path.exists(dataset_path):
             print(f"❌ Error: Dataset path not found at {dataset_path}")
             return False
-            
+
         # Import PIL here since it's only needed for this function
         try:
             from PIL import Image, ImageFile
+
             # Enable loading of truncated images
             ImageFile.LOAD_TRUNCATED_IMAGES = True
         except ImportError:
             print("❌ Error: PIL (Pillow) not available. Install with: pip install Pillow")
             return False
-        
+
         # Supported input formats
         input_extensions = {'.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.gif'}
         target_format = target_format.lower()
-        
+
         if target_format not in ['webp', 'jpeg']:
             print("❌ Error: target_format must be 'webp' or 'jpeg'")
             return False
-        
+
         target_ext = '.webp' if target_format == 'webp' else '.jpg'
         max_file_size_bytes = max_file_size_mb * 1024 * 1024
-        
+
         print(f"🖼️ Optimizing images in: {dataset_path}")
         print(f"📊 Target format: {target_format.upper()}")
         print(f"📏 Max file size: {max_file_size_mb} MB")
@@ -218,14 +226,14 @@ class UtilitiesManager:
         if max_dimension:
             print(f"📐 Max dimension: {max_dimension}px")
         print("="*60)
-        
+
         processed_count = 0
         converted_count = 0
         resized_count = 0
         error_count = 0
         total_size_before = 0
         total_size_after = 0
-        
+
         try:
             # Get all image files
             image_files = []
@@ -234,20 +242,20 @@ class UtilitiesManager:
                     file_ext = os.path.splitext(file)[1].lower()
                     if file_ext in input_extensions:
                         image_files.append(os.path.join(root, file))
-            
+
             if not image_files:
                 print("⚠️ No image files found to optimize")
                 return True
-                
+
             print(f"📁 Found {len(image_files)} images to process")
             print()
-            
+
             for i, image_path in enumerate(image_files, 1):
                 try:
                     file_name = os.path.basename(image_path)
                     file_size_before = os.path.getsize(image_path)
                     total_size_before += file_size_before
-                    
+
                     # Load image
                     with Image.open(image_path) as img:
                         # Convert to RGB if necessary (for JPEG/WebP compatibility)
@@ -260,17 +268,17 @@ class UtilitiesManager:
                             img = rgb_img
                         elif img.mode not in ('RGB', 'RGBA'):
                             img = img.convert('RGB')
-                        
+
                         original_size = img.size
                         needs_resize = False
-                        
+
                         # Check if we need to resize based on file size or dimensions
                         if file_size_before > max_file_size_bytes:
                             needs_resize = True
-                            
+
                         if max_dimension and (img.width > max_dimension or img.height > max_dimension):
                             needs_resize = True
-                        
+
                         # Resize if needed
                         if needs_resize:
                             if max_dimension:
@@ -282,34 +290,34 @@ class UtilitiesManager:
                                 new_size = (int(img.width * scale_factor), int(img.height * scale_factor))
                                 img = img.resize(new_size, Image.Resampling.LANCZOS)
                             resized_count += 1
-                        
+
                         # Determine output path
                         file_dir = os.path.dirname(image_path)
                         file_basename = os.path.splitext(file_name)[0]
                         output_path = os.path.join(file_dir, f"{file_basename}{target_ext}")
-                        
+
                         # Save in target format
                         save_kwargs = {'quality': quality, 'optimize': True}
                         if target_format == 'webp':
                             save_kwargs['method'] = 6  # Best compression
-                        
+
                         img.save(output_path, format=target_format.upper(), **save_kwargs)
-                        
+
                         # Get new file size
                         file_size_after = os.path.getsize(output_path)
                         total_size_after += file_size_after
-                        
+
                         # Remove original if format changed
                         format_changed = not image_path.lower().endswith(target_ext)
                         if format_changed:
                             os.remove(image_path)
                             converted_count += 1
-                        
+
                         processed_count += 1
-                        
+
                         # Progress update
                         size_reduction = ((file_size_before - file_size_after) / file_size_before * 100) if file_size_before > 0 else 0
-                        
+
                         status_parts = []
                         if format_changed:
                             status_parts.append("converted")
@@ -317,24 +325,24 @@ class UtilitiesManager:
                             status_parts.append(f"resized {original_size[0]}x{original_size[1]}→{img.size[0]}x{img.size[1]}")
                         if size_reduction > 0:
                             status_parts.append(f"{size_reduction:.1f}% smaller")
-                        
+
                         status = f"({', '.join(status_parts)})" if status_parts else ""
-                        
+
                         print(f"  ✅ [{i:3d}/{len(image_files)}] {file_name} {status}")
-                        
+
                         # Show progress every 25 files
                         if i % 25 == 0:
                             print(f"     📊 Progress: {i}/{len(image_files)} processed...")
-                        
+
                 except Exception as e:
                     print(f"  ❌ Error processing {file_name}: {e}")
                     error_count += 1
                     continue
-            
+
             # Final summary
             total_size_reduction = total_size_before - total_size_after
             size_reduction_percent = (total_size_reduction / total_size_before * 100) if total_size_before > 0 else 0
-            
+
             print("\n" + "="*60)
             print("🎉 Dataset optimization complete!")
             print(f"📊 Processed: {processed_count}/{len(image_files)} images")
@@ -344,13 +352,13 @@ class UtilitiesManager:
                 print(f"📏 Resized: {resized_count} images")
             if error_count > 0:
                 print(f"❌ Errors: {error_count} images failed")
-            
+
             print(f"💾 Size reduction: {total_size_reduction / (1024*1024):.1f} MB ({size_reduction_percent:.1f}%)")
             print(f"📁 Before: {total_size_before / (1024*1024):.1f} MB")
             print(f"📁 After: {total_size_after / (1024*1024):.1f} MB")
-            
+
             return error_count == 0
-            
+
         except Exception as e:
             print(f"❌ Unexpected error during optimization: {e}")
             return False

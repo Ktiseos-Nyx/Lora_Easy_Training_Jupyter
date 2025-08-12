@@ -5,18 +5,20 @@ Unified Inference Manager leveraging Kohya's library for image generation.
 """
 import os
 import sys
-import torch
-from typing import Dict, Any, Optional
+from typing import Any, Dict
 
 # Add Kohya's backend to system path
 sys.path.insert(0, os.path.join(os.getcwd(), "trainer", "derrian_backend", "sd_scripts"))
 
-from library import model_util, train_util
-from library.strategy_sd import SdTokenizeStrategy, SdTextEncodingStrategy
-from library.strategy_sdxl import SdxlTokenizeStrategy, SdxlTextEncodingStrategy
+import logging
+
+from library import model_util
+from library.strategy_sd import SdTextEncodingStrategy, SdTokenizeStrategy
+from library.strategy_sdxl import (SdxlTextEncodingStrategy,
+                                   SdxlTokenizeStrategy)
+
 # Import other strategies as needed, e.g., flux, sd3
 
-import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -49,14 +51,14 @@ class KohyaInferenceManager:
             return self.models_cache[model_path]
 
         logger.info(f"Loading {model_type} model from: {model_path}")
-        
+
         v2 = 'v2' in model_path.lower()
-        
+
         text_encoder, vae, unet = model_util.load_models_from_stable_diffusion_checkpoint(
             v2=v2,
             ckpt_path=model_path
         )
-        
+
         self.models_cache[model_path] = (text_encoder, vae, unet)
         return text_encoder, vae, unet
 
@@ -66,7 +68,7 @@ class KohyaInferenceManager:
         """
         model_path = params.get('model_path')
         prompt = params.get('prompt', '')
-        
+
         if not model_path or not os.path.exists(model_path):
             logger.error("Model path is required and must exist.")
             return
@@ -77,10 +79,10 @@ class KohyaInferenceManager:
             return
 
         strategy = self.strategies[model_type]
-        
+
         try:
             text_encoder, vae, unet = self._load_model(model_path, model_type)
-            
+
             # TODO: Implement the full inference pipeline:
             # 1. Tokenize prompt using strategy['tokenize']
             # 2. Encode tokens using strategy['encoding']
@@ -88,7 +90,7 @@ class KohyaInferenceManager:
             # 4. Denoising loop using the unet
             # 5. Decode latents using VAE
             # 6. Save or return the image
-            
+
             logger.info(f"Successfully loaded model and strategy for {model_type}.")
             logger.info("Inference pipeline is not fully implemented yet.")
 
@@ -110,7 +112,7 @@ if __name__ == '__main__':
             'model_path': sd15_model,
             'prompt': 'a beautiful landscape painting'
         })
-    
+
     if os.path.exists(sdxl_model):
         manager.generate_image({
             'model_path': sdxl_model,

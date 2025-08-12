@@ -1,7 +1,11 @@
-import ipywidgets as widgets
-from IPython.display import display, Image as IPImage
-from core.inference_manager import LoRAInferenceManager
 import os
+
+import ipywidgets as widgets
+from IPython.display import Image as IPImage
+from IPython.display import display
+
+from core.inference_manager import LoRAInferenceManager
+
 
 class InferenceWidget:
     def __init__(self):
@@ -11,7 +15,7 @@ class InferenceWidget:
         except ImportError:
             print("⚠️ Sidecar not available. Inference will display in main notebook.")
             self.inference_sidecar = None
-        
+
         self.inference_manager = LoRAInferenceManager()
         self.create_widgets()
 
@@ -22,7 +26,7 @@ class InferenceWidget:
             options=self._get_lora_options(),  # Populate from output directory
             layout=widgets.Layout(width='99%')
         )
-        
+
         # Base Model Path
         self.base_model_path = widgets.Text(
             description="Base Model:",
@@ -41,38 +45,38 @@ class InferenceWidget:
             placeholder="your_trigger_word, 1girl, standing...",
             layout=widgets.Layout(width='99%', height='100px')
         )
-        
+
         self.negative_prompt_text = widgets.Textarea(
             description="Negative:",
             placeholder="worst quality, low quality...",
             layout=widgets.Layout(width='99%', height='60px')
         )
-        
+
         # Generation controls
         self.lora_strength = widgets.FloatSlider(
             description="LoRA Strength:",
             min=0.0, max=2.0, step=0.1, value=1.0
         )
-        
+
         self.cfg_scale = widgets.FloatSlider(
             description="CFG Scale:",
             min=1.0, max=20.0, step=0.5, value=7.0
         )
-        
+
         self.steps_slider = widgets.IntSlider(
             description="Steps:",
             min=10, max=50, step=5, value=20
         )
-        
+
         self.generate_button = widgets.Button(
             description="🎨 Generate Preview",
             button_style='primary'
         )
         self.generate_button.on_click(self._on_generate)
-        
+
         # Results display
         self.result_output = widgets.Output()
-        
+
         self.widget_box = widgets.VBox([
             self.base_model_path,
             self.load_base_model_button,
@@ -127,7 +131,7 @@ class InferenceWidget:
             try:
                 if lora_path:
                     self.inference_manager.load_lora(lora_path, lora_strength)
-                
+
                 image = self.inference_manager.generate_preview(prompt, negative_prompt, steps, cfg)
                 if image:
                     display(IPImage(image.tobytes(), format='png'))

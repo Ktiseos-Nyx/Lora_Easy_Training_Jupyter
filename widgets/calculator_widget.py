@@ -1,9 +1,15 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Ktiseos Nyx
+# Contributors: See README.md Credits section for full acknowledgements
+
 # widgets/calculator_widget.py
-import ipywidgets as widgets
-from IPython.display import display, Image
-import os
 import glob
+import os
 from pathlib import Path
+
+import ipywidgets as widgets
+from IPython.display import Image, display
+
 
 class CalculatorWidget:
     def __init__(self):
@@ -46,7 +52,7 @@ class CalculatorWidget:
         )
 
         self.calculate_button = widgets.Button(description="Calculate Steps", button_style='success')
-        
+
         dataset_input_box = widgets.HBox([self.dataset_path, self.browse_button])
 
         input_box = widgets.VBox([
@@ -91,34 +97,34 @@ class CalculatorWidget:
         """Auto-populate with detected dataset directories"""
         with self.output_area:
             self.output_area.clear_output()
-            
+
             # Look for dataset directories
             datasets_pattern = "datasets/*"
             existing_dirs = [d for d in glob.glob(datasets_pattern) if os.path.isdir(d)]
-            
+
             if existing_dirs:
                 # Sort by modification time (most recent first)
                 existing_dirs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-                
+
                 print("📁 Available datasets:")
                 print("=" * 40)
-                
+
                 for i, dataset_dir in enumerate(existing_dirs[:5]):  # Show top 5
                     folder_name = os.path.basename(dataset_dir)
                     repeats, caption = self.extract_kohya_params(folder_name)
                     image_count = self.count_images_in_directory(dataset_dir)
-                    
+
                     print(f"{i+1}. {dataset_dir}")
                     print(f"   📊 {image_count} images, {repeats} repeats")
                     if caption:
                         print(f"   🏷️ Caption: {caption}")
                     print()
-                
+
                 # Auto-populate with most recent
                 most_recent = existing_dirs[0]
                 self.dataset_path.value = most_recent
                 print(f"📌 Auto-selected: {most_recent}")
-                
+
             else:
                 print("📂 No datasets found in 'datasets/' directory")
                 print("💡 Create a dataset using the Dataset Maker first!")
@@ -147,10 +153,10 @@ class CalculatorWidget:
             # Extract Kohya parameters from folder name
             folder_name = os.path.basename(dataset_path)
             repeats, caption = self.extract_kohya_params(folder_name)
-            
+
             # Count images in dataset
             images = self.count_images_in_directory(dataset_path)
-            
+
             if images == 0:
                 print(f"❌ No images found in: {dataset_path}")
                 return
@@ -170,22 +176,22 @@ class CalculatorWidget:
             print(f"📦 Batch Size:        {batch_size}")
             print("=" * 50)
             print(f"⚡ Total Steps:       {total_steps}")
-            
+
             # Training time estimation
             if total_steps > 0:
-                print(f"\n⏱️ Time Estimates (approximate):")
+                print("\n⏱️ Time Estimates (approximate):")
                 print(f"   • GPU rental:     {total_steps * 2 / 60:.1f}-{total_steps * 4 / 60:.1f} minutes")
                 print(f"   • Home GPU:       {total_steps * 3 / 60:.1f}-{total_steps * 6 / 60:.1f} minutes")
-            
+
             # Recommendations
-            print(f"\n🎯 Training Analysis:")
+            print("\n🎯 Training Analysis:")
             if total_steps < 500:
                 print("⚠️ Low step count - may underfit. Consider more epochs or repeats.")
             elif total_steps > 5000:
                 print("⚠️ High step count - may overfit. Consider fewer epochs.")
             else:
                 print("✅ Good step count for most LoRA training scenarios.")
-            
+
             print(f"\n💡 Formula: ({images} images × {repeats} repeats × {epochs} epochs) ÷ {batch_size} batch = {total_steps} steps")
 
             # --- Display Doro Image ---

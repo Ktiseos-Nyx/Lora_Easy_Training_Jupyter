@@ -1,13 +1,13 @@
 import torch
 from diffusers import StableDiffusionPipeline
-import os
+
 
 class LoRAInferenceManager:
     def __init__(self):
         self.pipeline = None
         self.current_lora = None
         self.base_model = None
-        
+
     def load_base_model(self, model_path):
         """Load base SD model"""
         print(f"🎨 Loading base model: {model_path}")
@@ -18,7 +18,7 @@ class LoRAInferenceManager:
         )
         self.base_model = model_path
         print("✅ Base model loaded.")
-        
+
     def load_lora(self, lora_path, strength=1.0):
         """Load and apply LoRA"""
         if self.pipeline:
@@ -28,13 +28,13 @@ class LoRAInferenceManager:
             print("✅ LoRA loaded.")
         else:
             print("❌ Base model not loaded. Cannot load LoRA.")
-            
+
     def generate_preview(self, prompt, negative_prompt="", steps=20, cfg=7.0):
         """Generate preview image"""
         if not self.pipeline:
             print("❌ Pipeline not initialized. Load base model first.")
             return None
-            
+
         print(f"Generating preview for: {prompt}")
         image = self.pipeline(
             prompt=prompt,
@@ -42,6 +42,6 @@ class LoRAInferenceManager:
             num_inference_steps=steps,
             guidance_scale=cfg
         ).images[0]
-        
+
         print("✅ Preview image generated.")
         return image

@@ -4,8 +4,9 @@
 Compatibility wrapper for the inference system.
 """
 
-from .kohya_inference_manager import KohyaInferenceManager
 import logging
+
+from .kohya_inference_manager import KohyaInferenceManager
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ class RefactoredInferenceManager:
     to the new KohyaInferenceManager. It ensures that existing widgets and
     code can operate without modification.
     """
-    
+
     def __init__(self):
         self.kohya_manager = KohyaInferenceManager()
         logger.info("RefactoredInferenceManager initialized, using Kohya backend.")
@@ -29,7 +30,7 @@ class RefactoredInferenceManager:
             params (dict): A dictionary of parameters for image generation,
                            including 'model_path', 'prompt', etc.
         """
-        logger.info(f"Delegating generation request to KohyaInferenceManager.")
+        logger.info("Delegating generation request to KohyaInferenceManager.")
         try:
             self.kohya_manager.generate_image(params)
         except Exception as e:
