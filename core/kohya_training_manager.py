@@ -80,7 +80,7 @@ class KohyaTrainingManager:
     MODEL_TYPE_PATTERNS = {
         'sd15': ['v1-5', 'sd-v1', 'sd_v1'],
         'sd20': ['v2-0', 'sd-v2', 'sd_v2', '768-v-ema'],
-        'sdxl': ['xl-base', 'sdxl', 'xl_base', 'xl', '-xl-', '_xl_'],
+        'sdxl': ['xl-base', 'sdxl', 'xl_base', 'xl', '-xl-', '_xl_', 'illustrious', 'pony', 'noobai', 'animagine'],
         'flux': ['flux', 'FLUX'],
         'sd3': ['sd3', 'SD3']
     }
