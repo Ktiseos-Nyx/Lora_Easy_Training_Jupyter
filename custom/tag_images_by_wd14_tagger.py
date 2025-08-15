@@ -110,7 +110,13 @@ def main(args):
                     force_filename=file,
                 )
         for file in files:
-            hf_hub_download(args.repo_id, file, cache_dir=model_location, force_download=True, force_filename=file)
+            # Download to HF cache first, then copy to local location
+            downloaded_path = hf_hub_download(args.repo_id, file, force_download=args.force_download)
+            # Copy to local model directory
+            import shutil
+            local_file_path = os.path.join(model_location, file)
+            shutil.copy2(downloaded_path, local_file_path)
+            logger.info(f"Copied {file} to {local_file_path}")
     else:
         logger.info("using existing wd14 tagger model")
 
@@ -154,14 +160,24 @@ def main(args):
                 provider_options=[{'device_type' : "GPU_FP32"}],
             )
         else:
-            ort_sess = ort.InferenceSession(
-                onnx_path,
-                providers=(
-                    ["CUDAExecutionProvider"] if "CUDAExecutionProvider" in ort.get_available_providers() else
-                    ["ROCMExecutionProvider"] if "ROCMExecutionProvider" in ort.get_available_providers() else
-                    ["CPUExecutionProvider"]
-                ),
-            )
+            # Try to create session with GPU first, but gracefully fall back to optimized CPU
+            try:
+                if "CUDAExecutionProvider" in ort.get_available_providers():
+                    logger.info("Attempting CUDA execution provider")
+                    ort_sess = ort.InferenceSession(onnx_path, providers=["CUDAExecutionProvider"])
+                elif "ROCMExecutionProvider" in ort.get_available_providers():
+                    logger.info("Attempting ROCm execution provider") 
+                    ort_sess = ort.InferenceSession(onnx_path, providers=["ROCMExecutionProvider"])
+                else:
+                    raise Exception("No GPU providers available, using CPU")
+            except Exception as e:
+                logger.info(f"GPU execution provider failed ({str(e)[:50]}...), falling back to optimized CPU")
+                # Use optimized CPU execution with all available optimizations
+                ort_sess = ort.InferenceSession(
+                    onnx_path, 
+                    providers=["CPUExecutionProvider"],
+                    sess_options=ort.SessionOptions()
+                )
     else:
         from tensorflow.keras.models import load_model
 

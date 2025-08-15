@@ -168,11 +168,11 @@ class SetupManager:
         # Check for VastAI first
         self._is_vastai = bool(os.environ.get('VAST_CONTAINERLABEL') or '/workspace' in self.project_root)
         if self._is_vastai:
-            self._correct_venv_path = '/venv/main/bin/pip'
-            print(f"🐳 VastAI detected - using correct venv: {self._correct_venv_path}")
-        else:
-            # Detect current Python/pip environment (conda, venv, etc.)
-            self._correct_venv_path = self._detect_current_pip()
+            print(f"🐳 VastAI detected - using current environment instead of hardcoded paths")
+        
+        # Always detect current Python/pip environment (conda, venv, etc.) - never hardcode paths
+        # This follows CLAUDE.md requirement: NEVER hardcode paths or environment assumptions
+        self._correct_venv_path = self._detect_current_pip()
 
         self._environment_detected = True
 

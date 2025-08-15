@@ -504,17 +504,10 @@ class DatasetManager:
         # First ensure the tagger model is available
         self._ensure_tagger_model_available(tagger_model)
 
-        # Try to find appropriate Python executable (cross-platform)
-        # First try Kohya's standard venv location
-        if sys.platform == "win32":
-            venv_python = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
-        else:
-            venv_python = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
-
-        if not os.path.exists(venv_python):
-            # Use current Python executable (should be the active venv)
-            venv_python = sys.executable
-            print(f"🐍 Using current Python environment: {venv_python}")
+        # Always use current Python executable for environment-agnostic execution
+        # This follows CLAUDE.md requirement: NEVER hardcode paths or environment assumptions
+        venv_python = sys.executable
+        print(f"🐍 Using current Python environment: {venv_python}")
 
         tagger_script = self._get_tagger_script_path()
 
@@ -535,6 +528,8 @@ class DatasetManager:
                 venv_python, tagger_script,
                 dataset_path,
                 "--repo_id", model_to_try,
+                "--model_dir", "wd14_tagger_model",  # Use relative path for cross-platform compatibility
+                "--force_download",  # Force download to local model_dir instead of using HF cache
                 "--thresh", str(threshold),
                 "--batch_size", "8" if "v3" in model_to_try or "swinv2" in model_to_try else "1",
                 "--max_data_loader_n_workers", "2",
@@ -583,16 +578,10 @@ class DatasetManager:
 
     def _tag_images_blip(self, dataset_path, caption_extension):
         """Tag images using BLIP captioning"""
-        # Try to find appropriate Python executable (cross-platform)
-        if sys.platform == "win32":
-            venv_python = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
-        else:
-            venv_python = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
-
-        if not os.path.exists(venv_python):
-            # Use current Python executable (should be the active venv)
-            venv_python = sys.executable
-            print(f"🐍 Using current Python environment: {venv_python}")
+        # Always use current Python executable for environment-agnostic execution
+        # This follows CLAUDE.md requirement: NEVER hardcode paths or environment assumptions
+        venv_python = sys.executable
+        print(f"🐍 Using current Python environment: {venv_python}")
 
         blip_script = os.path.join(self.sd_scripts_dir, "finetune/make_captions.py")
 
@@ -622,15 +611,9 @@ class DatasetManager:
         try:
             env = os.environ.copy()
 
-            # Add PYTHONPATH for custom optimizers (fixes CAME import issues)
-            derrian_dir = os.path.join(self.project_root, "trainer", "derrian_backend")
-            custom_scheduler_dir = os.path.join(derrian_dir, "custom_scheduler")
-
-            if os.path.exists(custom_scheduler_dir):
-                if "PYTHONPATH" in env:
-                    env["PYTHONPATH"] = f"{custom_scheduler_dir}:{env['PYTHONPATH']}"
-                else:
-                    env["PYTHONPATH"] = custom_scheduler_dir
+            # NOTE: Removed custom_scheduler PYTHONPATH injection
+            # The custom_scheduler should only be used for training, not for tagging operations
+            # Adding it here was breaking HuggingFace model loading in tagger subprocesses
 
             # Add common CUDA/CuDNN paths to LD_LIBRARY_PATH (keep existing logic!)
             cuda_path = os.environ.get("CUDA_PATH", "/usr/local/cuda")

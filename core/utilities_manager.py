@@ -78,16 +78,9 @@ class UtilitiesManager:
             print("Error: Please specify new dim and alpha values.")
             return False
 
-        # Check for venv python first, fall back to system python (cross-platform)
-        if sys.platform == "win32":
-            venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "Scripts", "python.exe")
-        else:
-            venv_python_path = os.path.join(self.sd_scripts_dir, "venv", "bin", "python")
-
-        if os.path.exists(venv_python_path):
-            venv_python = venv_python_path
-        else:
-            venv_python = "python"  # Use system python (common in containers)
+        # Always use current Python executable for environment-agnostic execution
+        # This follows CLAUDE.md requirement: NEVER hardcode paths or environment assumptions
+        venv_python = sys.executable
 
         # Try Derrian's enhanced resize script first, fallback to Kohya's
         derrian_resize_script = os.path.join(self.trainer_dir, "derrian_backend", "utils", "resize_lora.py")

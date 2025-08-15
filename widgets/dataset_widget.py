@@ -3,6 +3,7 @@
 # Contributors: See README.md Credits section for full acknowledgements
 
 # widgets/dataset_widget.py
+import asyncio
 import glob
 import os
 import re
@@ -111,7 +112,9 @@ class DatasetWidget:
             accept='.jpg,.jpeg,.png,.webp,.gif,.bmp,.tiff,.tif,.zip', # Added .zip
             multiple=True,
             description='Select Images/ZIP:', # Updated description
-            layout=widgets.Layout(width='99%')
+            layout=widgets.Layout(width='99%'),
+            # Add max file size to prevent memory issues
+            max_size=10*1024*1024  # 10MB per file limit
         )
 
         self.upload_images_button = widgets.Button(
@@ -723,8 +726,8 @@ class DatasetWidget:
         # --- Button Events ---
         self.url_download_button.on_click(self.run_url_download)
         self.create_folder_button.on_click(self.run_create_folder)
-        self.upload_images_button.on_click(self.run_upload_images)
-        self.upload_zip_button.on_click(self.run_upload_zip)
+        self.upload_images_button.on_click(self._handle_async_upload)
+        self.upload_zip_button.on_click(self._handle_async_zip_upload)
         # Gallery-dl scraper functionality integrated into URL download
         # self.gelbooru_button.on_click(self.run_gallery_dl_scraper)  # Button removed, functionality integrated
         self.preview_rename_button.on_click(self.run_preview_rename)
@@ -756,8 +759,8 @@ class DatasetWidget:
                 folder_path = self.dataset_directory.value.strip()
                 folder_exists = bool(folder_path) and os.path.exists(folder_path)
 
-                # Determine if any selected file is a ZIP
-                is_zip_selected = any(f['name'].endswith('.zip') for f in change['new'])
+                # Determine if any selected file is a ZIP (case-insensitive)
+                is_zip_selected = any(f['name'].lower().endswith('.zip') for f in change['new'])
 
                 if folder_exists:
                     self.upload_images_button.disabled = is_zip_selected # Disable image upload if zip is selected
@@ -774,7 +777,7 @@ class DatasetWidget:
                     # Try to suggest a folder name based on the files
                     suggested_name = "uploaded_dataset"
                     if is_zip_selected:
-                        zip_name = next(f['name'] for f in change['new'] if f['name'].endswith('.zip'))
+                        zip_name = next(f['name'] for f in change['new'] if f['name'].lower().endswith('.zip'))
                         suggested_name = zip_name.replace('.zip', '_dataset')
 
                     if not self.folder_name.value.strip():
@@ -870,7 +873,7 @@ class DatasetWidget:
                 # Check if files are already selected and enable appropriate buttons
                 if self.file_upload.value:
                     file_count = len(self.file_upload.value)
-                    is_zip_selected = any(f['name'].endswith('.zip') for f in self.file_upload.value)
+                    is_zip_selected = any(f['name'].lower().endswith('.zip') for f in self.file_upload.value)
 
                     # Enable the right button based on file type
                     self.upload_images_button.disabled = is_zip_selected
@@ -889,8 +892,16 @@ class DatasetWidget:
                 print(f"❌ Failed to create folder: {e}")
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create folder.</div>"
 
-    def run_upload_images(self, b):
-        """Upload multiple images to the created folder"""
+    def _handle_async_upload(self, b):
+        """Wrapper to handle async upload function"""
+        asyncio.create_task(self.run_upload_images(b))
+
+    def _handle_async_zip_upload(self, b):
+        """Wrapper to handle async ZIP upload function"""
+        asyncio.create_task(self.run_upload_zip(b))
+
+    async def run_upload_images(self, b):
+        """Upload multiple images to the created folder with async batch processing"""
         self.dataset_output.clear_output()
 
         if not self.dataset_directory.value:
@@ -903,59 +914,71 @@ class DatasetWidget:
 
         upload_folder = self.dataset_directory.value
         uploaded_files = self.file_upload.value
-
-        self.dataset_status.value = f"⚙️ Status: Uploading {len(uploaded_files)} images..."
+        total_files = len(uploaded_files)
+        batch_size = 5  # Process 5 files at a time
 
         with self.dataset_output:
             uploaded_count = 0
             total_size = 0
 
-            print(f"📁 Uploading {len(uploaded_files)} images to: {upload_folder}")
+            print(f"📁 Uploading {total_files} images to: {upload_folder}")
             print("="*60)
 
-            for file_info in uploaded_files:
-                try:
-                    filename = file_info['name']
-                    content_memview = file_info['content']
+            # Process files in batches
+            for i in range(0, total_files, batch_size):
+                batch = uploaded_files[i:i + batch_size]
+                batch_start = i + 1
+                batch_end = min(i + batch_size, total_files)
+                
+                # Update status for current batch
+                self.dataset_status.value = f"⚙️ Status: Processing batch {batch_start}-{batch_end} of {total_files} images..."
+                
+                for file_info in batch:
+                    try:
+                        filename = file_info['name']
+                        content_memview = file_info['content']
 
-                    # Convert memory view to bytes
-                    content = content_memview.tobytes()
+                        # Convert memory view to bytes
+                        content = content_memview.tobytes()
 
-                    if not content:
-                        print(f"⚠️ Warning: {filename} has no content, skipping")
-                        continue
+                        if not content:
+                            print(f"⚠️ Warning: {filename} has no content, skipping")
+                            continue
 
-                    file_path = os.path.join(upload_folder, filename)
+                        file_path = os.path.join(upload_folder, filename)
 
-                    # Write file content
-                    with open(file_path, 'wb') as f:
-                        f.write(content)
+                        # Write file content
+                        with open(file_path, 'wb') as f:
+                            f.write(content)
 
-                    file_size = len(content)
-                    total_size += file_size
-                    uploaded_count += 1
+                        file_size = len(content)
+                        total_size += file_size
+                        uploaded_count += 1
 
-                    print(f"✅ {filename} ({file_size/1024:.1f} KB)")
+                        print(f"✅ {filename} ({file_size/1024:.1f} KB)")
 
-                except Exception as e:
-                    print(f"❌ Failed to upload {filename if 'filename' in locals() else 'unknown file'}: {e}")
+                    except Exception as e:
+                        print(f"❌ Failed to upload {filename if 'filename' in locals() else 'unknown file'}: {e}")
+
+                # Yield control back to the event loop after each batch
+                await asyncio.sleep(0)
 
             total_size_mb = total_size / (1024 * 1024)
             print("\n🎉 Upload complete!")
-            print(f"📊 Uploaded: {uploaded_count}/{len(uploaded_files)} images")
+            print(f"📊 Uploaded: {uploaded_count}/{total_files} images")
             print(f"💾 Total size: {total_size_mb:.2f} MB")
             print(f"📁 Location: {upload_folder}")
 
             if uploaded_count > 0:
                 self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
 
-                # Clear the file upload widget for next use - don't force notify_change
+                # Clear the file upload widget for next use
                 self.file_upload.value = ()
             else:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
 
-    def run_upload_zip(self, b):
-        """Upload and extract a ZIP file to the created folder"""
+    async def run_upload_zip(self, b):
+        """Upload and extract a ZIP file to the created folder with async processing"""
         self.dataset_output.clear_output()
 
         if not self.dataset_directory.value:
@@ -972,7 +995,7 @@ class DatasetWidget:
         # Find the first ZIP file in the uploaded files
         zip_file_info = None
         for file_info in uploaded_files:
-            if file_info['name'].endswith('.zip'):
+            if file_info['name'].lower().endswith('.zip'):
                 zip_file_info = file_info
                 break
 
@@ -997,6 +1020,8 @@ class DatasetWidget:
                 print(f"✨ Extracting {zip_filename} to {upload_folder}")
                 with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
                     zip_ref.extractall(upload_folder)
+                # Yield control during extraction
+                await asyncio.sleep(0)
                 print("✅ Extraction complete.")
 
                 # Clean up the temporary zip file
