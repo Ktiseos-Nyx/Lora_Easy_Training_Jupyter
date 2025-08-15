@@ -5,6 +5,7 @@ Unified Inference Manager leveraging Kohya's library for image generation.
 """
 import os
 import sys
+import subprocess
 from typing import Any, Dict
 
 # Add Kohya's backend to system path
@@ -81,24 +82,70 @@ class KohyaInferenceManager:
         strategy = self.strategies[model_type]
 
         try:
-            text_encoder, vae, unet = self._load_model(model_path, model_type)
-
-            # TODO: Implement the full inference pipeline:
-            # 1. Tokenize prompt using strategy['tokenize']
-            # 2. Encode tokens using strategy['encoding']
-            # 3. Prepare latents (noise)
-            # 4. Denoising loop using the unet
-            # 5. Decode latents using VAE
-            # 6. Save or return the image
-
-            logger.info(f"Successfully loaded model and strategy for {model_type}.")
-            logger.info("Inference pipeline is not fully implemented yet.")
-
+            # Instead of implementing our own inference pipeline, use Kohya's proven scripts
+            inference_script = self._get_inference_script(model_type)
+            
+            # Build command for Kohya's inference script
+            cmd = [
+                sys.executable,  # Use current Python executable
+                inference_script,
+                "--ckpt", model_path,
+                "--prompt", prompt,
+                "--outdir", output_dir,
+                "--W", str(width),
+                "--H", str(height),
+                "--sampler", "ddim",  # Default sampler
+                "--steps", str(steps),
+                "--scale", str(cfg_scale)
+            ]
+            
+            # Add LoRA if specified
+            if lora_path:
+                cmd.extend(["--network_weights", lora_path])
+                if lora_strength != 1.0:
+                    cmd.extend(["--network_mul", str(lora_strength)])
+            
+            logger.info(f"Running Kohya inference: {' '.join(cmd)}")
+            
+            # Execute the inference script
+            result = subprocess.run(cmd, capture_output=True, text=True, cwd=self.sd_scripts_dir)
+            
+            if result.returncode == 0:
+                logger.info("✅ Inference completed successfully")
+                logger.info(result.stdout)
+            else:
+                logger.error("❌ Inference failed")
+                logger.error(result.stderr)
+                
         except Exception as e:
             logger.error(f"An error occurred during image generation: {e}")
-            # Clean up cache if loading failed
             if model_path in self.models_cache:
                 del self.models_cache[model_path]
+
+    def _get_inference_script(self, model_type: str) -> str:
+        """Get the appropriate Kohya inference script for model type"""
+        # Mapping of model types to Kohya inference scripts
+        script_mapping = {
+            'sd15': 'gen_img.py',
+            'sd20': 'gen_img.py', 
+            'sdxl': 'sdxl_gen_img.py',
+            'flux': 'flux_minimal_inference.py',
+            'sd3': 'sd3_minimal_inference.py'
+        }
+        
+        script_name = script_mapping.get(model_type, 'gen_img_diffusers.py')  # Default to diffusers script
+        script_path = os.path.join(self.sd_scripts_dir, script_name)
+        
+        if not os.path.exists(script_path):
+            # Fallback to general diffusers script
+            fallback_path = os.path.join(self.sd_scripts_dir, 'gen_img_diffusers.py')
+            if os.path.exists(fallback_path):
+                logger.warning(f"Script {script_path} not found, using fallback: {fallback_path}")
+                return fallback_path
+            else:
+                raise FileNotFoundError(f"No inference script found for {model_type}")
+                
+        return script_path
 
 # Example usage:
 if __name__ == '__main__':

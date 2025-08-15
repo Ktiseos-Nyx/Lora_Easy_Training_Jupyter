@@ -198,9 +198,36 @@ class SetupWidget:
                     info['optimization_hints'].append('H100 detected - next-gen performance monster!')
 
         except Exception:
-            # Fallback GPU detection
-            if os.path.exists('/proc/driver/nvidia/version'):
-                info['gpu_count'] = 1  # Assume at least 1 GPU
+            # Fallback GPU detection - actually try to count GPUs
+            try:
+                # Try nvidia-ml-py
+                import pynvml
+                pynvml.nvmlInit()
+                gpu_count = pynvml.nvmlDeviceGetCount()
+                info['gpu_count'] = gpu_count
+                info['gpu_driver'] = 'NVIDIA'
+            except ImportError:
+                # Try nvidia-smi command
+                try:
+                    result = subprocess.run(['nvidia-smi', '-L'], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        gpu_count = len([line for line in result.stdout.strip().split('\n') if 'GPU' in line])
+                        info['gpu_count'] = gpu_count
+                        info['gpu_driver'] = 'NVIDIA (nvidia-smi)'
+                    else:
+                        # Check if nvidia driver exists but no GPUs detected
+                        if os.path.exists('/proc/driver/nvidia/version'):
+                            info['gpu_count'] = 0  # Driver exists but no GPUs
+                            info['gpu_driver'] = 'NVIDIA (no devices)'
+                        else:
+                            info['gpu_count'] = 0  # No NVIDIA driver
+                            info['gpu_driver'] = 'None detected'
+                except FileNotFoundError:
+                    info['gpu_count'] = 0
+                    info['gpu_driver'] = 'None detected'
+            except Exception as e:
+                info['gpu_count'] = 0
+                info['gpu_driver'] = f'Detection failed: {e}'
 
         # === STORAGE AND PERFORMANCE HINTS ===
         try:
@@ -291,7 +318,11 @@ class SetupWidget:
         self.deep_validate_button = widgets.Button(description="🔧 Diagnose & Fix", button_style='warning', layout=button_layout)
         self.env_button = widgets.Button(description="🚩 Setup Environment", button_style='primary', layout=button_layout)
 
-        button_box = widgets.HBox([self.validate_button, self.deep_validate_button, self.env_button])
+        # Show all buttons for trainer notebook, just validation for dataset notebook
+        if hasattr(self, 'simplified_mode') and self.simplified_mode:
+            button_box = widgets.HBox([self.validate_button])
+        else:
+            button_box = widgets.HBox([self.validate_button, self.deep_validate_button, self.env_button])
         self.env_status = widgets.HTML("<div style='padding: 8px; border: 1px solid #007acc;'><strong>📊 Status:</strong> Ready for setup</div>")
         self.env_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
         env_box = widgets.VBox([env_desc, button_box, self.env_status, self.env_output])

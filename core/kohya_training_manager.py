@@ -18,16 +18,12 @@ from typing import Any, Dict, List
 
 import toml
 
-# Import Kohya's library system
+# Import Kohya's library system (required for training)
+kohya_path = os.path.join(os.getcwd(), "trainer", "derrian_backend", "sd_scripts")
+sys.path.insert(0, kohya_path)
+
+# Kohya SS library imports (core training logic)
 try:
-    # Add both Kohya and Derrian paths
-    kohya_path = os.path.join(os.getcwd(), "trainer", "derrian_backend", "sd_scripts")
-    derrian_path = os.path.join(os.getcwd(), "trainer", "derrian_backend")
-
-    sys.path.insert(0, kohya_path)
-    sys.path.insert(0, derrian_path)
-
-    # Kohya SS library imports (core training logic)
     import library.config_util as config_util
     import library.train_util as train_util
     from library import model_util
@@ -43,21 +39,32 @@ try:
                                        SdxlTextEncodingStrategy,
                                        SdxlTokenizeStrategy)
     from library.utils import setup_logging
-    # Derrian Distro validation and processing system
-    from utils import process, validation
-
-    KOHYA_AVAILABLE = True
-    DERRIAN_AVAILABLE = True
-
-except ImportError as e:
-    print(f"⚠️ Warning: Could not import Kohya/Derrian libraries: {e}")
-    print("Falling back to basic functionality")
-    KOHYA_AVAILABLE = False
-    DERRIAN_AVAILABLE = False
-
-# Setup logging using Kohya's system
-if KOHYA_AVAILABLE:
     setup_logging()
+    
+    # Also set up our file-based logging for easier debugging
+    from .logging_config import setup_file_logging
+    setup_file_logging()
+except ImportError as e:
+    raise ImportError(
+        f"❌ TRAINING SYSTEM UNAVAILABLE\n"
+        f"🔧 SOLUTION: Run 'python installer.py' to install required dependencies\n"
+        f"📍 TECHNICAL ERROR: {str(e)}\n"
+        f"📝 NOTE: This system requires Kohya's sd-scripts for training functionality"
+    ) from e
+
+# Import Derrian's utilities (validation and processing functions)
+derrian_path = os.path.join(os.getcwd(), "trainer", "derrian_backend")
+sys.path.insert(0, derrian_path)
+try:
+    # Import specific utility functions from individual Python files
+    from utils.process import *
+    from utils.validation import *
+except ImportError as e:
+    raise ImportError(f"❌ Derrian utilities not found: {e}\n"
+                     f"🔧 Please run: python installer.py\n"
+                     f"📝 This system requires Derrian's validation and processing utilities.") from e
+
+# Logging is set up during import above if Kohya is available
 import logging
 
 logger = logging.getLogger(__name__)
@@ -139,9 +146,6 @@ class KohyaTrainingManager:
 
     def _init_strategies(self):
         """Initialize Kohya's strategy system for different model architectures"""
-        if not KOHYA_AVAILABLE:
-            logger.warning("Kohya libraries not available, using fallback mode")
-            return
 
         self.strategies = {
             'sd15': {
@@ -390,22 +394,29 @@ class KohyaTrainingManager:
                     logger.info(f"Detected model type: {model_type} (pattern match)")
                     return model_type
 
-            # Try to load and inspect the model
-            if model_path.endswith('.safetensors') or model_path.endswith('.ckpt'):
-                # Use Kohya's model inspection utilities
+            # Use file size as additional heuristic for model type detection
+            if os.path.exists(model_path) and (model_path.endswith('.safetensors') or model_path.endswith('.ckpt')):
                 try:
-                    # This is a simplified approach - Kohya has more sophisticated detection
-                    # We can enhance this by actually loading model metadata
-                    if 'xl' in model_path_lower or 'sdxl' in model_path_lower:
-                        return 'sdxl'
-                    elif 'flux' in model_path_lower:
-                        return 'flux'
-                    elif 'sd3' in model_path_lower:
+                    file_size_gb = os.path.getsize(model_path) / (1024**3)  # Size in GB
+                    logger.debug(f"Model file size: {file_size_gb:.1f}GB")
+                    
+                    # File size based detection (common sizes, largest first)
+                    if file_size_gb > 10:  # Flux models are much larger (12-24GB)
+                        logger.info(f"Detected Flux model based on file size: {file_size_gb:.1f}GB")
+                        return 'flux'  
+                    elif file_size_gb > 8:  # SD3 models are also large (8-12GB)
+                        logger.info(f"Detected SD3 model based on file size: {file_size_gb:.1f}GB")
                         return 'sd3'
-                    else:
-                        return 'sd15'  # Default fallback
+                    elif file_size_gb > 5.5:  # SDXL models are typically 6-7GB
+                        logger.info(f"Detected SDXL model based on file size: {file_size_gb:.1f}GB")
+                        return 'sdxl'
+                    else:  # SD 1.5/2.0 models are typically 2-4GB
+                        logger.info(f"Detected SD1.5/2.0 model based on file size: {file_size_gb:.1f}GB")
+                        return 'sd15'
+                        
                 except Exception as e:
-                    logger.warning(f"Model inspection failed: {e}")
+                    logger.warning(f"File size detection failed: {e}")
+                    # Continue to fallback detection
 
         except Exception as e:
             logger.error(f"Model type detection failed: {e}")
@@ -522,11 +533,7 @@ class KohyaTrainingManager:
                 "v_parameterization": config.get('v_parameterization', False),
                 "clip_skip": config.get('clip_skip', 2),
             },
-            "dataset_arguments": {
-                "train_data_dir": self._ensure_parent_dataset_dir(config.get('dataset_path', '')),
-                "resolution": f"{config.get('resolution', 512)},{config.get('resolution', 512)}",
-                "batch_size": config.get('batch_size', 1),
-            },
+            # Dataset config moved to separate dataset.toml file
             "training_arguments": {
                 "output_dir": config.get('output_dir', self.output_dir),
                 "output_name": config.get('output_name', 'lora'),
@@ -553,6 +560,35 @@ class KohyaTrainingManager:
         logger.info(f"Created config TOML: {config_path}")
         return config_path
 
+    def create_dataset_toml(self, config: Dict) -> str:
+        """
+        Create dataset configuration TOML using proper Kohya format
+        """
+        dataset_path = os.path.join(self.config_dir, f"{config.get('output_name', 'lora')}_dataset.toml")
+        
+        # Kohya dataset config format from sd_scripts docs
+        dataset_config = {
+            "general": {
+                "shuffle_caption": config.get('shuffle_caption', True),
+                "caption_extension": config.get('caption_extension', '.txt'),
+                "keep_tokens": config.get('keep_tokens', 1)
+            },
+            "datasets": [{
+                "resolution": config.get('resolution', 512),
+                "batch_size": config.get('batch_size', 1),
+                "subsets": [{
+                    "image_dir": self._ensure_absolute_dataset_path(config.get('dataset_path', '')),
+                    "num_repeats": config.get('num_repeats', 10)
+                }]
+            }]
+        }
+        
+        with open(dataset_path, 'w') as f:
+            toml.dump(dataset_config, f)
+            
+        logger.info(f"Created dataset TOML: {dataset_path}")
+        return dataset_path
+
     def start_training(self, config: Dict, monitor_widget=None) -> bool:
         """
         Start training using Kohya's training scripts and our configuration
@@ -564,15 +600,54 @@ class KohyaTrainingManager:
             if 'model_type' not in config:
                 config['model_type'] = self.detect_model_type(config.get('model_path', ''))
 
-            # Create configuration file
-            config_path = self.create_config_toml(config)
+            # Validate config using Derrian's comprehensive validation system
+            logger.info("🔍 Validating training configuration...")
+            passed, errors, validated_args, validated_dataset_args, tag_data = self.validate_config_with_derrian(config)
+            
+            if not passed:
+                error_msg = f"❌ Configuration validation failed:\n" + "\n".join(f"  • {error}" for error in errors)
+                logger.error(error_msg)
+                if monitor_widget:
+                    monitor_widget.update_phase("Configuration validation failed", "error")
+                return False
 
-            # Get training command
-            cmd = self._get_training_command(config, config_path)
+            logger.info("✅ Configuration validation passed")
 
-            # Get Python executable
-            from core.managers import get_venv_python_path
-            python_executable = get_venv_python_path(self.project_root)
+            # Create both configuration files using Derrian's proven TOML generators
+            # Instead of our guessed implementations, use the actual Derrian functions
+            try:
+                # Change to Derrian backend directory for proper path handling
+                original_cwd = os.getcwd()
+                os.chdir(os.path.join(self.project_root, "trainer", "derrian_backend"))
+                
+                # Use validated args from Derrian's validation system
+                _, config_path = process_args(validated_args)
+                _, dataset_path = process_dataset_args(validated_dataset_args)
+                
+                # Convert relative paths to absolute paths
+                config_path = os.path.abspath(config_path)
+                dataset_path = os.path.abspath(dataset_path)
+                
+                logger.info(f"✅ Generated config: {config_path}")
+                logger.info(f"✅ Generated dataset config: {dataset_path}")
+                
+            except Exception as e:
+                logger.error(f"Failed to generate TOML files with Derrian functions: {e}")
+                # Fallback to our basic TOML generation
+                logger.warning("Falling back to basic TOML generation")
+                config_path = self.create_config_toml(config)
+                dataset_path = self.create_dataset_toml(config)
+            finally:
+                # Always restore original working directory
+                if 'original_cwd' in locals():
+                    os.chdir(original_cwd)
+
+            # Get training command with both config files
+            cmd = self._get_training_command(config, config_path, dataset_path)
+
+            # Always use current Python executable for environment-agnostic execution
+            # This follows CLAUDE.md requirement: NEVER hardcode paths or environment assumptions
+            python_executable = sys.executable
             cmd.insert(0, python_executable)
 
             # Setup environment
@@ -626,22 +701,22 @@ class KohyaTrainingManager:
                 monitor_widget.update_phase(f"Training failed: {e}", "error")
             return False
 
-    def _get_training_command(self, config: Dict, config_path: str) -> List[str]:
+    def _get_training_command(self, config: Dict, config_path: str, dataset_path: str) -> List[str]:
         """
-        Generate the training command for the specified model type.
+        Generate the training command for the specified model type using both config files.
         """
         model_type = config.get('model_type', 'sd15')
         script_name = self.SCRIPT_MAPPING.get(model_type, 'train_network.py')
         script_path = os.path.join(self.sd_scripts_dir, script_name)
 
-        cmd = [script_path, "--config_file", config_path]
+        # Proper Kohya command format with both config files
+        cmd = [
+            script_path, 
+            "--config_file", config_path,
+            "--dataset_config", dataset_path
+        ]
 
-        # Add arguments from the config dictionary
-        # This is a simplified approach; a more robust implementation would map
-        # config keys to command-line arguments.
-        if 'dataset_path' in config:
-            cmd.extend(["--train_data_dir", config['dataset_path']])
-
+        # Add model-specific arguments for Flux/SD3
         if model_type in ['flux', 'sd3']:
             model_config = self.model_configs[model_type]
             if config.get('clip_l_path'):
@@ -905,17 +980,15 @@ class KohyaTrainingManager:
         🧪 HYBRID VALIDATION - Use Derrian's advanced validation system
         This is the missing piece we lost during refactoring!
         """
-        if not DERRIAN_AVAILABLE:
-            logger.warning("Derrian validation not available, falling back to basic validation")
-            errors = self._validate_config_basic(config)
-            return len(errors) == 0, errors, config, {}, {}
+        # Try to use Derrian validation, fallback to basic if not available
 
         try:
             # Convert our config to Derrian's expected format
             derrian_args = self._convert_config_to_derrian_format(config)
 
             # Use Derrian's comprehensive validation system
-            passed, sdxl, errors, validated_args, validated_dataset_args, tag_data = validation.validate(derrian_args)
+            # The validate function was imported via "from utils.validation import *"
+            passed, sdxl, errors, validated_args, validated_dataset_args, tag_data = validate(derrian_args)
 
             if passed:
                 logger.info("✅ Derrian validation passed - config is safe for training")
@@ -928,50 +1001,92 @@ class KohyaTrainingManager:
 
         except Exception as e:
             logger.error(f"Derrian validation failed with exception: {e}")
+            logger.warning("Falling back to basic validation")
             # Fallback to basic validation
-            errors = self._validate_config_basic(config)
+            errors = self.validate_config(config)
             return len(errors) == 0, errors, config, {}, {}
 
     def _convert_config_to_derrian_format(self, config: Dict) -> Dict:
-        """Convert our config format to what Derrian's validation expects"""
-        # This is a simplified conversion - would need to be expanded based on
-        # Derrian's exact requirements, but this gives us the framework
-        return {
-            "args": {
-                "training": config
+        """Convert our config format to what Derrian's validation expects - REAL conversion from archived version"""
+        logger.debug("⚙️ Converting widget config to Derrian backend format...")
+        
+        # Proper Derrian args structure (from archived training_manager.py)
+        derrian_args = {
+            "basic": {
+                "pretrained_model_name_or_path": config.get('model_path'),
+                "output_dir": config.get('output_dir', self.output_dir),
+                "output_name": config.get('output_name', 'lora'),
+                "save_every_n_epochs": config.get('save_every_n_epochs', 1),
+                "keep_only_last_n_epochs": config.get('keep_only_last_n_epochs', 0),
+                "train_batch_size": config.get('batch_size', 1),
+                "mixed_precision": config.get('mixed_precision', 'fp16'),
+                "save_precision": config.get('save_precision', 'fp16'),
+                "max_train_epochs": config.get('epochs', 10),
+                "learning_rate": config.get('unet_lr', 1e-4),
+                "text_encoder_lr": config.get('text_encoder_lr', 5e-5),
+                "optimizer_type": config.get('optimizer', 'AdamW8bit'),
+                "lr_scheduler": config.get('lr_scheduler', 'cosine'),
+                "lr_warmup_ratio": config.get('lr_warmup_ratio', 0.1),
+                "network_dim": config.get('network_dim', 16),
+                "network_alpha": config.get('network_alpha', 8),
+                "clip_skip": config.get('clip_skip', 2),
+                "cache_latents": config.get('cache_latents', True),
+                "cache_latents_to_disk": config.get('cache_latents_to_disk', False),
+                "xformers": config.get('cross_attention') == "xformers",
+                "sdpa": config.get('cross_attention') == "sdpa",
             },
-            "dataset": {
-                "datasets": [{
-                    "image_dir": self._ensure_parent_dataset_dir(config.get('dataset_path', '')),
-                    "num_repeats": config.get('num_repeats', 10),
-                    "resolution": f"{config.get('resolution', 1024)},{config.get('resolution', 1024)}"
-                }]
+            "sdxl": {
+                "cache_text_encoder_outputs": config.get('cache_text_encoder_outputs', False),
+            },
+            "network": {
+                "type": config.get('lora_type', 'lora'),
+                "algo": config.get('lycoris_method', 'none'),
             }
         }
 
-    def _ensure_parent_dataset_dir(self, dataset_path):
+        # Proper Derrian dataset structure
+        derrian_dataset = {
+            "general": {
+                "resolution": config.get('resolution', 512),
+                "shuffle_caption": config.get('shuffle_caption', True),
+                "keep_tokens": config.get('keep_tokens', 1),
+                "flip_aug": config.get('flip_aug', False),
+                "caption_extension": config.get('caption_extension', '.txt'),
+                "enable_bucket": config.get('enable_bucket', True),
+                "bucket_no_upscale": config.get('bucket_no_upscale', False),
+                "bucket_reso_steps": config.get('bucket_reso_steps', 64),
+                "min_bucket_reso": config.get('min_bucket_reso', 256),
+                "max_bucket_reso": config.get('max_bucket_reso', 2048),
+                "batch_size": config.get('batch_size', 1),
+            },
+            "subsets": [
+                {
+                    "image_dir": self._ensure_absolute_dataset_path(config.get('dataset_path', '')),
+                    "num_repeats": config.get('num_repeats', 10),
+                    "caption_extension": config.get('caption_extension', '.txt'),
+                }
+            ]
+        }
+
+        return {"args": derrian_args, "dataset": derrian_dataset}
+
+    def _ensure_absolute_dataset_path(self, dataset_path):
         """
-        Ensure dataset path points to parent directory of numbered folders AND is absolute.
+        Ensure dataset path is absolute and correctly points to the training dataset folder.
         
         Since sd_scripts runs from trainer/derrian_backend/sd_scripts/, we need absolute paths
         to find datasets in the project root.
+        
+        The dataset path should point directly to the folder containing images (e.g., "3_character_name"),
+        NOT the parent "datasets" directory.
         """
         if not dataset_path:
             return dataset_path
-
-        import re
 
         # Convert to absolute path if it's relative (relative to project root)
         if not os.path.isabs(dataset_path):
             dataset_path = os.path.join(self.project_root, dataset_path)
 
-        # Check if the path ends with a numbered folder pattern (e.g., "10_character_name")
-        path_basename = os.path.basename(dataset_path)
-
-        # Kohya folder pattern: starts with number followed by underscore
-        if re.match(r'^\d+_', path_basename):
-            # This looks like a numbered folder - return parent directory
-            return os.path.dirname(dataset_path)
-        else:
-            # This looks like a parent directory already - use as-is
-            return dataset_path
+        # Return the absolute path to the actual dataset folder
+        # This should be the directory containing the training images
+        return dataset_path

@@ -4,6 +4,7 @@
 
 # core/managers.py
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -427,8 +428,11 @@ class SetupManager:
                     gpu_info['acceleration'] = 'directml'
                     gpu_info['directml_available'] = True
                     if torch_directml.is_available():
-                        gpu_info['type'] = 'amd'  # Assume AMD for DirectML
-                        gpu_info['devices'] = ['DirectML Device']
+                        # Don't assume AMD - DirectML works on AMD, Intel, and even some NVIDIA
+                        # Try to detect actual GPU vendor
+                        actual_gpu_type = self._detect_directml_gpu_vendor()
+                        gpu_info['type'] = actual_gpu_type
+                        gpu_info['devices'] = [f'DirectML Device ({actual_gpu_type.upper()})']
                         return gpu_info
                 except ImportError:
                     pass
@@ -469,6 +473,49 @@ class SetupManager:
                 pass
 
         return amd_info
+
+    def _detect_directml_gpu_vendor(self) -> str:
+        """Detect actual GPU vendor when using DirectML using proper GPU utilities"""
+        
+        # 1. Check for NVIDIA first using nvidia-smi
+        try:
+            result = subprocess.run(['nvidia-smi', '-L'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and 'GPU' in result.stdout:
+                return 'nvidia'
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # 2. Check for AMD using rocm-smi 
+        try:
+            result = subprocess.run(['rocm-smi', '--showid'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return 'amd'
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # 3. Fallback AMD check using radeontop (if available)
+        try:
+            result = subprocess.run(['radeontop', '-d', '-l1'], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return 'amd' 
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
+        # 4. Intel detection - only for ARM-based systems (like Surface Pro X, M1 Macs running Windows ARM)
+        if platform.machine().lower() in ['arm64', 'aarch64']:
+            try:
+                # Check for Intel Arc on ARM systems (rare but possible)
+                result = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'], 
+                                      capture_output=True, text=True, timeout=5)
+                if result.returncode == 0 and any(intel_indicator in result.stdout.lower() 
+                                                for intel_indicator in ['intel arc', 'intel iris']):
+                    return 'intel'
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                pass
+
+        # 5. Final fallback - we know DirectML is available but can't determine vendor
+        print("⚠️ DirectML available but GPU vendor unknown - this may affect training optimization")
+        return 'unknown'
 
     def _check_cuda_cudnn_versions(self):
         """Check CUDA and cuDNN version compatibility (NVIDIA) or ROCm compatibility (AMD)"""

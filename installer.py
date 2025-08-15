@@ -24,7 +24,9 @@ def get_python_command():
 class UnifiedInstaller:
     def __init__(self):
         self.project_root = os.path.dirname(os.path.abspath(__file__))
-        self.python_cmd = get_python_command()
+        # Always use current Python executable for environment-agnostic execution
+        # This follows CLAUDE.md requirement: NEVER hardcode paths or environment assumptions
+        self.python_cmd = sys.executable
         self.pip_cmd = [self.python_cmd, '-m', 'pip']
         
         self.trainer_dir = os.path.join(self.project_root, "trainer")

@@ -98,6 +98,16 @@ def get_file_manager():
 
 # Lazy widget imports - only import when actually needed!
 
+def show_recent_logs(lines=50):
+    """Show recent log entries for debugging"""
+    from core.logging_config import tail_log_file
+    tail_log_file(lines)
+
+def get_log_file_path():
+    """Get the current log file path for manual viewing"""
+    from core.logging_config import get_latest_log_file
+    return get_latest_log_file()
+
 def create_widgets():
     """
     Create all widgets with shared manager instances (lazy loaded)
@@ -118,6 +128,11 @@ def create_widget(widget_name):
     if widget_name == 'setup':
         from widgets.setup_widget import SetupWidget
         return SetupWidget(get_setup_manager(), get_model_manager())
+    elif widget_name == 'setup_simple':
+        from widgets.setup_widget import SetupWidget
+        widget = SetupWidget(get_setup_manager(), get_model_manager())
+        widget.simplified_mode = True
+        return widget
     elif widget_name == 'dataset':
         from widgets.dataset_widget import DatasetWidget
         return DatasetWidget(get_dataset_manager())
