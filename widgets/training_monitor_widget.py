@@ -247,10 +247,10 @@ class TrainingMonitorWidget:
         ])
 
     def set_training_config(self, config):
-        """Set the training configuration received from TrainingWidget (now structured TOML format)"""
+        """Set the training configuration received from TrainingWidget (flat or structured format)"""
         self.training_config = config
 
-        # Handle structured TOML config format
+        # Handle both flat widget config and structured TOML config format
         if self._is_structured_config(config):
             # Extract from structured TOML format
             training_args = config.get('training_arguments', {})

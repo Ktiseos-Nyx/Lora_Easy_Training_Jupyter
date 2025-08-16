@@ -547,10 +547,8 @@ class TrainingWidget:
             display(monitor.widget_box)
 
         # Pass the training configuration to the monitor
-        flat_config = self._get_training_config()
-        # Convert flat widget config to structured TOML format for consistency
-        structured_config = self._convert_to_structured_config(flat_config)
-        monitor.set_training_config(structured_config)
+        config = self._get_training_config()
+        monitor.set_training_config(config)
 
         with self.training_output:
             self.training_output.clear_output()
