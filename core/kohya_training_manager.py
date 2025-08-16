@@ -619,7 +619,7 @@ class KohyaTrainingManager:
         logger.warning(f"📊 Dataset path from config: {config.get('dataset_path')}")
         logger.warning("🚨 === END DATASET TOML RECREATION ALERT ===")
         
-        dataset_path = os.path.join(self.config_dir, f"{config.get('output_name', 'lora')}_dataset.toml")
+        dataset_toml_path = os.path.join(self.config_dir, f"{config.get('output_name', 'lora')}_dataset.toml")
         
         # 🎭 DATASET DEBUG: Check critical fields before TOML generation
         logger.info("🎭 === DATASET TOML DEBUG ===")
@@ -712,11 +712,11 @@ class KohyaTrainingManager:
         if subsets_section:
             dataset_config["datasets"][0]["subsets"] = [subsets_section]
         
-        with open(dataset_path, 'w') as f:
+        with open(dataset_toml_path, 'w') as f:
             toml.dump(dataset_config, f)
             
-        logger.info(f"Created dataset TOML: {dataset_path}")
-        return dataset_path
+        logger.info(f"Created dataset TOML: {dataset_toml_path}")
+        return dataset_toml_path
 
     def start_training(self, config: Dict, monitor_widget=None) -> bool:
         """
