@@ -229,8 +229,7 @@ class ImageCurationWidget:
             try:
                 # Initialize curation manager
                 if not self.curation_manager:
-                    from ..core.image_curation_manager import \
-                        ImageCurationManager
+                    from core.image_curation_manager import ImageCurationManager
                     self.curation_manager = ImageCurationManager()
 
                 # Set project path

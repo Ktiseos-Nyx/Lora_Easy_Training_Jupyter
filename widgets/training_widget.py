@@ -10,7 +10,7 @@ import warnings
 import ipywidgets as widgets
 from IPython.display import display
 
-from core.refactored_training_manager import HybridTrainingManager
+from core.refactored_training_manager import RefactoredTrainingManager
 
 from .training_monitor_widget import TrainingMonitorWidget
 
@@ -22,7 +22,7 @@ class TrainingWidget:
     def __init__(self, training_manager=None):
         # Use dependency injection - accept manager instance or create default
         if training_manager is None:
-            training_manager = HybridTrainingManager()
+            training_manager = RefactoredTrainingManager()
 
         self.manager = training_manager
         self.create_widgets()

@@ -589,6 +589,15 @@ class KohyaTrainingManager:
                 "clip_skip": config.get('clip_skip', 2),                        # Widget provides this
                 "save_model_as": "safetensors",                                  # Static format
                 "seed": 42,                                                      # Static seed
+                # Performance and memory optimization
+                "gradient_checkpointing": config.get('gradient_checkpointing', True),  # Widget provides this
+                "cache_latents": config.get('cache_latents', True),             # Widget provides this
+                "cache_latents_to_disk": config.get('cache_latents_to_disk', True),  # Widget provides this
+                "vae_batch_size": config.get('vae_batch_size', 1),              # Widget provides this
+                "no_half_vae": config.get('no_half_vae', False),                # Widget provides this
+                # Training optimizations
+                "gradient_accumulation_steps": config.get('gradient_accumulation_steps', 1),  # Widget provides this
+                "max_grad_norm": config.get('max_grad_norm', 1.0),              # Widget provides this
             },
         }
 

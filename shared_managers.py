@@ -57,8 +57,8 @@ def get_training_manager():
     """Get or create the training manager (heavy imports - only load when needed!)"""
     global _training_manager
     if _training_manager is None:
-        from core.refactored_training_manager import HybridTrainingManager
-        _training_manager = HybridTrainingManager()
+        from core.refactored_training_manager import RefactoredTrainingManager
+        _training_manager = RefactoredTrainingManager()
     return _training_manager
 
 def get_utilities_manager():
@@ -81,8 +81,8 @@ def get_inference_manager():
     """Get or create the inference manager"""
     global _inference_manager
     if _inference_manager is None:
-        from core.refactored_inference_manager import InferenceManager
-        _inference_manager = InferenceManager()
+        from core.refactored_inference_manager import RefactoredInferenceManager
+        _inference_manager = RefactoredInferenceManager()
     return _inference_manager
 
 # File manager instance (lazy loaded)
