@@ -623,19 +623,22 @@ class KohyaTrainingManager:
             subsets_section['class_tokens'] = config.get('class_tokens')
             
         # 🚨 CRITICAL: Resolution is REQUIRED for training!
+        # Kohya expects resolution as a single INTEGER, not a comma-separated string
         resolution = config.get('resolution')
         if resolution is not None:
-            # Ensure resolution is in proper format (e.g., "512,512" or [512, 512])
+            # Convert various formats to single integer
             if isinstance(resolution, (list, tuple)):
-                general_section['resolution'] = f"{resolution[0]},{resolution[1]}"
+                # Take the first value from [1024, 1024] → 1024
+                general_section['resolution'] = int(resolution[0])
             elif isinstance(resolution, str) and ',' in resolution:
-                general_section['resolution'] = resolution  # Already correct format
+                # Take first value from "1024,1024" → 1024
+                general_section['resolution'] = int(resolution.split(',')[0])
             elif isinstance(resolution, (int, str)):
-                # Single value - make it square
-                general_section['resolution'] = f"{resolution},{resolution}"
+                # Single value - convert to int
+                general_section['resolution'] = int(resolution)
         else:
             # Fallback to safe default - training CANNOT proceed without resolution!
-            general_section['resolution'] = "512,512"
+            general_section['resolution'] = 512  # Integer, not string!
         if config.get('shuffle_caption') is not None:
             general_section['shuffle_caption'] = config.get('shuffle_caption')
         if config.get('flip_aug') is not None:
@@ -693,37 +696,16 @@ class KohyaTrainingManager:
             logger.info(f"📊 Full config keys: {list(config.keys())}")
             logger.info("🎭 === END CONFIG DUMP ===")
 
-            # Create both configuration files using Derrian's proven TOML generators
-            # Instead of our guessed implementations, use the actual Derrian functions
-            try:
-                # Change to Derrian backend directory for proper path handling
-                original_cwd = os.getcwd()
-                os.chdir(os.path.join(self.project_root, "trainer", "derrian_backend"))
-                
-                # Use validated args from Derrian's validation system
-                _, config_path = process_args(validated_args)
-                _, dataset_path = process_dataset_args(validated_dataset_args)
-                
-                # Convert relative paths to absolute paths
-                config_path = os.path.abspath(config_path)
-                dataset_path = os.path.abspath(dataset_path)
-                
-                logger.info(f"✅ Generated config: {config_path}")
-                logger.info(f"✅ Generated dataset config: {dataset_path}")
-                
-            except Exception as e:
-                logger.error(f"❌ TOML generation failed: {e}")
-                logger.error("🚨 Configuration generation failed - cannot proceed with training")
-                logger.error("💡 Please check your configuration and try again")
-                # NO FALLBACK! If TOML generation fails, we should FAIL LOUDLY
-                # Don't secretly replace user config with defaults!
-                if monitor_widget:
-                    monitor_widget.update_phase(f"Configuration failed: {e}", "error")
-                return False
-            finally:
-                # Always restore original working directory
-                if 'original_cwd' in locals():
-                    os.chdir(original_cwd)
+            # 🍬 PURE CANDY WRAPPER: Use our working TOML generation directly!
+            # No more Derrian functions, no more undefined variables, just WORKING CODE!
+            logger.info("🍬 Using candy wrapper TOML generation (no Derrian validation)")
+            
+            # Generate TOML files using our proven working methods
+            config_path = self.create_config_toml(config)
+            dataset_path = self.create_dataset_toml(config)
+            
+            logger.info(f"✅ Generated config: {config_path}")
+            logger.info(f"✅ Generated dataset config: {dataset_path}")
 
             # 🍬 Trust that we generated valid TOML files - let sd-scripts validate them!
 
