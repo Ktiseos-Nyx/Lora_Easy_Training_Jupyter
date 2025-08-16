@@ -739,11 +739,14 @@ class KohyaTrainingManager:
         
         # 🧠 STRUCTURED CONFIG DEBUGGING
         logger.info("🎭 === STRUCTURED TOML CONFIG DEBUG ===")
+        logger.info(f"📊 Full config keys: {list(config.keys())}")
         logger.info(f"📊 network_arguments: {config.get('network_arguments', {})}")
         logger.info(f"📊 optimizer_arguments: {config.get('optimizer_arguments', {})}")
         logger.info(f"📊 training_arguments: {config.get('training_arguments', {})}")
         logger.info(f"📊 datasets: {config.get('datasets', [])}")
         logger.info(f"📊 general: {config.get('general', {})}")
+        logger.info(f"📊 Config source check - has 'model_path': {config.get('model_path') is not None}")
+        logger.info(f"📊 Config source check - has 'unet_lr': {config.get('unet_lr') is not None}")
         logger.info("🎭 === END STRUCTURED DEBUG ===")
 
         # Write structured config directly to files
