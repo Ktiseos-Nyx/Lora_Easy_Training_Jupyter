@@ -645,8 +645,21 @@ class KohyaTrainingManager:
         if config.get('dataset_path') is not None:                          # FIXED: Use 'dataset_path' from widget
             # FIX: Kohya runs from sd_scripts dir, needs ../../../ to reach project root
             dataset_path = config.get('dataset_path')
-            if not dataset_path.startswith('..'):
+            
+            # Smart path handling: only add ../../../ for relative paths from project root
+            if dataset_path.startswith('/'):
+                # Absolute path - use as-is
+                pass
+            elif dataset_path.startswith('../'):
+                # Already relative path - use as-is
+                pass
+            elif dataset_path.startswith('workspace/') or dataset_path.startswith('./'):
+                # Explicit workspace or current dir path - use as-is
+                pass
+            else:
+                # Relative path from project root - needs ../../../ prefix
                 dataset_path = f"../../../{dataset_path}"
+            
             subsets_section['image_dir'] = dataset_path                     # This is REQUIRED for training!
         if config.get('class_tokens') is not None:
             subsets_section['class_tokens'] = config.get('class_tokens')
