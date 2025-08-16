@@ -750,28 +750,38 @@ class KohyaTrainingManager:
         return self._execute_training_command(config_path, dataset_path, monitor_widget)
 
     def _launch_training_from_structured_config(self, config: Dict, monitor_widget=None) -> bool:
-        """Handle structured TOML config - write to files then train"""
-        logger.info("🎯 Using pre-structured TOML config from launch_from_files()")
+        """Handle structured TOML config - USE EXISTING FILES, DON'T WRITE NEW ONES!"""
+        logger.info("🎯 Using existing TOML files (NOT writing new ones!)")
         
-        # 🧠 STRUCTURED CONFIG DEBUGGING
-        logger.info("🎭 === STRUCTURED TOML CONFIG DEBUG ===")
-        logger.info(f"📊 Full config keys: {list(config.keys())}")
-        logger.info(f"📊 network_arguments: {config.get('network_arguments', {})}")
-        logger.info(f"📊 optimizer_arguments: {config.get('optimizer_arguments', {})}")
-        logger.info(f"📊 training_arguments: {config.get('training_arguments', {})}")
-        logger.info(f"📊 datasets: {config.get('datasets', [])}")
-        logger.info(f"📊 general: {config.get('general', {})}")
-        logger.info(f"📊 Config source check - has 'model_path': {config.get('model_path') is not None}")
-        logger.info(f"📊 Config source check - has 'unet_lr': {config.get('unet_lr') is not None}")
-        logger.info("🎭 === END STRUCTURED DEBUG ===")
-
-        # Write structured config directly to files
-        config_path = self._write_structured_config_toml(config)
-        dataset_path = self._write_structured_dataset_toml(config)
+        # 🚨 FIXED: DON'T WRITE TOML FILES! Just use existing ones!
+        # The second button should NEVER overwrite the good files from the first button
+        # Look for existing files that the first button created (project_name_config.toml format)
+        import glob
+        config_files = glob.glob(os.path.join(self.config_dir, "*_config.toml"))
+        dataset_files = glob.glob(os.path.join(self.config_dir, "*_dataset.toml"))
         
-        logger.info(f"✅ Wrote structured config: {config_path}")
-        logger.info(f"✅ Wrote structured dataset: {dataset_path}")
+        if config_files:
+            config_path = config_files[0]  # Use first match
+        else:
+            config_path = os.path.join(self.config_dir, "config.toml")  # Fallback
+            
+        if dataset_files:
+            dataset_path = dataset_files[0]  # Use first match  
+        else:
+            dataset_path = os.path.join(self.config_dir, "dataset.toml")  # Fallback
         
+        logger.info(f"📁 Using existing config: {config_path}")
+        logger.info(f"📁 Using existing dataset: {dataset_path}")
+        
+        # Verify files exist
+        if not os.path.exists(config_path):
+            logger.error(f"❌ Config file not found: {config_path}")
+            return False
+        if not os.path.exists(dataset_path):
+            logger.error(f"❌ Dataset file not found: {dataset_path}")
+            return False
+        
+        logger.info("✅ Found existing TOML files - launching training!")
         return self._execute_training_command(config_path, dataset_path, monitor_widget)
 
     def _write_structured_config_toml(self, config: Dict) -> str:
