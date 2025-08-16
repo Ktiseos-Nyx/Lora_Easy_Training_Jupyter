@@ -1448,6 +1448,34 @@ class SetupManager:
                     subprocess.run(["git", "submodule", "init"], cwd=path, check=True)
                     subprocess.run(["git", "submodule", "update"], cwd=path, check=True)
                     print("✅ Nested submodules initialized")
+                    
+                    # 🐍 PYTHON MODULE FIX: Add missing __init__.py files for CAME optimizer
+                    # Python requires __init__.py files to recognize directories as modules
+                    print("🔧 Fixing Python module detection for custom_scheduler...")
+                    custom_scheduler_dir = os.path.join(path, "custom_scheduler")
+                    lora_optimizer_dir = os.path.join(custom_scheduler_dir, "LoraEasyCustomOptimizer")
+                    
+                    # Create __init__.py files if directories exist but files are missing
+                    init_files_created = []
+                    if os.path.exists(custom_scheduler_dir):
+                        init_file = os.path.join(custom_scheduler_dir, "__init__.py")
+                        if not os.path.exists(init_file):
+                            with open(init_file, 'w') as f:
+                                f.write("# Auto-generated __init__.py for Python module detection\n")
+                            init_files_created.append("custom_scheduler/__init__.py")
+                    
+                    if os.path.exists(lora_optimizer_dir):
+                        init_file = os.path.join(lora_optimizer_dir, "__init__.py")
+                        if not os.path.exists(init_file):
+                            with open(init_file, 'w') as f:
+                                f.write("# Auto-generated __init__.py for Python module detection\n")
+                            init_files_created.append("custom_scheduler/LoraEasyCustomOptimizer/__init__.py")
+                    
+                    if init_files_created:
+                        print(f"✅ Created missing __init__.py files: {', '.join(init_files_created)}")
+                        print("🎯 CAME optimizer should now be detectable by Python!")
+                    else:
+                        print("ℹ️ Python module files already exist or directories not found")
 
                     # Run Derrian's installer to set up dependencies (non-interactive mode)
                     print("📦 Running Derrian's installer for dependencies...")
