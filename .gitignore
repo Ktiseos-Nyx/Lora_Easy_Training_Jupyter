@@ -131,3 +131,9 @@ CLAUDE.md
 # Gemini-generated test files
 cuda_check.html
 *.html
+
+# Test and debug files
+test_*.py
+debug_*.py
+*_test.py
+*_debug.py
