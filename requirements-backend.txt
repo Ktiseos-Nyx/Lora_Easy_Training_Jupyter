@@ -33,6 +33,7 @@ gallery-dl
 hf-transfer
 voluptuous==0.15.2
 sentencepiece==0.2.0
+uv  # Ultra-fast Python package installer (antisocial efficiency upgrade)
 
 # -- Image/UI/Data Handling --
 Pillow<10.0.0

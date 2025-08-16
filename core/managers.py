@@ -1016,8 +1016,8 @@ class SetupManager:
         # Method 3: Check if it's available as 'came' directly
         if not came_available:
             try:
-                from custom_scheduler import optimizer
-                # If we can import the optimizer module, CAME is probably available
+                from custom_scheduler.LoraEasyCustomOptimizer.came import CAME
+                # If we can import the CAME class, it's available
                 came_available = True
             except ImportError:
                 pass
@@ -1028,7 +1028,7 @@ class SetupManager:
                 venv_python = get_venv_python_path(self.project_root)
                 env = get_subprocess_environment(self.project_root)
                 result = subprocess.run(
-                    [venv_python, '-c', 'from custom_scheduler import optimizer; print("CAME available")'],
+                    [venv_python, '-c', 'from custom_scheduler.LoraEasyCustomOptimizer.came import CAME; print("CAME available")'],
                     capture_output=True,
                     text=True,
                     env=env,
@@ -1322,7 +1322,7 @@ class SetupManager:
 
                 # Test if CAME optimizer is already available
                 result = subprocess.run(
-                    [venv_python, '-c', 'from custom_scheduler import optimizer; print("CAME available")'],
+                    [venv_python, '-c', 'from custom_scheduler.LoraEasyCustomOptimizer.came import CAME; print("CAME available")'],
                     capture_output=True,
                     text=True,
                     env=env,

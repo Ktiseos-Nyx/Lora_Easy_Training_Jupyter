@@ -302,24 +302,17 @@ def main(args):
                 if "CUDAExecutionProvider" in available_providers:
                     logger.info("Attempting CUDA execution provider with enhanced configuration...")
                     
-                    # Enhanced CUDA provider options with backward compatibility
+                    # Simplified CUDA provider options for maximum compatibility
                     cuda_provider_options = {
                         'device_id': 0,
-                        'arena_extend_strategy': 'kNextPowerOfTwo',
-                        'gpu_mem_limit': 2 * 1024 * 1024 * 1024,  # 2GB limit
-                        'cudnn_conv_algo_search': 'EXHAUSTIVE',
-                        'do_copy_in_default_stream': True,
-                        # Additional options for better CUDA 12.x compatibility
-                        'cudnn_conv_use_max_workspace': '1',
-                        'cudnn_conv1d_pad_to_nc1d': '1',
+                        'gpu_mem_limit': 2 * 1024 * 1024 * 1024,  # 2GB limit for safety
+                        # Removed aggressive cuDNN options that cause CUDA library conflicts
                     }
                     
-                    # Enhanced session options for better performance and stability
+                    # Basic session options for maximum compatibility
                     sess_options = ort.SessionOptions()
-                    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
-                    sess_options.execution_mode = ort.ExecutionMode.ORT_PARALLEL
-                    sess_options.enable_mem_pattern = False  # May help with CUDA memory issues
-                    sess_options.enable_cpu_mem_arena = False  # Reduce memory overhead
+                    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_BASIC
+                    # Removed aggressive options that may conflict with different ONNX/CUDA versions
                     
                     # Try creating session with comprehensive error handling
                     try:
