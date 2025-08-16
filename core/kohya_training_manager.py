@@ -712,11 +712,14 @@ class KohyaTrainingManager:
                 logger.info(f"✅ Generated dataset config: {dataset_path}")
                 
             except Exception as e:
-                logger.error(f"Failed to generate TOML files with Derrian functions: {e}")
-                # Fallback to our basic TOML generation
-                logger.warning("Falling back to basic TOML generation")
-                config_path = self.create_config_toml(config)
-                dataset_path = self.create_dataset_toml(config)
+                logger.error(f"❌ TOML generation failed: {e}")
+                logger.error("🚨 Configuration generation failed - cannot proceed with training")
+                logger.error("💡 Please check your configuration and try again")
+                # NO FALLBACK! If TOML generation fails, we should FAIL LOUDLY
+                # Don't secretly replace user config with defaults!
+                if monitor_widget:
+                    monitor_widget.update_phase(f"Configuration failed: {e}", "error")
+                return False
             finally:
                 # Always restore original working directory
                 if 'original_cwd' in locals():
