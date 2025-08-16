@@ -634,7 +634,11 @@ class KohyaTrainingManager:
         if config.get('num_repeats') is not None:
             subsets_section['num_repeats'] = config.get('num_repeats')
         if config.get('dataset_path') is not None:                          # FIXED: Use 'dataset_path' from widget
-            subsets_section['image_dir'] = config.get('dataset_path')       # This is REQUIRED for training!
+            # FIX: Kohya runs from sd_scripts dir, needs ../../../ to reach project root
+            dataset_path = config.get('dataset_path')
+            if not dataset_path.startswith('..'):
+                dataset_path = f"../../../{dataset_path}"
+            subsets_section['image_dir'] = dataset_path                     # This is REQUIRED for training!
         if config.get('class_tokens') is not None:
             subsets_section['class_tokens'] = config.get('class_tokens')
             
@@ -659,8 +663,8 @@ class KohyaTrainingManager:
             general_section['shuffle_caption'] = config.get('shuffle_caption')
         if config.get('flip_aug') is not None:
             general_section['flip_aug'] = config.get('flip_aug')
-        if config.get('caption_extension') is not None:
-            general_section['caption_extension'] = config.get('caption_extension')
+        # Always specify caption extension - default to .txt if not provided
+        general_section['caption_extension'] = config.get('caption_extension', '.txt')
         if config.get('enable_bucket') is not None:
             general_section['enable_bucket'] = config.get('enable_bucket')
         if config.get('bucket_no_upscale') is not None:
@@ -866,13 +870,26 @@ class KohyaTrainingManager:
         return dataset_path
 
     def _execute_training_command(self, config_path: str, dataset_path: str, monitor_widget=None) -> bool:
-        """Execute the actual training command"""
+        """Execute the actual training command with proper model type detection"""
         try:
-            # 🍬 Trust that we generated valid TOML files - let sd-scripts validate them!
+            # Read the config to detect model type
+            import toml
+            with open(config_path, 'r') as f:
+                config = toml.load(f)
+            
+            # Detect model type from the loaded config
+            model_path = config.get('training_arguments', {}).get('pretrained_model_name_or_path', '')
+            model_type = self.detect_model_type(model_path)
+            
+            # Get the correct training script for the model type
+            script_name = self.SCRIPT_MAPPING.get(model_type, 'train_network.py')
+            
+            logger.info(f"🧠 Detected model type: {model_type}")
+            logger.info(f"🎯 Using training script: {script_name}")
 
-            # Simple training command - let sd-scripts figure everything out!
+            # Build training command with correct script
             cmd = [
-                os.path.join(self.sd_scripts_dir, "train_network.py"),
+                os.path.join(self.sd_scripts_dir, script_name),
                 "--config_file", config_path,
                 "--dataset_config", dataset_path
             ]
