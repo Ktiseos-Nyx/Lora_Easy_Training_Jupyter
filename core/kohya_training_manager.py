@@ -555,55 +555,32 @@ class KohyaTrainingManager:
             logger.info(f"📊 dataset_path: {repr(config.get('dataset_path'))}")
             logger.info(f"📊 output_dir: {repr(config.get('output_dir'))}")
 
-        # 🎵 BACK TO BASICS: Simple config.get() calls that were actually WORKING!
-        # (Based on git commit 26f87c4 when TOML generation was working correctly)
+        # 🎵 FIXED FIELD MAPPING: Use EXACT widget field names from debug output!
+        # Widget debug showed: 'model_path', 'train_batch_size', 'unet_lr', etc.
         toml_config = {
             "network_arguments": {
-                "unet_lr": config.get('unet_lr'),
-                "text_encoder_lr": config.get('text_encoder_lr'),
-                "network_dim": config.get('network_dim'),
-                "network_alpha": config.get('network_alpha'),
-                "network_module": config.get('network_module'),
-                "network_args": config.get('network_args'),
+                "network_dim": config.get('network_dim'),           # Widget provides this
+                "network_alpha": config.get('network_alpha'),       # Widget provides this
+                "network_module": "networks.lora",                  # Static value - widget doesn't provide
+                # Remove network_args for now - add back for LyCORIS later
             },
             "optimizer_arguments": {
-                "learning_rate": config.get('unet_lr'),  # sd-scripts uses learning_rate for main LR
-                "lr_scheduler": config.get('lr_scheduler'),
-                "lr_scheduler_num_cycles": config.get('lr_scheduler_num_cycles'),
-                "lr_warmup_steps": config.get('lr_warmup_steps'),
-                "optimizer_type": config.get('optimizer'),
-                "optimizer_args": config.get('optimizer_args'),
+                "learning_rate": config.get('unet_lr'),             # Widget provides 'unet_lr'
+                "text_encoder_lr": config.get('text_encoder_lr'),   # Widget provides this
+                "lr_scheduler": config.get('lr_scheduler'),         # Widget provides this  
+                "optimizer_type": config.get('optimizer'),          # Widget provides 'optimizer'
             },
             "training_arguments": {
-                "lowram": config.get('lowram'),
-                "pretrained_model_name_or_path": config.get('model_path'),
-                "max_train_epochs": config.get('epochs'),
-                "train_batch_size": config.get('batch_size'),
-                "mixed_precision": config.get('mixed_precision'),
-                "save_precision": config.get('save_precision'),
-                "save_every_n_epochs": config.get('save_every_n_epochs'),
-                "save_last_n_epochs": config.get('save_last_n_epochs'),
-                "output_name": config.get('output_name'),
-                "output_dir": config.get('output_dir'),
-                "logging_dir": config.get('logging_dir'),
-                "cache_latents": config.get('cache_latents'),
-                "cache_latents_to_disk": config.get('cache_latents_to_disk'),
-                "cache_text_encoder_outputs": config.get('cache_text_encoder_outputs'),
-                "min_snr_gamma": config.get('min_snr_gamma'),
-                "xformers": config.get('xformers'),
-                "sdpa": config.get('sdpa'),
-                "log_with": config.get('log_with'),
-                "zero_terminal_snr": config.get('zero_terminal_snr'),
-                "clip_skip": config.get('clip_skip'),
-                "vae_batch_size": config.get('vae_batch_size'),
-                "no_half_vae": config.get('no_half_vae'),
-                "gradient_checkpointing": config.get('gradient_checkpointing'),
-                "gradient_accumulation_steps": config.get('gradient_accumulation_steps'),
-                "max_grad_norm": config.get('max_grad_norm'),
-                "full_fp16": config.get('full_fp16'),
-                "random_crop": config.get('random_crop'),
-                "fp8_base": config.get('fp8_base'),
-                "v_parameterization": config.get('v_parameterization'),
+                "pretrained_model_name_or_path": config.get('model_path'),      # Widget provides 'model_path'
+                "max_train_epochs": config.get('epochs'),                       # Widget provides 'epochs'
+                "train_batch_size": config.get('train_batch_size'),             # Widget provides 'train_batch_size'
+                "save_every_n_epochs": config.get('save_every_n_epochs'),       # Widget provides this
+                "mixed_precision": config.get('precision'),                     # Widget provides 'precision'
+                "output_dir": "output",                                          # Static - output directory
+                "output_name": config.get('project_name', 'lora'),              # Widget provides 'project_name'
+                "clip_skip": config.get('clip_skip', 2),                        # Widget provides this
+                "save_model_as": "safetensors",                                  # Static format
+                "seed": 42,                                                      # Static seed
             },
         }
 
@@ -619,6 +596,12 @@ class KohyaTrainingManager:
         """
         dataset_path = os.path.join(self.config_dir, f"{config.get('output_name', 'lora')}_dataset.toml")
         
+        # 🎭 DATASET DEBUG: Check critical fields before TOML generation
+        logger.info("🎭 === DATASET TOML DEBUG ===")
+        logger.info(f"📊 dataset_path from widget: {repr(config.get('dataset_path'))}")
+        logger.info(f"📊 resolution from widget: {repr(config.get('resolution'))}")
+        logger.info(f"📊 num_repeats from widget: {repr(config.get('num_repeats'))}")
+        
         # 🎵 EXACT WORKING TOML STRUCTURE: Match your working dataset.toml format!
         # Filter out None values so TOML only gets fields that are actually set
         
@@ -631,15 +614,28 @@ class KohyaTrainingManager:
         if config.get('keep_tokens') is not None:
             datasets_section['keep_tokens'] = config.get('keep_tokens')
             
+        # 🚨 CRITICAL FIX: Widget provides 'dataset_path' NOT 'dataset_dir'!
         if config.get('num_repeats') is not None:
             subsets_section['num_repeats'] = config.get('num_repeats')
-        if config.get('dataset_dir') is not None:
-            subsets_section['image_dir'] = config.get('dataset_dir')
+        if config.get('dataset_path') is not None:                          # FIXED: Use 'dataset_path' from widget
+            subsets_section['image_dir'] = config.get('dataset_path')       # This is REQUIRED for training!
         if config.get('class_tokens') is not None:
             subsets_section['class_tokens'] = config.get('class_tokens')
             
-        if config.get('resolution') is not None:
-            general_section['resolution'] = config.get('resolution')
+        # 🚨 CRITICAL: Resolution is REQUIRED for training!
+        resolution = config.get('resolution')
+        if resolution is not None:
+            # Ensure resolution is in proper format (e.g., "512,512" or [512, 512])
+            if isinstance(resolution, (list, tuple)):
+                general_section['resolution'] = f"{resolution[0]},{resolution[1]}"
+            elif isinstance(resolution, str) and ',' in resolution:
+                general_section['resolution'] = resolution  # Already correct format
+            elif isinstance(resolution, (int, str)):
+                # Single value - make it square
+                general_section['resolution'] = f"{resolution},{resolution}"
+        else:
+            # Fallback to safe default - training CANNOT proceed without resolution!
+            general_section['resolution'] = "512,512"
         if config.get('shuffle_caption') is not None:
             general_section['shuffle_caption'] = config.get('shuffle_caption')
         if config.get('flip_aug') is not None:
