@@ -2,6 +2,9 @@ import argparse
 import csv
 import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 
 import cv2
 import numpy as np
@@ -15,10 +18,97 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 import logging
 import glob
+import warnings
+
+# Suppress diffusers FutureWarning about deprecated PyTorch function
+# This is a known issue with diffusers 0.25.0 + newer PyTorch versions
+warnings.filterwarnings("ignore", category=FutureWarning, module="diffusers")
 
 # Simple logging setup (replaces library.utils.setup_logging)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+def robust_download_fallback(repo_id, filename, local_path):
+    """
+    Robust download fallback system: hf_hub_download → aria2c → wget → Python requests
+    """
+    logger.info(f"Attempting robust download fallback for {filename}")
+    
+    # Construct HuggingFace URL
+    hf_url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
+    
+    # Method 1: Try aria2c
+    if shutil.which("aria2c"):
+        logger.info("🚀 Attempting download with aria2c...")
+        try:
+            command = [
+                "aria2c", hf_url,
+                "--console-log-level=warn",
+                "-c", "-s", "16", "-x", "16", "-k", "10M",
+                "-d", os.path.dirname(local_path),
+                "-o", os.path.basename(local_path)
+            ]
+            
+            result = subprocess.run(command, capture_output=True, text=True)
+            if result.returncode == 0 and os.path.exists(local_path):
+                logger.info(f"✅ Download complete with aria2c: {local_path}")
+                return local_path
+            else:
+                logger.warning("❌ aria2c failed. Trying wget...")
+        except Exception as e:
+            logger.warning(f"❌ Error with aria2c: {e}. Trying wget...")
+    else:
+        logger.info("⚠️ aria2c not available. Trying wget...")
+
+    # Method 2: Try wget
+    if shutil.which("wget"):
+        logger.info("🚀 Attempting download with wget...")
+        try:
+            command = ["wget", "-O", local_path, hf_url]
+            result = subprocess.run(command, capture_output=True, text=True)
+            
+            if result.returncode == 0 and os.path.exists(local_path):
+                logger.info(f"✅ Download complete with wget: {local_path}")
+                return local_path
+            else:
+                logger.warning("❌ wget failed. Trying Python requests...")
+        except Exception as e:
+            logger.warning(f"❌ Error with wget: {e}. Trying Python requests...")
+    else:
+        logger.info("⚠️ wget not available. Trying Python requests...")
+
+    # Method 3: Python requests fallback
+    logger.info("🚀 Attempting download with Python requests...")
+    try:
+        import requests
+        
+        response = requests.get(hf_url, stream=True)
+        response.raise_for_status()
+        
+        total_size = int(response.headers.get('content-length', 0))
+        downloaded = 0
+        
+        with open(local_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total_size > 0:
+                        percent = (downloaded / total_size) * 100
+                        if downloaded % (1024 * 1024) == 0:  # Log every MB
+                            logger.info(f"Progress: {percent:.1f}% ({downloaded}/{total_size} bytes)")
+        
+        if os.path.exists(local_path):
+            logger.info(f"✅ Download complete with Python requests: {local_path}")
+            return local_path
+        else:
+            logger.error("❌ Python requests download failed")
+            
+    except Exception as e:
+        logger.error(f"❌ Error with Python requests: {e}")
+
+    logger.error("💥 All download methods failed!")
+    return None
 
 # from wd14 tagger
 IMAGE_SIZE = 448
@@ -93,30 +183,74 @@ def main(args):
     # depreacatedの警告が出るけどなくなったらその時
     # https://github.com/toriato/stable-diffusion-webui-wd14-tagger/issues/22
     if not os.path.exists(model_location) or args.force_download:
+        # Create both base model directory and full model location directory
         os.makedirs(args.model_dir, exist_ok=True)
+        os.makedirs(model_location, exist_ok=True)
         logger.info(f"downloading wd14 tagger model from hf_hub. id: {args.repo_id}")
         files = FILES
         if args.onnx:
             files = ["selected_tags.csv"]
             files += FILES_ONNX
         else:
+            # Download SUB_DIR_FILES with fallback support
             for file in SUB_DIR_FILES:
-                hf_hub_download(
-                    args.repo_id,
-                    file,
-                    subfolder=SUB_DIR,
-                    cache_dir=os.path.join(model_location, SUB_DIR),
-                    force_download=True,
-                    force_filename=file,
-                )
+                subdir_path = os.path.join(model_location, SUB_DIR)
+                os.makedirs(subdir_path, exist_ok=True)
+                local_file_path = os.path.join(subdir_path, file)
+                
+                try:
+                    logger.info(f"Attempting HuggingFace Hub download for subfolder file {file}")
+                    hf_hub_download(
+                        args.repo_id,
+                        file,
+                        subfolder=SUB_DIR,
+                        cache_dir=subdir_path,
+                        force_download=True,
+                        force_filename=file,
+                    )
+                    logger.info(f"✅ HF Hub subfolder download successful: {file}")
+                except Exception as e:
+                    logger.warning(f"❌ HF Hub subfolder download failed for {file}: {e}")
+                    logger.info("Attempting robust download fallback for subfolder file...")
+                    
+                    # Use robust fallback download for subfolder files
+                    subfolder_file = f"{SUB_DIR}/{file}" if SUB_DIR else file
+                    result_path = robust_download_fallback(args.repo_id, subfolder_file, local_file_path)
+                    if not (result_path and os.path.exists(result_path)):
+                        logger.error(f"💥 All download methods failed for subfolder file {file}")
+                        raise Exception(f"Failed to download subfolder file {file}")
         for file in files:
-            # Download to HF cache first, then copy to local location
-            downloaded_path = hf_hub_download(args.repo_id, file, force_download=args.force_download)
-            # Copy to local model directory
-            import shutil
             local_file_path = os.path.join(model_location, file)
-            shutil.copy2(downloaded_path, local_file_path)
-            logger.info(f"Copied {file} to {local_file_path}")
+            # Create subdirectories if the file is in a subdirectory
+            os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+            
+            # Try hf_hub_download first, fallback to robust download if it fails
+            download_success = False
+            try:
+                logger.info(f"Attempting HuggingFace Hub download for {file}")
+                downloaded_path = hf_hub_download(args.repo_id, file, force_download=args.force_download)
+                # Copy to local model directory
+                shutil.copy2(downloaded_path, local_file_path)
+                logger.info(f"✅ HF Hub download successful: {file}")
+                download_success = True
+            except Exception as e:
+                logger.warning(f"❌ HF Hub download failed for {file}: {e}")
+                logger.info("Attempting robust download fallback...")
+                
+                # Use robust fallback download
+                result_path = robust_download_fallback(args.repo_id, file, local_file_path)
+                if result_path and os.path.exists(result_path):
+                    logger.info(f"✅ Fallback download successful: {file}")
+                    download_success = True
+                else:
+                    logger.error(f"💥 All download methods failed for {file}")
+            
+            # Verify file was downloaded successfully
+            if download_success and os.path.exists(local_file_path) and os.path.getsize(local_file_path) > 0:
+                logger.info(f"✅ File verified: {local_file_path} ({os.path.getsize(local_file_path)} bytes)")
+            else:
+                logger.error(f"❌ Download verification failed for {file}")
+                raise Exception(f"Failed to download {file} - all methods exhausted")
     else:
         logger.info("using existing wd14 tagger model")
 
@@ -162,26 +296,106 @@ def main(args):
         else:
             # Try to create session with GPU first, but gracefully fall back to optimized CPU
             try:
-                if "CUDAExecutionProvider" in ort.get_available_providers():
-                    logger.info("Attempting CUDA execution provider")
-                    ort_sess = ort.InferenceSession(onnx_path, providers=["CUDAExecutionProvider"])
-                elif "ROCMExecutionProvider" in ort.get_available_providers():
+                available_providers = ort.get_available_providers()
+                logger.info(f"Available ONNX providers: {available_providers}")
+                
+                if "CUDAExecutionProvider" in available_providers:
+                    logger.info("Attempting CUDA execution provider with enhanced configuration...")
+                    
+                    # Enhanced CUDA provider options with backward compatibility
+                    cuda_provider_options = {
+                        'device_id': 0,
+                        'arena_extend_strategy': 'kNextPowerOfTwo',
+                        'gpu_mem_limit': 2 * 1024 * 1024 * 1024,  # 2GB limit
+                        'cudnn_conv_algo_search': 'EXHAUSTIVE',
+                        'do_copy_in_default_stream': True,
+                        # Additional options for better CUDA 12.x compatibility
+                        'cudnn_conv_use_max_workspace': '1',
+                        'cudnn_conv1d_pad_to_nc1d': '1',
+                    }
+                    
+                    # Enhanced session options for better performance and stability
+                    sess_options = ort.SessionOptions()
+                    sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                    sess_options.execution_mode = ort.ExecutionMode.ORT_PARALLEL
+                    sess_options.enable_mem_pattern = False  # May help with CUDA memory issues
+                    sess_options.enable_cpu_mem_arena = False  # Reduce memory overhead
+                    
+                    # Try creating session with comprehensive error handling
+                    try:
+                        ort_sess = ort.InferenceSession(
+                            onnx_path, 
+                            providers=[("CUDAExecutionProvider", cuda_provider_options)],
+                            sess_options=sess_options
+                        )
+                        logger.info("✅ CUDA execution provider initialized successfully")
+                    except Exception as cuda_error:
+                        logger.warning(f"CUDA provider with options failed: {str(cuda_error)[:100]}...")
+                        logger.info("Trying CUDA provider with minimal options...")
+                        
+                        # Fallback: try minimal CUDA configuration
+                        minimal_cuda_options = {'device_id': 0}
+                        ort_sess = ort.InferenceSession(
+                            onnx_path, 
+                            providers=[("CUDAExecutionProvider", minimal_cuda_options)],
+                            sess_options=ort.SessionOptions()
+                        )
+                        logger.info("✅ CUDA execution provider with minimal config successful")
+                        
+                elif "ROCMExecutionProvider" in available_providers:
                     logger.info("Attempting ROCm execution provider") 
                     ort_sess = ort.InferenceSession(onnx_path, providers=["ROCMExecutionProvider"])
+                    logger.info("✅ ROCm execution provider initialized successfully")
                 else:
                     raise Exception("No GPU providers available, using CPU")
+                    
             except Exception as e:
-                logger.info(f"GPU execution provider failed ({str(e)[:50]}...), falling back to optimized CPU")
-                # Use optimized CPU execution with all available optimizations
+                logger.warning(f"All GPU execution providers failed: {str(e)[:100]}...")
+                logger.info("Falling back to optimized CPU execution")
+                
+                # Enhanced CPU execution with all available optimizations
+                cpu_sess_options = ort.SessionOptions()
+                cpu_sess_options.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                cpu_sess_options.execution_mode = ort.ExecutionMode.ORT_PARALLEL
+                cpu_sess_options.intra_op_num_threads = 0  # Use all available cores
+                cpu_sess_options.inter_op_num_threads = 0  # Use all available cores
+                
                 ort_sess = ort.InferenceSession(
                     onnx_path, 
                     providers=["CPUExecutionProvider"],
-                    sess_options=ort.SessionOptions()
+                    sess_options=cpu_sess_options
                 )
+                logger.info("✅ Optimized CPU execution provider initialized successfully")
     else:
+        import tensorflow as tf
         from tensorflow.keras.models import load_model
 
-        model = load_model(f"{model_location}")
+        model_path = f"{model_location}"
+        logger.info("Running wd14 tagger with TensorFlow/Keras")
+        logger.info(f"loading keras model: {model_path}")
+        
+        # Try GPU first, gracefully fall back to CPU if GPU fails
+        try:
+            # Check if GPU is available and try GPU inference
+            if tf.config.list_physical_devices('GPU'):
+                logger.info("GPU detected, attempting GPU inference...")
+                with tf.device('/GPU:0'):
+                    model = load_model(model_path)
+                logger.info("✅ TensorFlow GPU model loaded successfully")
+            else:
+                logger.info("No GPU detected, using CPU inference...")
+                with tf.device('/CPU:0'):
+                    model = load_model(model_path)
+                logger.info("✅ TensorFlow CPU model loaded successfully")
+        except Exception as e:
+            logger.warning(f"❌ GPU inference failed ({str(e)[:50]}...), falling back to CPU")
+            try:
+                with tf.device('/CPU:0'):
+                    model = load_model(model_path)
+                logger.info("✅ TensorFlow CPU fallback successful")
+            except Exception as cpu_error:
+                logger.error(f"💥 Both GPU and CPU model loading failed: {cpu_error}")
+                raise Exception(f"Failed to load TensorFlow model: {cpu_error}")
 
     # label_names = pd.read_csv("2022_0000_0899_6549/selected_tags.csv")
     # 依存ライブラリを増やしたくないので自力で読むよ
@@ -273,8 +487,21 @@ def main(args):
             probs = ort_sess.run(None, {input_name: imgs})[0]  # onnx output numpy
             probs = probs[: len(path_imgs)]
         else:
-            probs = model(imgs, training=False)
-            probs = probs.numpy()
+            # TensorFlow inference with GPU → CPU fallback
+            try:
+                probs = model(imgs, training=False)
+                probs = probs.numpy()
+            except Exception as e:
+                logger.warning(f"TensorFlow GPU inference failed ({str(e)[:50]}...), retrying with CPU")
+                try:
+                    import tensorflow as tf
+                    with tf.device('/CPU:0'):
+                        probs = model(imgs, training=False)
+                        probs = probs.numpy()
+                    logger.info("✅ TensorFlow CPU inference successful")
+                except Exception as cpu_error:
+                    logger.error(f"💥 Both GPU and CPU inference failed: {cpu_error}")
+                    raise Exception(f"TensorFlow inference failed: {cpu_error}")
 
         for (image_path, _), prob in zip(path_imgs, probs):
             combined_tags = []

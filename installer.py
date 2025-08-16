@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 LoRA Easy Training - Unified Command-Line Installer
+Enhanced with uv fallback and comprehensive logging
 """
 
 import os
@@ -8,6 +9,10 @@ import sys
 import subprocess
 import shutil
 import platform
+import logging
+import argparse
+import datetime
+from pathlib import Path
 
 def get_python_command():
     """Detects the best available Python command."""
@@ -22,12 +27,19 @@ def get_python_command():
     raise RuntimeError("❌ Python 3 not found. Please install Python 3.8+")
 
 class UnifiedInstaller:
-    def __init__(self):
+    def __init__(self, verbose=False):
         self.project_root = os.path.dirname(os.path.abspath(__file__))
+        self.verbose = verbose
+        
+        # Setup logging
+        self.setup_logging()
+        
         # Always use current Python executable for environment-agnostic execution
         # This follows CLAUDE.md requirement: NEVER hardcode paths or environment assumptions
         self.python_cmd = sys.executable
-        self.pip_cmd = [self.python_cmd, '-m', 'pip']
+        
+        # Initialize package manager with uv → pip fallback
+        self.package_manager = self.detect_package_manager()
         
         self.trainer_dir = os.path.join(self.project_root, "trainer")
         self.derrian_dir = os.path.join(self.trainer_dir, "derrian_backend")
@@ -42,25 +54,162 @@ class UnifiedInstaller:
             }
         }
 
-    def print_banner(self):
-        print("=" * 70)
-        print("🚀 LoRA Easy Training - Unified Command-Line Installer")
-        print("=" * 70)
-        print(f"🐍 Using Python: {self.python_cmd}")
-        print(f"🔧 Project Root: {self.project_root}")
-        print()
+    def setup_logging(self):
+        """Setup comprehensive logging system"""
+        # Create logs directory
+        logs_dir = os.path.join(self.project_root, "logs")
+        os.makedirs(logs_dir, exist_ok=True)
+        
+        # Generate timestamp for log file
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = os.path.join(logs_dir, f"installer_{timestamp}.log")
+        
+        # Configure logging
+        log_level = logging.DEBUG if self.verbose else logging.INFO
+        
+        # Create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        
+        # Setup file handler
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        
+        # Setup console handler
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(log_level)
+        console_handler.setFormatter(formatter)
+        
+        # Configure logger
+        self.logger = logging.getLogger('installer')
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
+        
+        # Store log file path for reference
+        self.log_file = log_file
+        
+        self.logger.info(f"Installer logging started - Log file: {log_file}")
+        self.logger.info(f"Verbose mode: {'Enabled' if self.verbose else 'Disabled'}")
 
-    def run_command(self, command, description, cwd=None):
-        print(f"🔄 {description}...")
+    def detect_package_manager(self):
+        """Detect best package manager: uv → pip fallback"""
+        if shutil.which("uv"):
+            self.logger.info("🚀 Found uv - Using for fast package installation")
+            return {
+                'name': 'uv',
+                'install_cmd': ['uv', 'pip', 'install'],
+                'available': True
+            }
+        else:
+            self.logger.info("⚠️ uv not found - Falling back to pip")
+            return {
+                'name': 'pip',
+                'install_cmd': [self.python_cmd, '-m', 'pip', 'install'],
+                'available': True
+            }
+
+    def get_install_command(self, *args):
+        """Get package installation command with current package manager"""
+        return self.package_manager['install_cmd'] + list(args)
+
+    def print_banner(self):
+        banner_lines = [
+            "=" * 70,
+            "🚀 LoRA Easy Training - Unified Command-Line Installer",
+            "   Enhanced with uv fallback and comprehensive logging",
+            "=" * 70,
+            f"🐍 Using Python: {self.python_cmd}",
+            f"📦 Package Manager: {self.package_manager['name']}",
+            f"🔧 Project Root: {self.project_root}",
+            f"📝 Log File: {self.log_file}",
+            ""
+        ]
+        
+        for line in banner_lines:
+            print(line)
+            self.logger.info(line.replace("📝 Log File: ", ""))
+
+    def run_command(self, command, description, cwd=None, allow_failure=False):
+        """Enhanced command runner with comprehensive logging"""
+        self.logger.info(f"🔄 {description}...")
+        self.logger.debug(f"Command: {' '.join(command)}")
+        self.logger.debug(f"Working directory: {cwd or 'current'}")
+        
+        if not self.verbose:
+            print(f"🔄 {description}...")
+        
         try:
-            result = subprocess.run(command, check=True, capture_output=True, text=True, cwd=cwd)
-            print(f"✅ {description} successful.")
+            # Run command with real-time output if verbose
+            if self.verbose:
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                    cwd=cwd
+                )
+                
+                output_lines = []
+                for line in iter(process.stdout.readline, ''):
+                    line = line.rstrip()
+                    if line:
+                        print(f"   {line}")
+                        self.logger.debug(f"OUTPUT: {line}")
+                        output_lines.append(line)
+                
+                process.stdout.close()
+                return_code = process.wait()
+                output = '\n'.join(output_lines)
+                
+                if return_code != 0:
+                    raise subprocess.CalledProcessError(return_code, command, output)
+            else:
+                # Run command silently
+                result = subprocess.run(command, check=True, capture_output=True, text=True, cwd=cwd)
+                output = result.stdout
+                
+            self.logger.info(f"✅ {description} successful.")
+            self.logger.debug(f"Command output: {output}")
+            
+            if not self.verbose:
+                print(f"✅ {description} successful.")
+            
             return True
+            
         except subprocess.CalledProcessError as e:
-            print(f"❌ {description} failed.")
-            print(f"   Error: {e}")
-            print(f"   Stderr: {e.stderr}")
-            print(f"   Stdout: {e.stdout}")
+            error_msg = f"❌ {description} failed."
+            self.logger.error(error_msg)
+            self.logger.error(f"Exit code: {e.returncode}")
+            self.logger.error(f"Command: {' '.join(command)}")
+            
+            if hasattr(e, 'stdout') and e.stdout:
+                self.logger.error(f"Stdout: {e.stdout}")
+            if hasattr(e, 'stderr') and e.stderr:
+                self.logger.error(f"Stderr: {e.stderr}")
+                
+            print(error_msg)
+            if self.verbose:
+                print(f"   Exit code: {e.returncode}")
+                if hasattr(e, 'stderr') and e.stderr:
+                    print(f"   Error output: {e.stderr}")
+            else:
+                print(f"   Check log file for details: {self.log_file}")
+            
+            if not allow_failure:
+                return False
+            else:
+                self.logger.warning(f"Command failed but continuing due to allow_failure=True")
+                return True
+                
+        except Exception as e:
+            error_msg = f"❌ Unexpected error during {description}: {e}"
+            self.logger.error(error_msg)
+            print(error_msg)
             return False
 
     def setup_submodules(self):
@@ -85,58 +234,106 @@ class UnifiedInstaller:
         return True
 
     def install_dependencies(self):
+        """Install dependencies with uv → pip fallback"""
         requirements_file = os.path.join(self.project_root, "requirements-backend.txt")
         if not os.path.exists(requirements_file):
-            print(f"❌ CRITICAL: requirements-backend.txt not found!")
+            error_msg = f"❌ CRITICAL: requirements-backend.txt not found!"
+            self.logger.error(error_msg)
+            print(error_msg)
             return False
+        
+        self.logger.info(f"Installing dependencies from: {requirements_file}")
+        
+        # Try with current package manager first
+        install_cmd = self.get_install_command('-r', requirements_file)
+        success = self.run_command(install_cmd, f"Installing Python packages with {self.package_manager['name']}")
+        
+        # If uv failed, fallback to pip
+        if not success and self.package_manager['name'] == 'uv':
+            self.logger.warning("uv installation failed, falling back to pip")
+            print("⚠️ uv installation failed, falling back to pip...")
             
-        return self.run_command(self.pip_cmd + ['install', '-r', requirements_file], "Installing Python packages")
+            # Update package manager to pip
+            self.package_manager = {
+                'name': 'pip',
+                'install_cmd': [self.python_cmd, '-m', 'pip', 'install'],
+                'available': True
+            }
+            
+            # Retry with pip
+            install_cmd = self.get_install_command('-r', requirements_file)
+            success = self.run_command(install_cmd, "Installing Python packages with pip (fallback)")
+        
+        return success
 
     def check_system_dependencies(self):
         """Check and attempt to install required system packages like aria2c"""
-        print("🔧 Checking system dependencies...")
+        self.logger.info("🔧 Checking system dependencies...")
         
         # Check for aria2c
         if not shutil.which('aria2c'):
+            self.logger.warning("aria2c not found. Attempting to install...")
             print("   - aria2c not found. Attempting to install...")
             
             system = platform.system().lower()
+            self.logger.info(f"Detected system: {system}")
+            
             if system == "linux":
                 # Try different package managers
-                for pm_cmd, install_cmd in [
+                package_managers = [
                     (['apt', '--version'], ['sudo', 'apt', 'update', '&&', 'sudo', 'apt', 'install', '-y', 'aria2']),
                     (['yum', '--version'], ['sudo', 'yum', 'install', '-y', 'aria2']),
                     (['dnf', '--version'], ['sudo', 'dnf', 'install', '-y', 'aria2'])
-                ]:
+                ]
+                
+                for pm_cmd, install_cmd in package_managers:
                     try:
                         subprocess.run(pm_cmd, capture_output=True, check=True)
-                        print(f"     ✅ Installing with {pm_cmd[0]}...")
-                        result = subprocess.run(install_cmd, shell=True)
+                        pm_name = pm_cmd[0]
+                        self.logger.info(f"Found package manager: {pm_name}")
+                        print(f"     ✅ Installing with {pm_name}...")
+                        
+                        result = subprocess.run(install_cmd, shell=True, capture_output=True, text=True)
                         if result.returncode == 0:
+                            self.logger.info(f"Successfully installed aria2c with {pm_name}")
                             break
+                        else:
+                            self.logger.warning(f"Failed to install with {pm_name}: {result.stderr}")
                     except (subprocess.CalledProcessError, FileNotFoundError):
                         continue
                 else:
-                    print("     ⚠️  Could not auto-install aria2c. Please install manually:")
+                    warning_msg = "Could not auto-install aria2c. Please install manually:"
+                    self.logger.warning(warning_msg)
+                    print(f"     ⚠️  {warning_msg}")
                     print("        Ubuntu/Debian: sudo apt install aria2")
                     print("        CentOS/RHEL: sudo yum install aria2")
             
             elif system == "darwin":
                 if shutil.which('brew'):
+                    self.logger.info("Installing aria2c with Homebrew...")
                     print("     ✅ Installing with Homebrew...")
-                    subprocess.run(['brew', 'install', 'aria2'])
+                    result = subprocess.run(['brew', 'install', 'aria2'], capture_output=True, text=True)
+                    if result.returncode == 0:
+                        self.logger.info("Successfully installed aria2c with Homebrew")
+                    else:
+                        self.logger.warning(f"Homebrew installation failed: {result.stderr}")
                 else:
-                    print("     ⚠️  Please install aria2c: brew install aria2")
+                    warning_msg = "Please install aria2c: brew install aria2"
+                    self.logger.warning(warning_msg)
+                    print(f"     ⚠️  {warning_msg}")
             
             elif system == "windows":
-                print("     ⚠️  Windows: Please install aria2c manually or use package manager")
+                warning_msg = "Windows: Please install aria2c manually or use package manager"
+                self.logger.warning(warning_msg)
+                print(f"     ⚠️  {warning_msg}")
         else:
+            self.logger.info("aria2c: Found")
             print("   - aria2c: ✅ Found")
         
         return True
 
     def apply_special_fixes_and_installs(self):
-        print("🔧 Applying special fixes and performing editable installs...")
+        self.logger.info("🔧 Applying special fixes and performing editable installs...")
         
         # --- Editable Installs ---
         editable_installs = {
@@ -147,17 +344,29 @@ class UnifiedInstaller:
         
         for name, path in editable_installs.items():
             if os.path.exists(os.path.join(path, 'setup.py')):
-                if not self.run_command(self.pip_cmd + ['install', '-e', '.'], f"Editable install for {name}", cwd=path):
-                    print(f"   - ⚠️  Could not install {name} in editable mode. Training might still work.")
+                self.logger.info(f"Installing {name} in editable mode from {path}")
+                install_cmd = self.get_install_command('-e', '.')
+                success = self.run_command(install_cmd, f"Editable install for {name}", cwd=path, allow_failure=True)
+                
+                if not success:
+                    warning_msg = f"Could not install {name} in editable mode. Training might still work."
+                    self.logger.warning(warning_msg)
+                    print(f"   - ⚠️  {warning_msg}")
+            else:
+                self.logger.debug(f"No setup.py found for {name} at {path}, skipping editable install")
         
         # --- Platform-Specific Fixes ---
         if platform.system() == "Windows":
+            self.logger.info("Applying Windows-specific fix for bitsandbytes...")
             print("   - Applying Windows-specific fix for bitsandbytes...")
             try:
                 bnb_src_dir = os.path.join(self.sd_scripts_dir, 'bitsandbytes_windows')
                 result = subprocess.run([self.python_cmd, '-c', 'import site; print(site.getsitepackages()[0])'], capture_output=True, text=True, check=True)
                 site_packages = result.stdout.strip()
                 bnb_dest_dir = os.path.join(site_packages, 'bitsandbytes')
+                
+                self.logger.debug(f"Bitsandbytes source: {bnb_src_dir}")
+                self.logger.debug(f"Bitsandbytes destination: {bnb_dest_dir}")
                 
                 if os.path.exists(bnb_dest_dir):
                     # This can be improved with logic to select the correct CUDA version DLL
@@ -166,56 +375,151 @@ class UnifiedInstaller:
                     dest_file = os.path.join(bnb_dest_dir, 'libbitsandbytes_cudaall.dll')
                     if os.path.exists(src_file):
                         shutil.copy2(src_file, dest_file)
-                        print(f"     ✅ Copied {dll_to_copy} to {dest_file}")
+                        success_msg = f"Copied {dll_to_copy} to {dest_file}"
+                        self.logger.info(success_msg)
+                        print(f"     ✅ {success_msg}")
                     else:
-                        print(f"     ⚠️ Could not find source DLL: {src_file}")
+                        error_msg = f"Could not find source DLL: {src_file}"
+                        self.logger.warning(error_msg)
+                        print(f"     ⚠️ {error_msg}")
                 else:
-                    print(f"     ⚠️ bitsandbytes directory not found in site-packages. Cannot apply fix.")
+                    error_msg = "bitsandbytes directory not found in site-packages. Cannot apply fix."
+                    self.logger.warning(error_msg)
+                    print(f"     ⚠️ {error_msg}")
             except Exception as e:
-                print(f"     ❌ Error applying bitsandbytes fix: {e}")
+                error_msg = f"Error applying bitsandbytes fix: {e}"
+                self.logger.error(error_msg)
+                print(f"     ❌ {error_msg}")
 
         # --- PyTorch version file fix ---
+        self.logger.info("Checking if PyTorch version patch is needed...")
         print("   - Checking if PyTorch version patch is needed...")
         try:
             import torch
-            if torch.__version__ in ["2.0.0", "2.0.1"]:
-                print(f"   - Applying patch for PyTorch {torch.__version__}...")
+            pytorch_version = torch.__version__
+            self.logger.info(f"Detected PyTorch version: {pytorch_version}")
+            
+            if pytorch_version in ["2.0.0", "2.0.1"]:
+                self.logger.info(f"Applying patch for PyTorch {pytorch_version}...")
+                print(f"   - Applying patch for PyTorch {pytorch_version}...")
                 fix_script_path = os.path.join(self.derrian_dir, 'fix_torch.py')
                 if os.path.exists(fix_script_path):
                     self.run_command([self.python_cmd, fix_script_path], "Applying PyTorch patch")
             else:
-                print(f"   - PyTorch version is {torch.__version__}. No patch needed.")
+                info_msg = f"PyTorch version is {pytorch_version}. No patch needed."
+                self.logger.info(info_msg)
+                print(f"   - {info_msg}")
         except ImportError:
-            print("   - ⚠️  Could not import PyTorch. Skipping version patch check.")
+            warning_msg = "Could not import PyTorch. Skipping version patch check."
+            self.logger.warning(warning_msg)
+            print(f"   - ⚠️  {warning_msg}")
         except Exception as e:
-            print(f"   - ❌ Error applying PyTorch patch: {e}")
+            error_msg = f"Error applying PyTorch patch: {e}"
+            self.logger.error(error_msg)
+            print(f"   - ❌ {error_msg}")
         
         return True
 
     def run_installation(self):
+        """Run the complete installation process"""
         self.print_banner()
         
-        if not self.setup_submodules():
-            print("❌ Halting installation due to submodule setup failure.")
-            return
+        start_time = datetime.datetime.now()
+        self.logger.info("Installation started")
+        
+        try:
+            if not self.setup_submodules():
+                error_msg = "Halting installation due to submodule setup failure."
+                self.logger.error(error_msg)
+                print(f"❌ {error_msg}")
+                return False
 
-        if not self.check_system_dependencies():
-            print("❌ System dependency check failed.")
-            return
+            if not self.check_system_dependencies():
+                error_msg = "System dependency check failed."
+                self.logger.error(error_msg)
+                print(f"❌ {error_msg}")
+                return False
 
-        if not self.install_dependencies():
-            print("❌ Halting installation due to dependency installation failure.")
-            return
+            if not self.install_dependencies():
+                error_msg = "Halting installation due to dependency installation failure."
+                self.logger.error(error_msg)
+                print(f"❌ {error_msg}")
+                return False
+                
+            if not self.apply_special_fixes_and_installs():
+                warning_msg = "Some special fixes or editable installs failed."
+                self.logger.warning(warning_msg)
+                print(f"⚠️ {warning_msg}")
+
+            end_time = datetime.datetime.now()
+            duration = end_time - start_time
             
-        if not self.apply_special_fixes_and_installs():
-            print("⚠️ Some special fixes or editable installs failed.")
+            completion_lines = [
+                "\n" + "=" * 70,
+                "✅ Installation complete!",
+                f"⏱️ Total time: {duration}",
+                f"📦 Package manager used: {self.package_manager['name']}",
+                f"📝 Full log available at: {self.log_file}",
+                "",
+                "🚀 You can now start Jupyter and use the training notebooks.",
+                "   Run: jupyter notebook",
+                "=" * 70
+            ]
+            
+            for line in completion_lines:
+                print(line)
+                if line.strip():
+                    self.logger.info(line)
+                    
+            return True
+            
+        except Exception as e:
+            error_msg = f"Unexpected error during installation: {e}"
+            self.logger.error(error_msg)
+            print(f"❌ {error_msg}")
+            print(f"📝 Check log file for details: {self.log_file}")
+            return False
 
-        print("\n" + "=" * 70)
-        print("✅ Installation complete!")
-        print("   You can now start Jupyter and use the training notebooks.")
-        print("   Run: jupyter notebook")
-        print("=" * 70)
+def main():
+    """Main entry point with argument parsing"""
+    parser = argparse.ArgumentParser(
+        description="LoRA Easy Training - Unified Command-Line Installer",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python installer.py                    # Normal installation
+  python installer.py --verbose         # Verbose installation with detailed output
+  python installer.py -v                # Short form of verbose
+
+The installer will:
+  1. Clone/update the derrian_backend submodule
+  2. Install system dependencies (aria2c)
+  3. Install Python packages using uv (if available) or pip
+  4. Apply platform-specific fixes
+  5. Set up editable installs for development packages
+
+Logs are automatically saved to logs/installer_TIMESTAMP.log for debugging.
+        """
+    )
+    
+    parser.add_argument(
+        '--verbose', '-v',
+        action='store_true',
+        help='Enable verbose output with detailed logging'
+    )
+    
+    args = parser.parse_args()
+    
+    try:
+        installer = UnifiedInstaller(verbose=args.verbose)
+        success = installer.run_installation()
+        sys.exit(0 if success else 1)
+    except KeyboardInterrupt:
+        print("\n⚠️ Installation interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Critical error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
-    installer = UnifiedInstaller()
-    installer.run_installation()
+    main()
