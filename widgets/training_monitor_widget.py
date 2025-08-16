@@ -247,33 +247,63 @@ class TrainingMonitorWidget:
         ])
 
     def set_training_config(self, config):
-        """Set the training configuration received from TrainingWidget"""
+        """Set the training configuration received from TrainingWidget (now structured TOML format)"""
         self.training_config = config
 
-        # Store inference parameters
-        self.sample_prompt = config.get('sample_prompt', '')
-        self.sample_num_images = config.get('sample_num_images', 0)
-        self.sample_resolution = config.get('sample_resolution', 512)
-        self.sample_seed = config.get('sample_seed', 42)
-        self.base_model_path = config.get('model_path', '')
-        self.output_dir = config.get('output_dir', '') # This should be the project's output dir
+        # Handle structured TOML config format
+        if self._is_structured_config(config):
+            # Extract from structured TOML format
+            training_args = config.get('training_arguments', {})
+            datasets = config.get('datasets', [{}])[0].get('subsets', [{}])[0] if config.get('datasets') else {}
+            general = config.get('general', {})
+            
+            # Store inference parameters from structured config
+            self.sample_prompt = config.get('sample_prompt', '')  # This comes from widget, not TOML
+            self.sample_num_images = config.get('sample_num_images', 0)
+            self.sample_resolution = config.get('sample_resolution', 512)
+            self.sample_seed = config.get('sample_seed', 42)
+            self.base_model_path = training_args.get('pretrained_model_name_or_path', '')
+            self.output_dir = training_args.get('output_dir', '')
+            
+            # Extract dataset info from structured format
+            num_repeats = datasets.get('num_repeats', 1)
+            batch_size = training_args.get('train_batch_size', 1)
+        else:
+            # Legacy flat format support
+            self.sample_prompt = config.get('sample_prompt', '')
+            self.sample_num_images = config.get('sample_num_images', 0)
+            self.sample_resolution = config.get('sample_resolution', 512)
+            self.sample_seed = config.get('sample_seed', 42)
+            self.base_model_path = config.get('model_path', '')
+            self.output_dir = config.get('output_dir', '')
+            
+            # Legacy dataset info extraction
+            num_repeats = config.get('num_repeats', 1)
+            batch_size = config.get('train_batch_size', 1)
 
         # Calculate steps per epoch for accurate progress tracking
         if config:
             try:
                 # Get dataset info
-                dataset_size = config.get('dataset_size', 100)  # fallback
-                num_repeats = config.get('num_repeats', 1)
-                batch_size = config.get('train_batch_size', 1)
+                dataset_size = config.get('dataset_size', 100)  # fallback (not in TOML, comes from widget)
 
                 # Calculate steps per epoch: (images * repeats) / batch_size
                 self.steps_per_epoch = max(1, (dataset_size * num_repeats) // batch_size)
-                self.total_epochs = config.get('epochs', 1)
+                
+                # Get total epochs from structured or flat config
+                if self._is_structured_config(config):
+                    self.total_epochs = config.get('training_arguments', {}).get('max_train_epochs', 1)
+                else:
+                    self.total_epochs = config.get('epochs', 1)
 
                 print(f"📊 Calculated: {self.steps_per_epoch} steps per epoch for {dataset_size} images")
             except Exception as e:
                 print(f"⚠️ Could not calculate steps per epoch: {e}")
                 self.steps_per_epoch = 100  # Safe fallback
+
+    def _is_structured_config(self, config):
+        """Check if config is structured TOML format"""
+        return any(section in config for section in ['network_arguments', 'optimizer_arguments', 'training_arguments'])
 
     def start_training_clicked(self, b):
         """Handle start training button click - DEAD SIMPLE FILE HUNTING APPROACH"""

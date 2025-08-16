@@ -547,8 +547,10 @@ class TrainingWidget:
             display(monitor.widget_box)
 
         # Pass the training configuration to the monitor
-        config = self._get_training_config()
-        monitor.set_training_config(config)
+        flat_config = self._get_training_config()
+        # Convert flat widget config to structured TOML format for consistency
+        structured_config = self._convert_to_structured_config(flat_config)
+        monitor.set_training_config(structured_config)
 
         with self.training_output:
             self.training_output.clear_output()
@@ -631,6 +633,60 @@ class TrainingWidget:
             'lycoris_method': getattr(self, 'lycoris_method', type('obj', (object,), {'value': 'none'})).value,
             'experimental_features': self._get_experimental_features(),
         }
+
+    def _convert_to_structured_config(self, flat_config):
+        """Convert flat widget config to structured TOML format"""
+        # Handle resolution formatting like our KohyaTrainingManager does
+        resolution = flat_config.get('resolution')
+        if isinstance(resolution, (int, str)):
+            formatted_resolution = f"{resolution},{resolution}"
+        else:
+            formatted_resolution = "512,512"
+
+        structured_config = {
+            "network_arguments": {
+                "network_dim": flat_config.get('network_dim'),
+                "network_alpha": flat_config.get('network_alpha'),
+                "network_module": "networks.lora",
+            },
+            "optimizer_arguments": {
+                "learning_rate": flat_config.get('unet_lr'),
+                "text_encoder_lr": flat_config.get('text_encoder_lr'),
+                "lr_scheduler": flat_config.get('lr_scheduler'),
+                "optimizer_type": flat_config.get('optimizer'),
+            },
+            "training_arguments": {
+                "pretrained_model_name_or_path": flat_config.get('model_path'),
+                "max_train_epochs": flat_config.get('epochs'),
+                "train_batch_size": flat_config.get('train_batch_size'),
+                "save_every_n_epochs": flat_config.get('save_every_n_epochs'),
+                "mixed_precision": flat_config.get('precision'),
+                "output_dir": "output",
+                "output_name": flat_config.get('project_name', 'lora'),
+                "clip_skip": flat_config.get('clip_skip', 2),
+                "save_model_as": "safetensors",
+                "seed": 42,
+            },
+            "datasets": [{
+                "subsets": [{
+                    "image_dir": flat_config.get('dataset_path'),
+                    "num_repeats": flat_config.get('num_repeats'),
+                }]
+            }],
+            "general": {
+                "resolution": formatted_resolution,
+                "shuffle_caption": flat_config.get('shuffle_caption'),
+                "flip_aug": flat_config.get('flip_aug'),
+            },
+            # Include widget-only fields for monitor widget compatibility
+            "sample_prompt": flat_config.get('sample_prompt'),
+            "sample_num_images": flat_config.get('sample_num_images'),
+            "sample_resolution": flat_config.get('sample_resolution'),
+            "sample_seed": flat_config.get('sample_seed'),
+            "dataset_size": flat_config.get('dataset_size'),  # For step calculation
+            "epochs": flat_config.get('epochs'),  # For total epochs calculation
+        }
+        return structured_config
 
     def _create_combined_advanced_section(self, advanced_training_box):
         """Create combined advanced section merging Advanced Training Options with Advanced Mode"""

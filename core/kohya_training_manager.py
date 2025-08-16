@@ -679,34 +679,118 @@ class KohyaTrainingManager:
     def start_training(self, config: Dict, monitor_widget=None) -> bool:
         """
         Start training using Kohya's training scripts and our configuration
+        Handles both flat widget config and structured TOML config formats
         """
         logger.info("🚀 Starting training with Kohya backend")
 
         try:
-            # 🍬 STARBURST WRAPPER MODE: Just make TOML files and let sd-scripts handle everything!
-            logger.info("🍬 Simple wrapper approach - generating TOML and letting sd-scripts do the work")
+            # 🕵️ DETECT CONFIG FORMAT: Widget (flat) vs TOML (structured)
+            is_structured_toml = self._is_structured_toml_config(config)
             
-            # 🧠 LIN-MANUEL MIRANDA DEBUGGING MODE: "WHY DO YOU DEBUG LIKE YOU'RE RUNNING OUT OF TIME?"
-            logger.info("🎭 === WIDGET CONFIG DEBUG DUMP ===")
-            logger.info(f"📊 dataset_dir: {repr(config.get('dataset_dir'))}")
-            logger.info(f"📊 dataset_path: {repr(config.get('dataset_path'))}")  
-            logger.info(f"📊 output_dir: {repr(config.get('output_dir'))}")
-            logger.info(f"📊 model_path: {repr(config.get('model_path'))}")
-            logger.info(f"📊 project_name: {repr(config.get('project_name'))}")
-            logger.info(f"📊 Full config keys: {list(config.keys())}")
-            logger.info("🎭 === END CONFIG DUMP ===")
+            if is_structured_toml:
+                logger.info("📋 Received structured TOML config from launch_from_files()")
+                # Already in TOML format - write to files and proceed
+                return self._launch_training_from_structured_config(config, monitor_widget)
+            else:
+                logger.info("📋 Received flat widget config from prepare_config_only()")
+                # Need to generate TOML files first
+                return self._launch_training_from_widget_config(config, monitor_widget)
+                
+        except Exception as e:
+            logger.error(f"💥 Training failed: {e}")
+            return False
 
-            # 🍬 PURE CANDY WRAPPER: Use our working TOML generation directly!
-            # No more Derrian functions, no more undefined variables, just WORKING CODE!
-            logger.info("🍬 Using candy wrapper TOML generation (no Derrian validation)")
-            
-            # Generate TOML files using our proven working methods
-            config_path = self.create_config_toml(config)
-            dataset_path = self.create_dataset_toml(config)
-            
-            logger.info(f"✅ Generated config: {config_path}")
-            logger.info(f"✅ Generated dataset config: {dataset_path}")
+    def _is_structured_toml_config(self, config: Dict) -> bool:
+        """Detect if config is structured TOML format vs flat widget format"""
+        # TOML structure has these top-level sections
+        toml_sections = ['network_arguments', 'optimizer_arguments', 'training_arguments']
+        return any(section in config for section in toml_sections)
 
+    def _launch_training_from_widget_config(self, config: Dict, monitor_widget=None) -> bool:
+        """Handle flat widget config - generate TOML then train"""
+        logger.info("🍬 Simple wrapper approach - generating TOML and letting sd-scripts do the work")
+        
+        # 🧠 LIN-MANUEL MIRANDA DEBUGGING MODE: "WHY DO YOU DEBUG LIKE YOU'RE RUNNING OUT OF TIME?"
+        logger.info("🎭 === WIDGET CONFIG DEBUG DUMP ===")
+        logger.info(f"📊 dataset_dir: {repr(config.get('dataset_dir'))}")
+        logger.info(f"📊 dataset_path: {repr(config.get('dataset_path'))}")  
+        logger.info(f"📊 output_dir: {repr(config.get('output_dir'))}")
+        logger.info(f"📊 model_path: {repr(config.get('model_path'))}")
+        logger.info(f"📊 project_name: {repr(config.get('project_name'))}")
+        logger.info(f"📊 Full config keys: {list(config.keys())}")
+        logger.info("🎭 === END CONFIG DUMP ===")
+
+        # 🍬 PURE CANDY WRAPPER: Use our working TOML generation directly!
+        # No more Derrian functions, no more undefined variables, just WORKING CODE!
+        logger.info("🍬 Using candy wrapper TOML generation (no Derrian validation)")
+        
+        # Generate TOML files using our proven working methods
+        config_path = self.create_config_toml(config)
+        dataset_path = self.create_dataset_toml(config)
+        
+        logger.info(f"✅ Generated config: {config_path}")
+        logger.info(f"✅ Generated dataset config: {dataset_path}")
+        
+        return self._execute_training_command(config_path, dataset_path, monitor_widget)
+
+    def _launch_training_from_structured_config(self, config: Dict, monitor_widget=None) -> bool:
+        """Handle structured TOML config - write to files then train"""
+        logger.info("🎯 Using pre-structured TOML config from launch_from_files()")
+        
+        # 🧠 STRUCTURED CONFIG DEBUGGING
+        logger.info("🎭 === STRUCTURED TOML CONFIG DEBUG ===")
+        logger.info(f"📊 network_arguments: {config.get('network_arguments', {})}")
+        logger.info(f"📊 optimizer_arguments: {config.get('optimizer_arguments', {})}")
+        logger.info(f"📊 training_arguments: {config.get('training_arguments', {})}")
+        logger.info(f"📊 datasets: {config.get('datasets', [])}")
+        logger.info(f"📊 general: {config.get('general', {})}")
+        logger.info("🎭 === END STRUCTURED DEBUG ===")
+
+        # Write structured config directly to files
+        config_path = self._write_structured_config_toml(config)
+        dataset_path = self._write_structured_dataset_toml(config)
+        
+        logger.info(f"✅ Wrote structured config: {config_path}")
+        logger.info(f"✅ Wrote structured dataset: {dataset_path}")
+        
+        return self._execute_training_command(config_path, dataset_path, monitor_widget)
+
+    def _write_structured_config_toml(self, config: Dict) -> str:
+        """Write pre-structured TOML config to file"""
+        config_filename = f"structured_config_{hash(str(config)) % 10000}.toml"
+        config_path = os.path.join(self.config_dir, config_filename)
+        
+        # Extract just the training sections for config.toml
+        config_sections = {
+            'network_arguments': config.get('network_arguments', {}),
+            'optimizer_arguments': config.get('optimizer_arguments', {}),
+            'training_arguments': config.get('training_arguments', {})
+        }
+        
+        with open(config_path, 'w') as f:
+            toml.dump(config_sections, f)
+        
+        return config_path
+
+    def _write_structured_dataset_toml(self, config: Dict) -> str:
+        """Write pre-structured dataset config to file"""
+        dataset_filename = f"structured_dataset_{hash(str(config)) % 10000}.toml"
+        dataset_path = os.path.join(self.config_dir, dataset_filename)
+        
+        # Extract just the dataset sections for dataset.toml
+        dataset_sections = {
+            'datasets': config.get('datasets', []),
+            'general': config.get('general', {})
+        }
+        
+        with open(dataset_path, 'w') as f:
+            toml.dump(dataset_sections, f)
+        
+        return dataset_path
+
+    def _execute_training_command(self, config_path: str, dataset_path: str, monitor_widget=None) -> bool:
+        """Execute the actual training command"""
+        try:
             # 🍬 Trust that we generated valid TOML files - let sd-scripts validate them!
 
             # Simple training command - let sd-scripts figure everything out!
