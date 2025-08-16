@@ -882,45 +882,52 @@ class DatasetManager:
             # Download images using aria2c (if available) or fallback to requests
             downloaded_count = 0
 
-            # Try using aria2c first (faster for multiple files)
-            try:
-                # Create temporary URL list file for aria2c
-                url_file = os.path.join(dataset_dir, "temp_urls.txt")
-                with open(url_file, 'w') as f:
-                    for url in image_urls:
-                        f.write(f"{url}\n")
+            # Method 1: Try aria2c first (fastest for batch downloads)
+            if shutil.which("aria2c"):
+                print("🚀 Attempting batch download with aria2c...")
+                try:
+                    # Create temporary URL list file for aria2c
+                    url_file = os.path.join(dataset_dir, "temp_urls.txt")
+                    with open(url_file, 'w') as f:
+                        for url in image_urls:
+                            f.write(f"{url}\n")
 
-                # Use aria2c for fast parallel downloads
-                import subprocess
-                cmd = [
-                    'aria2c',
-                    '-i', url_file,
-                    '-d', dataset_dir,
-                    '-j', '4',  # 4 parallel downloads
-                    '-x', '2',  # 2 connections per download
-                    '--auto-file-renaming=false',
-                    '--allow-overwrite=true'
-                ]
+                    # Use aria2c for fast parallel downloads
+                    import subprocess
+                    cmd = [
+                        'aria2c',
+                        '-i', url_file,
+                        '-d', dataset_dir,
+                        '-j', '4',  # 4 parallel downloads
+                        '-x', '2',  # 2 connections per download
+                        '--auto-file-renaming=false',
+                        '--allow-overwrite=true'
+                    ]
 
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                    result = subprocess.run(cmd, capture_output=True, text=True)
 
-                # Clean up temp file
-                os.remove(url_file)
+                    # Clean up temp file
+                    os.remove(url_file)
 
-                if result.returncode == 0:
-                    downloaded_count = len([f for f in os.listdir(dataset_dir)
-                                          if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))])
-                    print(f"✅ Downloaded {downloaded_count} images using aria2c")
-                else:
-                    raise Exception("aria2c failed, falling back to requests")
+                    if result.returncode == 0:
+                        downloaded_count = len([f for f in os.listdir(dataset_dir)
+                                              if f.lower().endswith(('.jpg', '.jpeg', '.png', '.webp'))])
+                        print(f"✅ Downloaded {downloaded_count} images using aria2c")
+                        return downloaded_count > 0
+                    else:
+                        print("❌ aria2c failed. Trying wget...")
 
-            except Exception as e:
-                print(f"⚠️ aria2c not available or failed: {e}")
-                print("📥 Falling back to slower direct downloads...")
+                except Exception as e:
+                    print(f"❌ Error with aria2c: {e}. Trying wget...")
+            else:
+                print("⚠️ aria2c not available. Trying wget...")
 
-                # Fallback: download using requests
-                for i, url in enumerate(image_urls):
-                    try:
+            # Method 2: Try wget for batch downloads  
+            if shutil.which("wget"):
+                print("🚀 Attempting batch download with wget...")
+                try:
+                    downloaded_count = 0
+                    for i, url in enumerate(image_urls):
                         # Get filename from URL
                         parsed_url = urlparse(url)
                         filename = os.path.basename(parsed_url.path)
@@ -934,21 +941,61 @@ class DatasetManager:
                             downloaded_count += 1
                             continue
 
-                        # Download the image
-                        img_response = requests.get(url, timeout=30, stream=True)
-                        img_response.raise_for_status()
+                        # Download with wget
+                        cmd = ["wget", "-O", filepath, url]
+                        result = subprocess.run(cmd, capture_output=True)
+                        
+                        if result.returncode == 0:
+                            downloaded_count += 1
+                            if downloaded_count % 10 == 0:
+                                print(f"📥 Downloaded {downloaded_count}/{len(image_urls)} images with wget...")
+                        else:
+                            print(f"⚠️ wget failed for {url}")
 
-                        with open(filepath, 'wb') as f:
-                            for chunk in img_response.iter_content(chunk_size=8192):
-                                f.write(chunk)
+                    if downloaded_count > 0:
+                        print(f"✅ Downloaded {downloaded_count} images using wget")
+                        return downloaded_count > 0
+                    else:
+                        print("❌ wget batch download failed. Falling back to Python requests...")
+                        
+                except Exception as e:
+                    print(f"❌ Error with wget: {e}. Falling back to Python requests...")
+            else:
+                print("⚠️ wget not available. Falling back to Python requests...")
 
+            # Method 3: Fallback to Python requests
+            print("🚀 Attempting download with Python requests...")
+            downloaded_count = 0
+            for i, url in enumerate(image_urls):
+                try:
+                    # Get filename from URL
+                    parsed_url = urlparse(url)
+                    filename = os.path.basename(parsed_url.path)
+                    if not filename or '.' not in filename:
+                        filename = f"gelbooru_image_{i+1}.jpg"
+
+                    filepath = os.path.join(dataset_dir, filename)
+
+                    # Skip if file already exists
+                    if os.path.exists(filepath):
                         downloaded_count += 1
-                        if downloaded_count % 10 == 0:
-                            print(f"📥 Downloaded {downloaded_count}/{len(image_urls)} images...")
-
-                    except Exception as img_error:
-                        print(f"⚠️ Failed to download {url}: {img_error}")
                         continue
+
+                    # Download the image
+                    img_response = requests.get(url, timeout=30, stream=True)
+                    img_response.raise_for_status()
+
+                    with open(filepath, 'wb') as f:
+                        for chunk in img_response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+
+                    downloaded_count += 1
+                    if downloaded_count % 10 == 0:
+                        print(f"📥 Downloaded {downloaded_count}/{len(image_urls)} images...")
+
+                except Exception as img_error:
+                    print(f"⚠️ Failed to download {url}: {img_error}")
+                    continue
 
             print(f"🎉 Successfully downloaded {downloaded_count} images to {dataset_dir}")
             return downloaded_count > 0

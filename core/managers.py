@@ -3,6 +3,7 @@
 # Contributors: See README.md Credits section for full acknowledgements
 
 # core/managers.py
+import datetime
 import os
 import platform
 import re
@@ -552,15 +553,28 @@ class SetupManager:
             cudnn_version = torch.backends.cudnn.version()
 
             # Check for known problematic combinations
+            # Note: cuDNN 9.x works fine with PyTorch 2.1+, only flag if PyTorch is old
             if cudnn_version and str(cudnn_version).startswith('9'):
-                return {
-                    'compatible': False,
-                    'issue': f'cuDNN {cudnn_version} incompatible (need 8.x)',
-                    'cuda_version': cuda_version,
-                    'cudnn_version': cudnn_version,
-                    'gpu_type': 'nvidia',
-                    'fix_type': 'reinstall_pytorch_cuda8'
-                }
+                try:
+                    import torch
+                    pytorch_version = torch.__version__
+                    # Only flag as incompatible if PyTorch is old (< 2.1)
+                    major, minor = map(int, pytorch_version.split('.')[:2])
+                    if major < 2 or (major == 2 and minor < 1):
+                        return {
+                            'compatible': False,
+                            'issue': f'cuDNN {cudnn_version} incompatible with PyTorch {pytorch_version} (need PyTorch 2.1+)',
+                            'cuda_version': cuda_version,
+                            'cudnn_version': cudnn_version,
+                            'gpu_type': 'nvidia',
+                            'fix_type': 'upgrade_pytorch'
+                        }
+                    else:
+                        # cuDNN 9.x + PyTorch 2.1+ = perfectly fine!
+                        print(f"ℹ️ cuDNN {cudnn_version} + PyTorch {pytorch_version} = Compatible ✅")
+                except Exception:
+                    # If we can't check PyTorch version, assume it's fine
+                    pass
 
             return {
                 'compatible': True,
@@ -975,13 +989,18 @@ class SetupManager:
             if not os.path.exists(os.path.join(self.sd_scripts_dir, script)):
                 issues.append(f"Missing training script: {script}")
 
-        # Check for CAME optimizer
+        # Check for CAME optimizer - try multiple import paths
         came_available = False
+        
+        # Method 1: Direct import (if installed globally)
         try:
             import LoraEasyCustomOptimizer.came
             came_available = True
         except ImportError:
-            # Try alternative paths
+            pass
+        
+        # Method 2: Try from custom_scheduler directory
+        if not came_available:
             sys_path_backup = sys.path.copy()
             try:
                 custom_scheduler_dir = os.path.join(self.derrian_dir, "custom_scheduler")
@@ -993,6 +1012,32 @@ class SetupManager:
                 pass
             finally:
                 sys.path = sys_path_backup
+        
+        # Method 3: Check if it's available as 'came' directly
+        if not came_available:
+            try:
+                from custom_scheduler import optimizer
+                # If we can import the optimizer module, CAME is probably available
+                came_available = True
+            except ImportError:
+                pass
+        
+        # Method 4: Try subprocess test (most reliable)
+        if not came_available:
+            try:
+                venv_python = get_venv_python_path(self.project_root)
+                env = get_subprocess_environment(self.project_root)
+                result = subprocess.run(
+                    [venv_python, '-c', 'from custom_scheduler import optimizer; print("CAME available")'],
+                    capture_output=True,
+                    text=True,
+                    env=env,
+                    timeout=5
+                )
+                if result.returncode == 0:
+                    came_available = True
+            except Exception:
+                pass
 
         if not came_available:
             issues.append("CAME optimizer not available")
@@ -1913,6 +1958,7 @@ class ModelManager:
         return url # Return original url if no match
 
     def download_file(self, url, dest_dir, api_token=""):
+        """Download file with robust fallback chain: hf-transfer → aria2c → wget"""
         validated_url = self._validate_url(url)
         if not validated_url:
             print("Invalid URL provided.")
@@ -1920,22 +1966,73 @@ class ModelManager:
 
         filename = os.path.basename(validated_url.split('?')[0])
         destination_path = os.path.join(dest_dir, filename)
+        
+        # Check if file already exists
+        if os.path.exists(destination_path) and os.path.getsize(destination_path) > 0:
+            file_size = os.path.getsize(destination_path)
+            print(f"✅ File already exists: {destination_path}")
+            print(f"📁 Size: {file_size:,} bytes ({file_size/1024/1024:.1f} MB)")
+            print(f"🕒 Last modified: {datetime.datetime.fromtimestamp(os.path.getmtime(destination_path)).strftime('%Y-%m-%d %H:%M:%S')}")
+            return destination_path
 
         print(f"Downloading from {validated_url}...")
 
-        # Check if it's a Hugging Face URL and hf-transfer is available
-        if "huggingface.co" in validated_url and shutil.which("hf-transfer"):
-            print("Attempting download with hf-transfer...")
+        # Method 1: Try aria2c first (fastest, most reliable)
+        if shutil.which("aria2c"):
+            print("🚀 Attempting download with aria2c...")
             try:
-                # hf-transfer uses environment variables for token
+                header = ""
+                download_url = validated_url
+                
+                if "civitai.com" in validated_url and api_token and "hf" not in api_token:
+                    download_url = f"{validated_url}?token={api_token}"
+                elif "huggingface.co" in validated_url and api_token:
+                    header = f"Authorization: Bearer {api_token}"
+
+                command = [
+                    "aria2c", download_url,
+                    "--console-log-level=warn",
+                    "-c", "-s", "16", "-x", "16", "-k", "10M",
+                    "-d", dest_dir,
+                    "-o", filename
+                ]
+                if header:
+                    command.extend(["--header", header])
+
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
+
+                for line in iter(process.stdout.readline, ''):
+                    print(line, end='')
+
+                process.stdout.close()
+                return_code = process.wait()
+
+                if return_code == 0:
+                    print(f"✅ Download complete with aria2c: {destination_path}")
+                    return destination_path
+                else:
+                    print(f"❌ aria2c failed with exit code {return_code}. Trying next method.")
+
+            except Exception as e:
+                print(f"❌ Error with aria2c: {e}. Trying next method.")
+        else:
+            print("⚠️ aria2c not available. Trying hf-transfer.")
+
+        # Method 2: Try hf-transfer for Hugging Face URLs
+        if "huggingface.co" in validated_url and shutil.which("hf-transfer"):
+            print("🚀 Attempting download with hf-transfer...")
+            try:
                 env = os.environ.copy()
                 if api_token:
                     env["HF_HUB_TOKEN"] = api_token
 
-                # hf-transfer download command
-                # It downloads directly to the current directory, so we'll move it later
                 hf_download_cmd = ["hf-transfer", "download", validated_url, "--local-dir", dest_dir]
-
                 process = subprocess.Popen(
                     hf_download_cmd,
                     stdout=subprocess.PIPE,
@@ -1952,56 +2049,91 @@ class ModelManager:
                 return_code = process.wait()
 
                 if return_code == 0:
-                    print(f"\nDownload complete with hf-transfer: {destination_path}")
+                    print(f"✅ Download complete with hf-transfer: {destination_path}")
                     return destination_path
                 else:
-                    print(f"\nhf-transfer failed with exit code {return_code}. Falling back to aria2c.")
+                    print(f"❌ hf-transfer failed with exit code {return_code}. Falling back to wget.")
 
             except Exception as e:
-                print(f"\nError with hf-transfer: {e}. Falling back to aria2c.")
+                print(f"❌ Error with hf-transfer: {e}. Falling back to wget.")
+        else:
+            if "huggingface.co" in validated_url:
+                print("⚠️ hf-transfer not available for HuggingFace URL. Falling back to wget.")
 
-        # Fallback to aria2c if hf-transfer fails or is not used
-        header = ""
-        if "civitai.com" in validated_url and api_token and "hf" not in api_token:
-            validated_url = f"{validated_url}?token={api_token}"
-        elif "huggingface.co" in validated_url and api_token:
-            header = f"Authorization: Bearer {api_token}"
+        # Method 3: Try wget as fallback
+        if shutil.which("wget"):
+            print("🚀 Attempting download with wget...")
+            try:
+                download_url = validated_url
+                wget_args = ["wget", "-O", destination_path]
+                
+                if "civitai.com" in validated_url and api_token and "hf" not in api_token:
+                    download_url = f"{validated_url}?token={api_token}"
+                elif "huggingface.co" in validated_url and api_token:
+                    wget_args.extend(["--header", f"Authorization: Bearer {api_token}"])
+                
+                wget_args.append(download_url)
+                
+                process = subprocess.Popen(
+                    wget_args,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,
+                )
 
-        command = [
-            "aria2c", validated_url,
-            "--console-log-level=warn",
-            "-c", "-s", "16", "-x", "16", "-k", "10M",
-            "-d", dest_dir,
-            "-o", filename
-        ]
-        if header:
-            command.extend(["--header", header])
+                for line in iter(process.stdout.readline, ''):
+                    print(line, end='')
 
+                process.stdout.close()
+                return_code = process.wait()
+
+                if return_code == 0:
+                    print(f"✅ Download complete with wget: {destination_path}")
+                    return destination_path
+                else:
+                    print(f"❌ wget failed with exit code {return_code}.")
+
+            except Exception as e:
+                print(f"❌ Error with wget: {e}")
+        else:
+            print("⚠️ wget not available.")
+
+        # Method 4: Python requests as absolute fallback
+        print("🚀 Attempting download with Python requests (final fallback)...")
         try:
-            process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-            )
+            import requests
+            
+            headers = {}
+            download_url = validated_url
+            
+            if "civitai.com" in validated_url and api_token and "hf" not in api_token:
+                download_url = f"{validated_url}?token={api_token}"
+            elif "huggingface.co" in validated_url and api_token:
+                headers["Authorization"] = f"Bearer {api_token}"
 
-            for line in iter(process.stdout.readline, ''):
-                print(line, end='')
-
-            process.stdout.close()
-            return_code = process.wait()
-
-            if return_code:
-                raise subprocess.CalledProcessError(return_code, command)
-
-            print(f"\nDownload complete: {destination_path}")
+            response = requests.get(download_url, headers=headers, stream=True)
+            response.raise_for_status()
+            
+            total_size = int(response.headers.get('content-length', 0))
+            downloaded = 0
+            
+            with open(destination_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total_size > 0:
+                            percent = (downloaded / total_size) * 100
+                            print(f"\rProgress: {percent:.1f}% ({downloaded}/{total_size} bytes)", end='', flush=True)
+            
+            print(f"\n✅ Download complete with Python requests: {destination_path}")
             return destination_path
-
-        except subprocess.CalledProcessError as e:
-            print(f"An error occurred while downloading the file: {e}")
+            
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
+            print(f"❌ Error with Python requests: {e}")
+
+        print("💥 All download methods failed!")
         return None
 
     def download_model(self, model_url, model_name=None, api_token=""):
