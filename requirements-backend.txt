@@ -54,7 +54,7 @@ imagesize==1.4.1
 prodigyopt==1.0
 lion-pytorch==0.1.2
 dadaptation==3.2
-pytorch_optimizer>=3.1.0
+pytorch_optimizer==3.1.2
 schedulefree
 prodigy-plus-schedule-free
 came-pytorch
