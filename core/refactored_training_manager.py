@@ -122,21 +122,25 @@ class RefactoredTrainingManager:
 
     def prepare_config_only(self, config):
         """
-        Legacy method for generating config files only
+        Generate both config and dataset files (despite the name)
+        sd_scripts backend requires BOTH config.toml AND dataset.toml
         """
         config_path = self.kohya_manager.create_config_toml(config)
+        dataset_path = self.kohya_manager.create_dataset_toml(config)
 
-        # Use the actual filename instead of hardcoded "config.toml"
-        if config_path:
-            actual_filename = os.path.basename(config_path)
+        # Use the actual filenames instead of hardcoded names
+        if config_path and dataset_path:
+            config_filename = os.path.basename(config_path)
+            dataset_filename = os.path.basename(dataset_path)
             return {
-                actual_filename: config_path,
-                "dataset.toml": None  # Handled by Kohya's unified config
+                config_filename: config_path,
+                dataset_filename: dataset_path
             }
         else:
+            # Fallback to standard names if creation failed
             return {
                 "config.toml": config_path,
-                "dataset.toml": None
+                "dataset.toml": dataset_path
             }
 
     def validate_config(self, config):

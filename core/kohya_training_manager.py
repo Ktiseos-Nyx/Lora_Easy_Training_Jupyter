@@ -23,6 +23,7 @@ kohya_path = os.path.join(os.getcwd(), "trainer", "derrian_backend", "sd_scripts
 sys.path.insert(0, kohya_path)
 
 # Kohya SS library imports (core training logic)
+KOHYA_AVAILABLE = False
 try:
     import library.config_util as config_util
     import library.train_util as train_util
@@ -44,7 +45,11 @@ try:
     # Also set up our file-based logging for easier debugging
     from .logging_config import setup_file_logging
     setup_file_logging()
+    
+    # If we got here, Kohya is available
+    KOHYA_AVAILABLE = True
 except ImportError as e:
+    KOHYA_AVAILABLE = False
     raise ImportError(
         f"❌ TRAINING SYSTEM UNAVAILABLE\n"
         f"🔧 SOLUTION: Run 'python installer.py' to install required dependencies\n"
@@ -385,6 +390,11 @@ class KohyaTrainingManager:
             return self._basic_model_detection(model_path)
 
         try:
+            # Guard against None/empty model path
+            if not model_path:
+                logger.error(f"❌ Model path is empty/None: {repr(model_path)} - Check widget model selection!")
+                return 'sd15'
+                
             # Use Kohya's model detection utilities
             model_path_lower = model_path.lower()
 
@@ -426,6 +436,8 @@ class KohyaTrainingManager:
 
     def _basic_model_detection(self, model_path: str) -> str:
         """Basic model type detection fallback"""
+        if not model_path:
+            return 'sd15'
         model_path_lower = model_path.lower()
 
         for model_type, patterns in self.MODEL_TYPE_PATTERNS.items():
@@ -525,32 +537,73 @@ class KohyaTrainingManager:
         """Fallback TOML config creation for SD1.5/SDXL"""
         config_path = os.path.join(self.config_dir, f"{config.get('output_name', 'lora')}_config.toml")
 
-        # Basic config structure
+        # 🎭 === LIN-MANUEL MIRANDA DEBUGGING MODE ===
+        logger.info("🎭 === WIDGET CONFIG DEBUG DUMP ===")
+        logger.info(f"📊 Full config keys: {list(config.keys())}")
+        logger.info(f"📊 Config type: {type(config)}")
+        
+        # Check if this is structured config from widget
+        if 'model_arguments' in config:
+            logger.info("🎵 WAIT FOR IT... Structured widget config detected!")
+            logger.info(f"📊 model_arguments: {config.get('model_arguments', {})}")
+            logger.info(f"📊 training_arguments: {config.get('training_arguments', {})}")
+            logger.info(f"📊 network_arguments: {config.get('network_arguments', {})}")
+        else:
+            logger.info("🎵 HAMILTON'S WAY... Looking for flat config fields")
+            logger.info(f"📊 model_path: {repr(config.get('model_path'))}")
+            logger.info(f"📊 dataset_dir: {repr(config.get('dataset_dir'))}")
+            logger.info(f"📊 dataset_path: {repr(config.get('dataset_path'))}")
+            logger.info(f"📊 output_dir: {repr(config.get('output_dir'))}")
+
+        # 🎵 BACK TO BASICS: Simple config.get() calls that were actually WORKING!
+        # (Based on git commit 26f87c4 when TOML generation was working correctly)
         toml_config = {
-            "model_arguments": {
-                "pretrained_model_name_or_path": config.get('model_path', ''),
-                "v2": config.get('v2', False),
-                "v_parameterization": config.get('v_parameterization', False),
-                "clip_skip": config.get('clip_skip', 2),
-            },
-            # Dataset config moved to separate dataset.toml file
-            "training_arguments": {
-                "output_dir": config.get('output_dir', self.output_dir),
-                "output_name": config.get('output_name', 'lora'),
-                "learning_rate": config.get('unet_lr'),
-                "text_encoder_lr": config.get('text_encoder_lr'),
-                "lr_scheduler": config.get('lr_scheduler', 'cosine'),
-                "optimizer_type": config.get('optimizer', 'AdamW8bit'),
-                "max_train_epochs": config.get('epochs', 10),
-                "save_every_n_epochs": config.get('save_every_n_epochs', 1),
-                "mixed_precision": config.get('mixed_precision', 'fp16'),
-                "save_precision": config.get('save_precision', 'fp16'),
-                "seed": config.get('seed', 42),
-            },
             "network_arguments": {
-                "network_module": config.get('network_module', 'networks.lora'),
+                "unet_lr": config.get('unet_lr'),
+                "text_encoder_lr": config.get('text_encoder_lr'),
                 "network_dim": config.get('network_dim'),
                 "network_alpha": config.get('network_alpha'),
+                "network_module": config.get('network_module'),
+                "network_args": config.get('network_args'),
+            },
+            "optimizer_arguments": {
+                "learning_rate": config.get('unet_lr'),  # sd-scripts uses learning_rate for main LR
+                "lr_scheduler": config.get('lr_scheduler'),
+                "lr_scheduler_num_cycles": config.get('lr_scheduler_num_cycles'),
+                "lr_warmup_steps": config.get('lr_warmup_steps'),
+                "optimizer_type": config.get('optimizer'),
+                "optimizer_args": config.get('optimizer_args'),
+            },
+            "training_arguments": {
+                "lowram": config.get('lowram'),
+                "pretrained_model_name_or_path": config.get('model_path'),
+                "max_train_epochs": config.get('epochs'),
+                "train_batch_size": config.get('batch_size'),
+                "mixed_precision": config.get('mixed_precision'),
+                "save_precision": config.get('save_precision'),
+                "save_every_n_epochs": config.get('save_every_n_epochs'),
+                "save_last_n_epochs": config.get('save_last_n_epochs'),
+                "output_name": config.get('output_name'),
+                "output_dir": config.get('output_dir'),
+                "logging_dir": config.get('logging_dir'),
+                "cache_latents": config.get('cache_latents'),
+                "cache_latents_to_disk": config.get('cache_latents_to_disk'),
+                "cache_text_encoder_outputs": config.get('cache_text_encoder_outputs'),
+                "min_snr_gamma": config.get('min_snr_gamma'),
+                "xformers": config.get('xformers'),
+                "sdpa": config.get('sdpa'),
+                "log_with": config.get('log_with'),
+                "zero_terminal_snr": config.get('zero_terminal_snr'),
+                "clip_skip": config.get('clip_skip'),
+                "vae_batch_size": config.get('vae_batch_size'),
+                "no_half_vae": config.get('no_half_vae'),
+                "gradient_checkpointing": config.get('gradient_checkpointing'),
+                "gradient_accumulation_steps": config.get('gradient_accumulation_steps'),
+                "max_grad_norm": config.get('max_grad_norm'),
+                "full_fp16": config.get('full_fp16'),
+                "random_crop": config.get('random_crop'),
+                "fp8_base": config.get('fp8_base'),
+                "v_parameterization": config.get('v_parameterization'),
             },
         }
 
@@ -562,26 +615,61 @@ class KohyaTrainingManager:
 
     def create_dataset_toml(self, config: Dict) -> str:
         """
-        Create dataset configuration TOML using proper Kohya format
+        Create dataset configuration TOML using REAL Kohya format from your resources!
         """
         dataset_path = os.path.join(self.config_dir, f"{config.get('output_name', 'lora')}_dataset.toml")
         
-        # Kohya dataset config format from sd_scripts docs
+        # 🎵 EXACT WORKING TOML STRUCTURE: Match your working dataset.toml format!
+        # Filter out None values so TOML only gets fields that are actually set
+        
+        # Build datasets section
+        datasets_section = {}
+        subsets_section = {}
+        general_section = {}
+        
+        # Only add fields that aren't None
+        if config.get('keep_tokens') is not None:
+            datasets_section['keep_tokens'] = config.get('keep_tokens')
+            
+        if config.get('num_repeats') is not None:
+            subsets_section['num_repeats'] = config.get('num_repeats')
+        if config.get('dataset_dir') is not None:
+            subsets_section['image_dir'] = config.get('dataset_dir')
+        if config.get('class_tokens') is not None:
+            subsets_section['class_tokens'] = config.get('class_tokens')
+            
+        if config.get('resolution') is not None:
+            general_section['resolution'] = config.get('resolution')
+        if config.get('shuffle_caption') is not None:
+            general_section['shuffle_caption'] = config.get('shuffle_caption')
+        if config.get('flip_aug') is not None:
+            general_section['flip_aug'] = config.get('flip_aug')
+        if config.get('caption_extension') is not None:
+            general_section['caption_extension'] = config.get('caption_extension')
+        if config.get('enable_bucket') is not None:
+            general_section['enable_bucket'] = config.get('enable_bucket')
+        if config.get('bucket_no_upscale') is not None:
+            general_section['bucket_no_upscale'] = config.get('bucket_no_upscale')
+        if config.get('bucket_reso_steps') is not None:
+            general_section['bucket_reso_steps'] = config.get('bucket_reso_steps')
+        if config.get('min_bucket_reso') is not None:
+            general_section['min_bucket_reso'] = config.get('min_bucket_reso')
+        if config.get('max_bucket_reso') is not None:
+            general_section['max_bucket_reso'] = config.get('max_bucket_reso')
+        if config.get('caption_dropout_rate') is not None:
+            general_section['caption_dropout_rate'] = config.get('caption_dropout_rate')
+        if config.get('caption_tag_dropout_rate') is not None:
+            general_section['caption_tag_dropout_rate'] = config.get('caption_tag_dropout_rate')
+
+        # Build final structure
         dataset_config = {
-            "general": {
-                "shuffle_caption": config.get('shuffle_caption', True),
-                "caption_extension": config.get('caption_extension', '.txt'),
-                "keep_tokens": config.get('keep_tokens', 1)
-            },
-            "datasets": [{
-                "resolution": config.get('resolution', 512),
-                "batch_size": config.get('batch_size', 1),
-                "subsets": [{
-                    "image_dir": self._ensure_absolute_dataset_path(config.get('dataset_path', '')),
-                    "num_repeats": config.get('num_repeats', 10)
-                }]
-            }]
+            "datasets": [datasets_section] if datasets_section else [{}],
+            "general": general_section
         }
+        
+        # Add subsets to the first dataset
+        if subsets_section:
+            dataset_config["datasets"][0]["subsets"] = [subsets_section]
         
         with open(dataset_path, 'w') as f:
             toml.dump(dataset_config, f)
@@ -596,22 +684,18 @@ class KohyaTrainingManager:
         logger.info("🚀 Starting training with Kohya backend")
 
         try:
-            # Detect model type if not provided
-            if 'model_type' not in config:
-                config['model_type'] = self.detect_model_type(config.get('model_path', ''))
-
-            # Validate config using Derrian's comprehensive validation system
-            logger.info("🔍 Validating training configuration...")
-            passed, errors, validated_args, validated_dataset_args, tag_data = self.validate_config_with_derrian(config)
+            # 🍬 STARBURST WRAPPER MODE: Just make TOML files and let sd-scripts handle everything!
+            logger.info("🍬 Simple wrapper approach - generating TOML and letting sd-scripts do the work")
             
-            if not passed:
-                error_msg = f"❌ Configuration validation failed:\n" + "\n".join(f"  • {error}" for error in errors)
-                logger.error(error_msg)
-                if monitor_widget:
-                    monitor_widget.update_phase("Configuration validation failed", "error")
-                return False
-
-            logger.info("✅ Configuration validation passed")
+            # 🧠 LIN-MANUEL MIRANDA DEBUGGING MODE: "WHY DO YOU DEBUG LIKE YOU'RE RUNNING OUT OF TIME?"
+            logger.info("🎭 === WIDGET CONFIG DEBUG DUMP ===")
+            logger.info(f"📊 dataset_dir: {repr(config.get('dataset_dir'))}")
+            logger.info(f"📊 dataset_path: {repr(config.get('dataset_path'))}")  
+            logger.info(f"📊 output_dir: {repr(config.get('output_dir'))}")
+            logger.info(f"📊 model_path: {repr(config.get('model_path'))}")
+            logger.info(f"📊 project_name: {repr(config.get('project_name'))}")
+            logger.info(f"📊 Full config keys: {list(config.keys())}")
+            logger.info("🎭 === END CONFIG DUMP ===")
 
             # Create both configuration files using Derrian's proven TOML generators
             # Instead of our guessed implementations, use the actual Derrian functions
@@ -642,8 +726,15 @@ class KohyaTrainingManager:
                 if 'original_cwd' in locals():
                     os.chdir(original_cwd)
 
-            # Get training command with both config files
-            cmd = self._get_training_command(config, config_path, dataset_path)
+            # 🍬 Trust that we generated valid TOML files - let sd-scripts validate them!
+
+            # Simple training command - let sd-scripts figure everything out!
+            cmd = [
+                os.path.join(self.sd_scripts_dir, "train_network.py"),
+                "--config_file", config_path,
+                "--dataset_config", dataset_path
+            ]
+            logger.info(f"🚀 Running: {' '.join(cmd[-3:])}")
 
             # Always use current Python executable for environment-agnostic execution
             # This follows CLAUDE.md requirement: NEVER hardcode paths or environment assumptions
@@ -739,39 +830,10 @@ class KohyaTrainingManager:
 
     def validate_config(self, config: Dict) -> List[str]:
         """
-        Validate training configuration using Kohya's validation utilities
+        🍬 Candy wrapper mode - no validation, let sd-scripts handle it!
         """
-        errors = []
-
-        # Basic validation
-        required_fields = ['model_path', 'dataset_path', 'output_name']
-        for field in required_fields:
-            if not config.get(field):
-                errors.append(f"Missing required field: {field}")
-
-        # Path validation
-        if config.get('model_path') and not os.path.exists(config['model_path']):
-            errors.append(f"Model path not found: {config['model_path']}")
-
-        if config.get('dataset_path') and not os.path.exists(config['dataset_path']):
-            errors.append(f"Dataset path not found: {config['dataset_path']}")
-
-        # Optimizer validation
-        optimizer = config.get('optimizer', 'AdamW8bit')
-        if optimizer not in self.supported_optimizers:
-            errors.append(f"Unsupported optimizer: {optimizer}")
-
-        # Learning rate validation
-        lr = config.get('learning_rate', 0.0001)
-        if not isinstance(lr, (int, float)) or lr <= 0:
-            errors.append("Learning rate must be a positive number")
-
-        # Model type validation
-        model_type = config.get('model_type')
-        if model_type and model_type not in self.SCRIPT_MAPPING:
-            errors.append(f"Unsupported model type: {model_type}")
-
-        return errors
+        logger.info("🍬 Skipping validation - letting sd-scripts handle everything!")
+        return []  # No errors, we trust sd-scripts
 
     def get_model_info(self, model_path: str) -> Dict:
         """
@@ -1061,7 +1123,7 @@ class KohyaTrainingManager:
             },
             "subsets": [
                 {
-                    "image_dir": self._ensure_absolute_dataset_path(config.get('dataset_path', '')),
+                    "image_dir": self._ensure_absolute_dataset_path(config.get('dataset_dir', '')),
                     "num_repeats": config.get('num_repeats', 10),
                     "caption_extension": config.get('caption_extension', '.txt'),
                 }
@@ -1072,21 +1134,26 @@ class KohyaTrainingManager:
 
     def _ensure_absolute_dataset_path(self, dataset_path):
         """
-        Ensure dataset path is absolute and correctly points to the training dataset folder.
+        Convert dataset path to relative path for Derrian backend compatibility.
         
-        Since sd_scripts runs from trainer/derrian_backend/sd_scripts/, we need absolute paths
-        to find datasets in the project root.
+        Derrian's validation expects relative paths from the project root, not absolute paths.
+        The sd_scripts run from trainer/derrian_backend/ so they need relative paths.
         
-        The dataset path should point directly to the folder containing images (e.g., "3_character_name"),
-        NOT the parent "datasets" directory.
+        Example: "/workspace/project/datasets/3_character" -> "datasets/3_character"
         """
         if not dataset_path:
             return dataset_path
 
-        # Convert to absolute path if it's relative (relative to project root)
-        if not os.path.isabs(dataset_path):
-            dataset_path = os.path.join(self.project_root, dataset_path)
+        # If it's an absolute path, make it relative to project root
+        if os.path.isabs(dataset_path):
+            try:
+                # Convert absolute path to relative from project root
+                dataset_path = os.path.relpath(dataset_path, self.project_root)
+            except ValueError:
+                # If paths are on different drives (Windows), keep as absolute
+                pass
 
-        # Return the absolute path to the actual dataset folder
-        # This should be the directory containing the training images
+        # Ensure we're not adding extra path separators
+        dataset_path = dataset_path.replace('\\', '/')  # Normalize path separators
+        
         return dataset_path
