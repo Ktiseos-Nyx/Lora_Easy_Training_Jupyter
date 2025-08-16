@@ -636,6 +636,18 @@ class TrainingWidget:
 
     def _convert_to_structured_config(self, flat_config):
         """Convert flat widget config to structured TOML format"""
+        
+        # 🔍 DEBUG: What's actually in the flat config?
+        print("🚨 === FLAT CONFIG DEBUG (BEFORE CONVERSION) ===")
+        print(f"📊 All flat config keys: {list(flat_config.keys())}")
+        print(f"📊 network_dim: {repr(flat_config.get('network_dim'))}")
+        print(f"📊 network_alpha: {repr(flat_config.get('network_alpha'))}")
+        print(f"📊 unet_lr: {repr(flat_config.get('unet_lr'))}")
+        print(f"📊 model_path: {repr(flat_config.get('model_path'))}")
+        print(f"📊 epochs: {repr(flat_config.get('epochs'))}")
+        print(f"📊 optimizer: {repr(flat_config.get('optimizer'))}")
+        print("🚨 === END FLAT CONFIG DEBUG ===")
+        
         # Handle resolution formatting like our KohyaTrainingManager does
         resolution = flat_config.get('resolution')
         if isinstance(resolution, (int, str)):
