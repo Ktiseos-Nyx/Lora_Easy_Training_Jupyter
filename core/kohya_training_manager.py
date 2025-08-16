@@ -757,7 +757,8 @@ class KohyaTrainingManager:
 
     def _write_structured_config_toml(self, config: Dict) -> str:
         """Write pre-structured TOML config to file"""
-        config_filename = f"structured_config_{hash(str(config)) % 10000}.toml"
+        # Use standard naming that launch_from_files() expects
+        config_filename = "config.toml"
         config_path = os.path.join(self.config_dir, config_filename)
         
         # Extract just the training sections for config.toml
@@ -774,7 +775,8 @@ class KohyaTrainingManager:
 
     def _write_structured_dataset_toml(self, config: Dict) -> str:
         """Write pre-structured dataset config to file with proper Kohya format"""
-        dataset_filename = f"structured_dataset_{hash(str(config)) % 10000}.toml"
+        # Use standard naming that launch_from_files() expects
+        dataset_filename = "dataset.toml"
         dataset_path = os.path.join(self.config_dir, dataset_filename)
         
         # 🎯 CRITICAL FIX: Build proper Kohya dataset structure, not just a dump!
