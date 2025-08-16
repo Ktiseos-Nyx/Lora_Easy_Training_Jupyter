@@ -773,18 +773,57 @@ class KohyaTrainingManager:
         return config_path
 
     def _write_structured_dataset_toml(self, config: Dict) -> str:
-        """Write pre-structured dataset config to file"""
+        """Write pre-structured dataset config to file with proper Kohya format"""
         dataset_filename = f"structured_dataset_{hash(str(config)) % 10000}.toml"
         dataset_path = os.path.join(self.config_dir, dataset_filename)
         
-        # Extract just the dataset sections for dataset.toml
-        dataset_sections = {
-            'datasets': config.get('datasets', []),
-            'general': config.get('general', {})
+        # 🎯 CRITICAL FIX: Build proper Kohya dataset structure, not just a dump!
+        # We need the exact structure that the working create_dataset_toml method uses
+        
+        datasets_section = {}
+        subsets_section = {}
+        general_section = config.get('general', {})
+        
+        # Extract from our structured config's datasets array
+        if config.get('datasets') and len(config['datasets']) > 0:
+            first_dataset = config['datasets'][0]
+            if 'subsets' in first_dataset and len(first_dataset['subsets']) > 0:
+                subset = first_dataset['subsets'][0]
+                
+                # Build subsets section
+                if subset.get('num_repeats') is not None:
+                    subsets_section['num_repeats'] = subset['num_repeats']
+                if subset.get('image_dir') is not None:
+                    subsets_section['image_dir'] = subset['image_dir']
+                    
+        # Fix resolution format - Kohya needs INTEGER not "1024,1024" string
+        if 'resolution' in general_section:
+            resolution = general_section['resolution']
+            if isinstance(resolution, str) and ',' in resolution:
+                # Convert "1024,1024" → 1024 (integer)
+                general_section['resolution'] = int(resolution.split(',')[0])
+            elif isinstance(resolution, (int, str)):
+                general_section['resolution'] = int(resolution)
+                
+        # Build final structure matching working create_dataset_toml
+        dataset_config = {
+            "datasets": [datasets_section] if datasets_section else [{}],
+            "general": general_section
         }
         
+        # Add subsets to the first dataset if we have any
+        if subsets_section:
+            dataset_config["datasets"][0]["subsets"] = [subsets_section]
+        
+        # 🧠 DEBUGGING: Log what we're actually writing
+        logger.info("🎯 === STRUCTURED DATASET TOML DEBUG ===")
+        logger.info(f"📊 Writing dataset config: {dataset_config}")
+        logger.info(f"📊 Subsets section: {subsets_section}")
+        logger.info(f"📊 General section: {general_section}")
+        logger.info("🎯 === END DATASET TOML DEBUG ===")
+        
         with open(dataset_path, 'w') as f:
-            toml.dump(dataset_sections, f)
+            toml.dump(dataset_config, f)
         
         return dataset_path
 
