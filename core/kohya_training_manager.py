@@ -466,6 +466,14 @@ class KohyaTrainingManager:
         """
         Create training configuration TOML using Kohya's config utilities
         """
+        # 🚨 RESET DEMON DEBUGGING: Track when/why TOML is being recreated
+        import traceback
+        logger.warning("🚨 === TOML RECREATION ALERT ===")
+        logger.warning("📊 create_config_toml() called!")
+        logger.warning(f"📊 Call stack: {[line.strip() for line in traceback.format_stack()[-3:-1]]}")
+        logger.warning(f"📊 Config project name: {config.get('output_name', 'lora')}")
+        logger.warning("🚨 === END TOML RECREATION ALERT ===")
+        
         model_type = config.get('model_type', 'sd15')
 
         if model_type in self.model_configs:
@@ -594,6 +602,14 @@ class KohyaTrainingManager:
         """
         Create dataset configuration TOML using REAL Kohya format from your resources!
         """
+        # 🚨 RESET DEMON DEBUGGING: Track dataset TOML recreation
+        import traceback
+        logger.warning("🚨 === DATASET TOML RECREATION ALERT ===")
+        logger.warning("📊 create_dataset_toml() called!")
+        logger.warning(f"📊 Call stack: {[line.strip() for line in traceback.format_stack()[-3:-1]]}")
+        logger.warning(f"📊 Dataset path from config: {config.get('dataset_path')}")
+        logger.warning("🚨 === END DATASET TOML RECREATION ALERT ===")
+        
         dataset_path = os.path.join(self.config_dir, f"{config.get('output_name', 'lora')}_dataset.toml")
         
         # 🎭 DATASET DEBUG: Check critical fields before TOML generation
@@ -760,6 +776,13 @@ class KohyaTrainingManager:
 
     def _write_structured_config_toml(self, config: Dict) -> str:
         """Write pre-structured TOML config to file"""
+        # 🚨 RESET DEMON DEBUGGING: Track structured TOML writes
+        import traceback
+        logger.warning("🚨 === STRUCTURED CONFIG WRITE ALERT ===")
+        logger.warning("📊 _write_structured_config_toml() called!")
+        logger.warning(f"📊 Call stack: {[line.strip() for line in traceback.format_stack()[-3:-1]]}")
+        logger.warning("🚨 === END STRUCTURED CONFIG ALERT ===")
+        
         # Use standard naming that launch_from_files() expects
         config_filename = "config.toml"
         config_path = os.path.join(self.config_dir, config_filename)
