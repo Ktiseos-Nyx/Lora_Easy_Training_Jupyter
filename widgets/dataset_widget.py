@@ -735,6 +735,8 @@ class DatasetWidget:
         self.create_folder_button.on_click(self.run_create_folder)
         self.upload_images_button.on_click(self._handle_async_upload)
         self.upload_zip_button.on_click(self._handle_async_zip_upload)
+        
+        logger.info("🔗 BUTTON HANDLERS: Upload button click handlers attached")
         # Gallery-dl scraper functionality integrated into URL download
         # self.gelbooru_button.on_click(self.run_gallery_dl_scraper)  # Button removed, functionality integrated
         self.preview_rename_button.on_click(self.run_preview_rename)
@@ -854,6 +856,10 @@ class DatasetWidget:
 
     def run_create_folder(self, b):
         """Create a new folder for image upload using Kohya's repeat count format"""
+        logger.info("🖱️ BUTTON CLICK: Create Folder button clicked!")
+        logger.info(f"📁 Folder name: '{self.folder_name.value}'")
+        logger.info(f"📁 Repeat count: {self.folder_repeats.value}")
+        
         self.dataset_output.clear_output()
         folder_name = self.folder_name.value.strip()
         repeat_count = self.folder_repeats.value
@@ -904,10 +910,16 @@ class DatasetWidget:
 
     def _handle_async_upload(self, b):
         """Wrapper to handle async upload function"""
+        logger.info("🖱️ BUTTON CLICK: Upload Images button clicked!")
+        logger.info(f"🖱️ Button state - disabled: {self.upload_images_button.disabled}")
+        logger.info(f"🖱️ Files in widget: {len(self.file_upload.value)}")
         asyncio.create_task(self.run_upload_images(b))
 
     def _handle_async_zip_upload(self, b):
         """Wrapper to handle async ZIP upload function"""
+        logger.info("🖱️ BUTTON CLICK: Upload ZIP button clicked!")
+        logger.info(f"🖱️ Button state - disabled: {self.upload_zip_button.disabled}")
+        logger.info(f"🖱️ Files in widget: {len(self.file_upload.value)}")
         asyncio.create_task(self.run_upload_zip(b))
 
     async def run_upload_images(self, b):
