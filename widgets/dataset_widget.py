@@ -769,6 +769,52 @@ class DatasetWidget:
             logger.info(f"🧪 TESTING: Manual trigger successful!")
         except Exception as e:
             logger.error(f"🧪 TESTING: Manual trigger failed: {e}")
+            
+        # WORKAROUND: Implement polling-based file detection since observer isn't working
+        logger.info(f"🔄 WORKAROUND: Starting file upload polling system...")
+        self._last_file_count = 0
+        self._last_file_names = set()
+        import threading
+        import time
+        
+        def poll_file_upload():
+            """Poll FileUpload widget for changes since observer isn't working"""
+            while True:
+                try:
+                    current_files = self.file_upload.value
+                    current_count = len(current_files)
+                    current_names = {f['name'] for f in current_files} if current_files else set()
+                    
+                    # Check if files have changed
+                    if current_count != self._last_file_count or current_names != self._last_file_names:
+                        logger.info(f"🔄 POLLING DETECTED FILE CHANGE: {self._last_file_count} -> {current_count} files")
+                        
+                        # Simulate the observer event manually
+                        change_event = {
+                            'new': current_files,
+                            'old': (),  # We don't track old state in polling
+                            'type': 'change',
+                            'name': 'value',
+                            'owner': self.file_upload
+                        }
+                        
+                        # Trigger our observer method manually
+                        self.on_file_upload_change(change_event)
+                        
+                        # Update tracking
+                        self._last_file_count = current_count
+                        self._last_file_names = current_names
+                        
+                except Exception as e:
+                    logger.error(f"🔄 POLLING ERROR: {e}")
+                
+                # Poll every 2 seconds
+                time.sleep(2)
+        
+        # Start polling in background thread
+        polling_thread = threading.Thread(target=poll_file_upload, daemon=True)
+        polling_thread.start()
+        logger.info(f"🔄 WORKAROUND: File upload polling thread started")
 
         # Reset upload button event handler (button created earlier)
         self.reset_upload_button.on_click(self.reset_upload_widget)
