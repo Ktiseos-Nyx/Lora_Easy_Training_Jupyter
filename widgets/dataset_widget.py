@@ -751,7 +751,24 @@ class DatasetWidget:
         self.upload_button.on_click(self.run_upload_to_huggingface)
 
         # --- File Upload Observer ---
+        logger.info(f"🔗 ATTACHING FILE UPLOAD OBSERVER")
+        logger.info(f"🔗 FileUpload widget type: {type(self.file_upload)}")
+        logger.info(f"🔗 FileUpload widget value: {self.file_upload.value}")
+        logger.info(f"🔗 FileUpload widget description: {self.file_upload.description}")
+        
         self.file_upload.observe(self.on_file_upload_change, names='value')
+        
+        logger.info(f"🔗 FILE UPLOAD OBSERVER ATTACHED SUCCESSFULLY")
+        logger.info(f"🔗 Observer method: {self.on_file_upload_change}")
+        
+        # Test if we can manually trigger the observer
+        logger.info(f"🧪 TESTING: Manual observer trigger...")
+        try:
+            test_change = {'new': [], 'old': [], 'type': 'change', 'name': 'value', 'owner': self.file_upload}
+            self.on_file_upload_change(test_change)
+            logger.info(f"🧪 TESTING: Manual trigger successful!")
+        except Exception as e:
+            logger.error(f"🧪 TESTING: Manual trigger failed: {e}")
 
         # Reset upload button event handler (button created earlier)
         self.reset_upload_button.on_click(self.reset_upload_widget)
