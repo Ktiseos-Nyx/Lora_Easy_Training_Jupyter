@@ -66,7 +66,9 @@ watchdog==4.0.0
 
 # -- ONNX / Tagger Dependencies --
 onnx==1.16.1
-onnxruntime-gpu==1.18.0
+# Use Microsoft's CUDA 12 build instead of broken PyPI version
+# Based on working Colab configurations (Android XXL, Jelosus2, Holo)
+onnxruntime-gpu==1.17.1 --extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/
 protobuf<4
 
 # -- Windows Specific (safe to include for all OS) --

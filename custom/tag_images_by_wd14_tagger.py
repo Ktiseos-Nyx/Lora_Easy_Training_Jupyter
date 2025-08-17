@@ -28,6 +28,26 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="diffusers")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+def get_safe_gpu_memory_limit():
+    """
+    Dynamically calculate safe GPU memory limit based on available VRAM.
+    Returns appropriate memory limit for cross-platform compatibility.
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            # Get total VRAM and leave 20% buffer for other processes
+            total_vram = torch.cuda.get_device_properties(0).total_memory
+            safe_limit = int(total_vram * 0.8)  # Use 80% of available VRAM
+            logger.info(f"🔍 Detected {total_vram/1024**3:.1f}GB VRAM, setting ONNX limit to {safe_limit/1024**3:.1f}GB")
+            return safe_limit
+        else:
+            logger.info("🔍 No CUDA available, skipping GPU memory limit")
+            return None  # No GPU, no limit needed
+    except Exception as e:
+        logger.warning(f"GPU memory detection failed: {e}")
+        return 2 * 1024 * 1024 * 1024  # Fallback to 2GB for safety
+
 def robust_download_fallback(repo_id, filename, local_path):
     """
     Robust download fallback system: hf_hub_download → aria2c → wget → Python requests
@@ -302,12 +322,14 @@ def main(args):
                 if "CUDAExecutionProvider" in available_providers:
                     logger.info("Attempting CUDA execution provider with enhanced configuration...")
                     
-                    # Simplified CUDA provider options for maximum compatibility
-                    cuda_provider_options = {
-                        'device_id': 0,
-                        'gpu_mem_limit': 2 * 1024 * 1024 * 1024,  # 2GB limit for safety
-                        # Removed aggressive cuDNN options that cause CUDA library conflicts
-                    }
+                    # Dynamic CUDA provider options for cross-platform compatibility
+                    cuda_provider_options = {'device_id': 0}
+                    
+                    # Add dynamic GPU memory limit based on available VRAM
+                    safe_memory_limit = get_safe_gpu_memory_limit()
+                    if safe_memory_limit:
+                        cuda_provider_options['gpu_mem_limit'] = safe_memory_limit
+                    # Removed aggressive cuDNN options that cause CUDA library conflicts
                     
                     # Basic session options for maximum compatibility
                     sess_options = ort.SessionOptions()
