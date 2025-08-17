@@ -761,50 +761,63 @@ class DatasetWidget:
 
     def on_file_upload_change(self, change):
         """Handle file upload selection changes"""
-        logger.info(f"🔍 FILE UPLOAD CHANGE: {len(change.get('new', []))} files, change_type: {change.get('type')}")
-        logger.debug(f"🔍 Full change object: {change}")
-        
-        if change['new']:  # Files have been selected
-            file_count = len(change['new'])
-            if file_count > 0:
-                # Check if a folder is created AND exists on disk
-                folder_path = self.dataset_directory.value.strip()
-                folder_exists = bool(folder_path) and os.path.exists(folder_path)
+        try:
+            logger.info(f"🔍 FILE UPLOAD CHANGE TRIGGERED!")
+            logger.info(f"🔍 Change object type: {type(change)}")
+            logger.info(f"🔍 Change object keys: {list(change.keys()) if hasattr(change, 'keys') else 'No keys'}")
+            
+            new_files = change.get('new', [])
+            logger.info(f"🔍 Files count: {len(new_files)}")
+            logger.info(f"🔍 Change type: {change.get('type', 'No type')}")
+            logger.debug(f"🔍 Full change object: {change}")
+            
+            if new_files:  # Files have been selected
+                file_count = len(new_files)
+                if file_count > 0:
+                    # Check if a folder is created AND exists on disk
+                    folder_path = self.dataset_directory.value.strip()
+                    folder_exists = bool(folder_path) and os.path.exists(folder_path)
 
-                # Determine if any selected file is a ZIP (case-insensitive)
-                is_zip_selected = any(f['name'].lower().endswith('.zip') for f in change['new'])
+                    # Determine if any selected file is a ZIP (case-insensitive)
+                    is_zip_selected = any(f['name'].lower().endswith('.zip') for f in new_files)
 
-                if folder_exists:
-                    self.upload_images_button.disabled = is_zip_selected # Disable image upload if zip is selected
-                    self.upload_zip_button.disabled = not is_zip_selected # Enable zip upload only if zip is selected
+                    if folder_exists:
+                        self.upload_images_button.disabled = is_zip_selected # Disable image upload if zip is selected
+                        self.upload_zip_button.disabled = not is_zip_selected # Enable zip upload only if zip is selected
 
-                    if is_zip_selected:
-                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP to '{folder_path}'.</div>"
+                        if is_zip_selected:
+                            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP to '{folder_path}'.</div>"
+                        else:
+                            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images to '{folder_path}'.</div>"
                     else:
-                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images to '{folder_path}'.</div>"
+                        # If no folder exists but files are selected, auto-suggest creating folder
+                        self.upload_images_button.disabled = True
+                        self.upload_zip_button.disabled = True
+                        # Try to suggest a folder name based on the files
+                        suggested_name = "uploaded_dataset"
+                        if is_zip_selected:
+                            zip_name = next(f['name'] for f in new_files if f['name'].lower().endswith('.zip'))
+                            suggested_name = zip_name.replace('.zip', '_dataset')
+
+                        if not self.folder_name.value.strip():
+                            self.folder_name.value = suggested_name
+
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>📁 Status:</strong> {file_count} file(s) selected. Click 'Create Folder' first, then upload.</div>"
                 else:
-                    # If no folder exists but files are selected, auto-suggest creating folder
                     self.upload_images_button.disabled = True
                     self.upload_zip_button.disabled = True
-                    # Try to suggest a folder name based on the files
-                    suggested_name = "uploaded_dataset"
-                    if is_zip_selected:
-                        zip_name = next(f['name'] for f in change['new'] if f['name'].lower().endswith('.zip'))
-                        suggested_name = zip_name.replace('.zip', '_dataset')
-
-                    if not self.folder_name.value.strip():
-                        self.folder_name.value = suggested_name
-
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>📁 Status:</strong> {file_count} file(s) selected. Click 'Create Folder' first, then upload.</div>"
             else:
+                # No files selected - reset everything
                 self.upload_images_button.disabled = True
                 self.upload_zip_button.disabled = True
-        else:
-            # No files selected - reset everything
+                if not self.dataset_directory.value.strip():
+                    self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>Status:</strong> Select images/ZIP or create a folder to start uploading.</div>"
+        except Exception as e:
+            logger.error(f"🚨 ERROR in file upload observer: {e}")
+            logger.exception("Full traceback:")
+            # Ensure buttons are disabled if error occurs
             self.upload_images_button.disabled = True
             self.upload_zip_button.disabled = True
-            if not self.dataset_directory.value.strip():
-                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>Status:</strong> Select images/ZIP or create a folder to start uploading.</div>"
 
     def run_url_download(self, b):
         """Handle URL/ZIP download method"""
