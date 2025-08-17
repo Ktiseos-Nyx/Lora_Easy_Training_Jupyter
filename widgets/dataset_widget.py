@@ -787,9 +787,9 @@ class DatasetWidget:
                     current_count = len(current_files)
                     current_names = {f['name'] for f in current_files} if current_files else set()
                     
-                    # Log every 10th poll to show thread is alive
-                    if poll_count % 10 == 0:
-                        logger.info(f"🔄 POLLING HEARTBEAT #{poll_count}: {current_count} files, widget_value={current_files}")
+                    # Removed heartbeat logging - it proved the thread works but spams logs
+                    # if poll_count % 10 == 0:
+                    #     logger.info(f"🔄 POLLING HEARTBEAT #{poll_count}: {current_count} files, widget_value={current_files}")
                     
                     # Check if files have changed
                     if current_count != self._last_file_count or current_names != self._last_file_names:
