@@ -136,4 +136,4 @@ cuda_check.html
 test_*.py
 debug_*.py
 *_test.py
-*_debug.pytest_file_upload.py
+*_debug.py

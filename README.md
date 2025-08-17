@@ -166,6 +166,8 @@ Our system now features:
 
 - ⚠️ **Triton/ONNX Compatibility Warnings**: Docker/VastAI users may encounter issues with AdamW8bit optimizer.
 - ⚠️ **NO SUPPORT FOR LOCAL MACINTOSH ARM/M1-M4 MACHINES**
+- 🐛 **FileUpload Widget Issues**: In some container environments, the file upload widget may not respond to file selection. **Workaround**: Use the manual upload buttons or direct file copying to dataset directories.
+- 🔧 **CAME Optimizer Path Issues**: Due to container environment differences, you may need to manually edit the generated TOML config file. If training fails with "module 'LoraEasyCustomOptimizer' has no attribute 'CAME'", change `optimizer_type = "LoraEasyCustomOptimizer.CAME"` to `optimizer_type = "LoraEasyCustomOptimizer.came.CAME"` in your training config files.
 
 **Getting Help**:
     - If you encounter issues or have questions, please:
