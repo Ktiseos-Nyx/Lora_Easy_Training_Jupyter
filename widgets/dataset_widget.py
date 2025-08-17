@@ -5,14 +5,21 @@
 # widgets/dataset_widget.py
 import asyncio
 import glob
+import logging
 import os
 import re
 import zipfile
+from datetime import datetime
 
 import ipywidgets as widgets
 from IPython.display import display
 
 from core.dataset_manager import DatasetManager
+from core.logging_config import setup_file_logging
+
+# Setup external logging for widget debugging
+setup_file_logging()
+logger = logging.getLogger(__name__)
 
 
 class DatasetWidget:
@@ -752,6 +759,9 @@ class DatasetWidget:
 
     def on_file_upload_change(self, change):
         """Handle file upload selection changes"""
+        logger.info(f"🔍 FILE UPLOAD CHANGE: {len(change.get('new', []))} files, change_type: {change.get('type')}")
+        logger.debug(f"🔍 Full change object: {change}")
+        
         if change['new']:  # Files have been selected
             file_count = len(change['new'])
             if file_count > 0:
@@ -1052,6 +1062,7 @@ class DatasetWidget:
 
     def reset_upload_widget(self, b):
         """Reset the file upload widget to clear any cached state"""
+        logger.info("🔄 MANUAL RESET: User clicked reset upload button")
         # Clear the upload widget value
         self.file_upload.value = ()
 
