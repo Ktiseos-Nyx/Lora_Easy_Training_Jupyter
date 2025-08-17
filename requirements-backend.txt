@@ -67,7 +67,7 @@ watchdog==4.0.0
 # -- ONNX / Tagger Dependencies --
 onnx==1.16.1
 onnxruntime-gpu==1.18.0
-protobuf==4.25.3
+protobuf<4
 
 # -- Windows Specific (safe to include for all OS) --
 pyreadline
