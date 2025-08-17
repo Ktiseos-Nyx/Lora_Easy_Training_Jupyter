@@ -312,7 +312,7 @@ class TrainingWidget:
         • <strong>Lion:</strong> Fast and memory efficient<br>
         <em>Our environment fixes should resolve most compatibility issues! Try CAME or AdamW8bit for memory savings.</em>
         </div>""")
-        self.optimizer = widgets.Dropdown(options=['AdamW', 'AdamW8bit', 'Prodigy', 'DAdaptation', 'DadaptAdam', 'DadaptLion', 'Lion', 'SGDNesterov', 'SGDNesterov8bit', 'AdaFactor', 'Came'], value='AdamW', description='Optimizer:', style={'description_width': 'initial'})
+        self.optimizer = widgets.Dropdown(options=['AdamW', 'AdamW8bit', 'Prodigy', 'DAdaptation', 'DadaptAdam', 'DadaptLion', 'Lion', 'SGDNesterov', 'SGDNesterov8bit', 'AdaFactor', 'CAME'], value='AdamW', description='Optimizer:', style={'description_width': 'initial'})
         self.cross_attention = widgets.Dropdown(options=['sdpa', 'xformers'], value='sdpa', description='Cross Attention:', style={'description_width': 'initial'})
         self.precision = widgets.Dropdown(options=['fp16', 'bf16', 'float'], value='fp16', description='Precision:', style={'description_width': 'initial'})
         self.fp8_base = widgets.Checkbox(value=False, description="FP8 Base (experimental, requires PyTorch 2.1+)", indent=False)
