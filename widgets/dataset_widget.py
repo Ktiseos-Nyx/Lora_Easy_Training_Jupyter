@@ -794,18 +794,43 @@ class DatasetWidget:
                     # Check if files have changed
                     if current_count != self._last_file_count or current_names != self._last_file_names:
                         logger.info(f"🔄 POLLING DETECTED FILE CHANGE: {self._last_file_count} -> {current_count} files")
+                        logger.info(f"🔄 File names: {list(current_names)}")
                         
-                        # Simulate the observer event manually
-                        change_event = {
-                            'new': current_files,
-                            'old': (),  # We don't track old state in polling
-                            'type': 'change',
-                            'name': 'value',
-                            'owner': self.file_upload
-                        }
-                        
-                        # Trigger our observer method manually
-                        self.on_file_upload_change(change_event)
+                        # AUTO-UPLOAD: Bypass broken observer system entirely
+                        if current_count > 0:
+                            logger.info(f"🚀 AUTO-UPLOAD: Starting immediate upload of {current_count} files...")
+                            
+                            # Check if folder exists
+                            folder_path = self.dataset_directory.value.strip()
+                            if folder_path and os.path.exists(folder_path):
+                                # Determine if ZIP or images
+                                is_zip_selected = any(f['name'].lower().endswith('.zip') for f in current_files)
+                                
+                                if is_zip_selected:
+                                    logger.info(f"🚀 AUTO-UPLOAD: Detected ZIP file, uploading and extracting...")
+                                    # Create a fake button event and trigger ZIP upload
+                                    import asyncio
+                                    asyncio.create_task(self.run_upload_zip(None))
+                                else:
+                                    logger.info(f"🚀 AUTO-UPLOAD: Detected image files, uploading...")
+                                    # Create a fake button event and trigger image upload  
+                                    import asyncio
+                                    asyncio.create_task(self.run_upload_images(None))
+                                    
+                                # Clear the widget immediately after triggering upload
+                                logger.info(f"🧹 AUTO-CLEAR: Clearing file widget after upload trigger")
+                                # Note: We clear in the upload method, not here to avoid race conditions
+                            else:
+                                logger.warning(f"🚀 AUTO-UPLOAD: No folder exists, cannot auto-upload. Create folder first!")
+                                # Still trigger observer for status updates
+                                change_event = {
+                                    'new': current_files,
+                                    'old': (),
+                                    'type': 'change',
+                                    'name': 'value',
+                                    'owner': self.file_upload
+                                }
+                                self.on_file_upload_change(change_event)
                         
                         # Update tracking
                         self._last_file_count = current_count
