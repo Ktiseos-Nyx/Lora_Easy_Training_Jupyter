@@ -15,6 +15,7 @@ import ipywidgets as widgets
 from IPython.display import display
 
 from core.dataset_manager import DatasetManager
+from core.file_upload_manager import FileUploadManager
 from core.logging_config import setup_file_logging
 
 # Setup external logging for widget debugging
@@ -23,12 +24,15 @@ logger = logging.getLogger(__name__)
 
 
 class DatasetWidget:
-    def __init__(self, dataset_manager=None):
-        # Use dependency injection - accept manager instance or create default
+    def __init__(self, dataset_manager=None, file_upload_manager=None):
+        # Use dependency injection - accept manager instances or create defaults
         if dataset_manager is None:
             dataset_manager = DatasetManager()  # Uses lazy ModelManager loading now!
+        if file_upload_manager is None:
+            file_upload_manager = FileUploadManager()
 
         self.manager = dataset_manager
+        self.file_manager = file_upload_manager
         self.create_widgets()
 
     def create_widgets(self):
@@ -808,14 +812,15 @@ class DatasetWidget:
                                 
                                 if is_zip_selected:
                                     logger.info(f"🚀 AUTO-UPLOAD: Detected ZIP file, uploading and extracting...")
-                                    # Create a fake button event and trigger ZIP upload
-                                    import asyncio
-                                    asyncio.create_task(self.run_upload_zip(None))
+                                    # Use FileUploadManager for clean ZIP handling
+                                    zip_file = current_files[0]  # Should only be one ZIP
+                                    success, message = self.file_manager.upload_and_extract_zip(zip_file, folder_path)
+                                    self._update_upload_status(success, message)
                                 else:
                                     logger.info(f"🚀 AUTO-UPLOAD: Detected image files, uploading...")
-                                    # Create a fake button event and trigger image upload  
-                                    import asyncio
-                                    asyncio.create_task(self.run_upload_images(None))
+                                    # Use FileUploadManager for clean image handling
+                                    success, message = self.file_manager.upload_images(current_files, folder_path)
+                                    self._update_upload_status(success, message)
                                     
                                 # Clear the widget immediately after triggering upload
                                 logger.info(f"🧹 AUTO-CLEAR: Clearing file widget after upload trigger")
@@ -1866,6 +1871,16 @@ class DatasetWidget:
                 self.caption_status.value = "<div style='background: #d4edda; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Tags displayed successfully.</div>"
             else:
                 self.caption_status.value = "<div style='background: #f8d7da; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to display tags.</div>"
+
+    def _update_upload_status(self, success: bool, message: str):
+        """Update upload status widget with result message."""
+        if success:
+            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {message}</div>"
+            # Clear the widget after successful upload
+            self.file_upload.value = ()
+            logger.info("🧹 AUTO-CLEAR: FileUpload widget cleared after successful upload")
+        else:
+            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> {message}</div>"
 
     def display(self):
         display(self.widget_box)
