@@ -4,8 +4,6 @@ import ipywidgets as widgets
 from IPython.display import Image as IPImage
 from IPython.display import display
 
-from core.inference_manager import LoRAInferenceManager
-
 
 class InferenceWidget:
     def __init__(self):
@@ -16,7 +14,9 @@ class InferenceWidget:
             print("⚠️ Sidecar not available. Inference will display in main notebook.")
             self.inference_sidecar = None
 
-        self.inference_manager = LoRAInferenceManager()
+        # Lazy import inference manager to avoid startup issues
+        from shared_managers import get_inference_manager
+        self.inference_manager = get_inference_manager()
         self.create_widgets()
 
     def create_widgets(self):
