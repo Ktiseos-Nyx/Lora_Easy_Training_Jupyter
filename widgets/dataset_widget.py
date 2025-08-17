@@ -779,11 +779,17 @@ class DatasetWidget:
         
         def poll_file_upload():
             """Poll FileUpload widget for changes since observer isn't working"""
+            poll_count = 0
             while True:
                 try:
+                    poll_count += 1
                     current_files = self.file_upload.value
                     current_count = len(current_files)
                     current_names = {f['name'] for f in current_files} if current_files else set()
+                    
+                    # Log every 10th poll to show thread is alive
+                    if poll_count % 10 == 0:
+                        logger.info(f"🔄 POLLING HEARTBEAT #{poll_count}: {current_count} files, widget_value={current_files}")
                     
                     # Check if files have changed
                     if current_count != self._last_file_count or current_names != self._last_file_names:
