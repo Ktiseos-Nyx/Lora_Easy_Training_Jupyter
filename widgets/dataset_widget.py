@@ -972,8 +972,8 @@ class DatasetWidget:
             if uploaded_count > 0:
                 self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
 
-                # Clear the file upload widget for next use
-                self.file_upload.value = ()
+                # DISABLED: Auto-clear causes race condition where widget resets before user can upload
+                # self.file_upload.value = ()  # Users can manually reset if needed
             else:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
 
@@ -1038,8 +1038,8 @@ class DatasetWidget:
                     print(f"⚠️ Image counting error: {e}")
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}.</div>"
 
-                # Clear the file upload widget for next use
-                self.file_upload.value = ()
+                # DISABLED: Auto-clear causes race condition where widget resets before user can upload
+                # self.file_upload.value = ()  # Users can manually reset if needed
                 self.upload_images_button.disabled = True
                 self.upload_zip_button.disabled = True
 
