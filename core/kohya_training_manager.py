@@ -584,7 +584,7 @@ class KohyaTrainingManager:
                 "train_batch_size": config.get('train_batch_size'),             # Widget provides 'train_batch_size'
                 "save_every_n_epochs": config.get('save_every_n_epochs'),       # Widget provides this
                 "mixed_precision": config.get('precision'),                     # Widget provides 'precision'
-                "output_dir": "output",                                          # Static - output directory
+                "output_dir": self.output_dir,                                   # Absolute path to output directory
                 "output_name": config.get('project_name', 'lora'),              # Widget provides 'project_name'
                 "clip_skip": config.get('clip_skip', 2),                        # Widget provides this
                 "save_model_as": "safetensors",                                  # Static format
