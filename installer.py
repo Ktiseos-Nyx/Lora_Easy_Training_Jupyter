@@ -96,21 +96,13 @@ class UnifiedInstaller:
         self.logger.info(f"Verbose mode: {'Enabled' if self.verbose else 'Disabled'}")
 
     def detect_package_manager(self):
-        """Detect best package manager: uv → pip fallback"""
-        if shutil.which("uv"):
-            self.logger.info("🚀 Found uv - Using for fast package installation")
-            return {
-                'name': 'uv',
-                'install_cmd': ['uv', 'pip', 'install'],
-                'available': True
-            }
-        else:
-            self.logger.info("⚠️ uv not found - Falling back to pip")
-            return {
-                'name': 'pip',
-                'install_cmd': [self.python_cmd, '-m', 'pip', 'install'],
-                'available': True
-            }
+        """Use pip for package installation"""
+        self.logger.info("📦 Using pip for package installation")
+        return {
+            'name': 'pip',
+            'install_cmd': [self.python_cmd, '-m', 'pip', 'install'],
+            'available': True
+        }
 
     def get_install_command(self, *args):
         """Get package installation command with current package manager"""
@@ -120,7 +112,7 @@ class UnifiedInstaller:
         banner_lines = [
             "=" * 70,
             "🚀 LoRA Easy Training - Unified Command-Line Installer",
-            "   Enhanced with uv fallback and comprehensive logging",
+            "   Enhanced with comprehensive logging and error handling",
             "=" * 70,
             f"🐍 Using Python: {self.python_cmd}",
             f"📦 Package Manager: {self.package_manager['name']}",

@@ -137,3 +137,6 @@ test_*.py
 debug_*.py
 *_test.py
 *_debug.py
+
+# User submitted logs and debugging materials
+user_logs_submissions/
