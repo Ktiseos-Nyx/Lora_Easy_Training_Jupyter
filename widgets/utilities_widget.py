@@ -22,14 +22,106 @@ class UtilitiesWidget:
         header_icon = "🔧"
         header_main = widgets.HTML(f"<h2>{header_icon} 4. Utilities</h2>")
 
-        # --- Hugging Face Upload ---
+        # --- Enhanced Hugging Face Upload ---
+        upload_desc = widgets.HTML("""<h4>🚀 Enhanced HuggingFace Upload</h4>
+        <p><strong>📋 Features:</strong> Multi-file upload, progress tracking, repository management, pull request creation</p>""")
+        
+        # Repository configuration
         self.hf_token = widgets.Password(description="HF Write Token:", placeholder="HuggingFace Write API Token", layout=widgets.Layout(width='99%'))
-        self.model_path_to_upload = widgets.Text(description="Model Path:", placeholder="/path/to/your/lora.safetensors", layout=widgets.Layout(width='99%'))
-        self.hf_repo_name = widgets.Text(description="Repo Name:", placeholder="e.g., my-awesome-loras", layout=widgets.Layout(width='99%'))
-        self.upload_button = widgets.Button(description="Upload to Hugging Face", button_style='primary')
-        self.upload_status = widgets.HTML("<p><strong>📊 Status:</strong> Ready to upload</p>")
-        self.upload_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll'))
-        hf_upload_box = widgets.VBox([self.hf_token, self.model_path_to_upload, self.hf_repo_name, self.upload_button, self.upload_status, self.upload_output])
+        
+        repo_config_box = widgets.HBox([
+            widgets.VBox([
+                widgets.Label("Owner:"),
+                widgets.Text(placeholder="your-username", layout=widgets.Layout(width='200px'))
+            ], layout=widgets.Layout(width='33%')),
+            widgets.VBox([
+                widgets.Label("Repository:"),
+                widgets.Text(placeholder="my-awesome-loras", layout=widgets.Layout(width='200px'))
+            ], layout=widgets.Layout(width='33%')),
+            widgets.VBox([
+                widgets.Label("Type:"),
+                widgets.Dropdown(options=['model', 'dataset', 'space'], value='model', layout=widgets.Layout(width='120px'))
+            ], layout=widgets.Layout(width='33%'))
+        ])
+        
+        self.hf_owner = repo_config_box.children[0].children[1]
+        self.hf_repo_name = repo_config_box.children[1].children[1] 
+        self.hf_repo_type = repo_config_box.children[2].children[1]
+        
+        self.hf_remote_folder = widgets.Text(description="Remote Folder:", placeholder="Optional: e.g., models/v1", layout=widgets.Layout(width='99%'))
+        
+        # File selection
+        file_select_box = widgets.HBox([
+            widgets.VBox([
+                widgets.Label("File Type:"),
+                widgets.Dropdown(options=self.manager.file_types, value='safetensors', layout=widgets.Layout(width='150px'))
+            ], layout=widgets.Layout(width='50%')),
+            widgets.VBox([
+                widgets.Label("Sort By:"),
+                widgets.Dropdown(options=['name', 'date'], value='name', layout=widgets.Layout(width='100px'))
+            ], layout=widgets.Layout(width='50%'))
+        ])
+        
+        self.hf_file_type = file_select_box.children[0].children[1]
+        self.hf_sort_by = file_select_box.children[1].children[1]
+        
+        directory_box = widgets.HBox([
+            widgets.Text(value=self.manager.project_root, description="Source Directory:", layout=widgets.Layout(width='80%')),
+            widgets.Button(description="🔄 List Files", button_style='info', layout=widgets.Layout(width='15%'))
+        ])
+        
+        self.hf_source_directory = directory_box.children[0]
+        self.hf_refresh_button = directory_box.children[1]
+        
+        self.hf_file_list = widgets.SelectMultiple(options=[], description="Files:", layout=widgets.Layout(width='99%', height='150px'))
+        
+        # Upload options
+        self.hf_commit_message = widgets.Textarea(value="Upload via Enhanced Utilities Widget 🤗", placeholder="Commit message", description="Message:", layout=widgets.Layout(width='99%', height='60px'))
+        
+        upload_options_box = widgets.HBox([
+            widgets.Checkbox(value=False, description="Create Pull Request"),
+            widgets.Checkbox(value=True, description="Clear output after upload")
+        ])
+        
+        self.hf_create_pr = upload_options_box.children[0]
+        self.hf_clear_after = upload_options_box.children[1]
+        
+        # Upload controls
+        upload_controls_box = widgets.HBox([
+            widgets.Button(description="⬆️ Upload Selected Files", button_style='success', layout=widgets.Layout(width='60%')),
+            widgets.Button(description="🧹 Clear Output", button_style='warning', layout=widgets.Layout(width='35%'))
+        ])
+        
+        self.hf_upload_button = upload_controls_box.children[0]
+        self.hf_clear_button = upload_controls_box.children[1]
+        
+        # Progress tracking
+        self.hf_progress_box = widgets.VBox([
+            widgets.HBox([widgets.Label("Current File:", layout=widgets.Layout(width='100px')), widgets.Label("N/A")]),
+            widgets.HBox([widgets.Label("Progress:", layout=widgets.Layout(width='100px')), widgets.Label("0/0")]),
+            widgets.FloatProgress(value=0, min=0, max=100, description='Overall:', layout=widgets.Layout(width='90%'))
+        ], layout=widgets.Layout(visibility='hidden', padding='10px', border='1px solid #ddd'))
+        
+        self.hf_current_file_label = self.hf_progress_box.children[0].children[1]
+        self.hf_progress_label = self.hf_progress_box.children[1].children[1] 
+        self.hf_progress_bar = self.hf_progress_box.children[2]
+        
+        self.hf_upload_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll'))
+        
+        hf_upload_box = widgets.VBox([
+            upload_desc,
+            self.hf_token,
+            repo_config_box,
+            self.hf_remote_folder,
+            file_select_box,
+            directory_box,
+            self.hf_file_list,
+            self.hf_commit_message,
+            upload_options_box,
+            upload_controls_box,
+            self.hf_progress_box,
+            self.hf_upload_output
+        ])
 
         # --- LoRA Resizing ---
         self.lora_input_path = widgets.Text(description="Input LoRA Path:", placeholder="/path/to/input_lora.safetensors", layout=widgets.Layout(width='99%'))
@@ -122,23 +214,145 @@ class UtilitiesWidget:
         self.widget_box = widgets.VBox([header_main, accordion])
 
         # --- Button Events ---
-        self.upload_button.on_click(self.run_upload_to_hf)
+        self.hf_upload_button.on_click(self.run_enhanced_upload_to_hf)
+        self.hf_clear_button.on_click(self.clear_upload_output)
+        self.hf_refresh_button.on_click(self.refresh_file_list)
+        self.hf_file_type.observe(self.on_file_type_change, names='value')
+        self.hf_sort_by.observe(self.on_sort_change, names='value')
         self.resize_button.on_click(self.run_resize_lora)
         self.optimize_button.on_click(self.run_optimize_dataset)
+        
+        # Initialize file list
+        self.refresh_file_list(None)
 
-    def run_upload_to_hf(self, b):
-        self.upload_output.clear_output()
-        self.upload_status.value = "<p><strong>⚙️ Status:</strong> Uploading to Hugging Face...</p>"
-        with self.upload_output:
-            success = self.manager.upload_to_huggingface(
-                self.hf_token.value,
-                self.model_path_to_upload.value,
-                self.hf_repo_name.value
-            )
-            if success:
-                self.upload_status.value = "<p><strong>✅ Status:</strong> Upload complete!</p>"
+    def clear_upload_output(self, b):
+        """Clear the upload output area"""
+        self.hf_upload_output.clear_output(wait=True)
+        self.hf_progress_box.layout.visibility = 'hidden'
+
+    def refresh_file_list(self, b):
+        """Refresh the file list based on current directory and file type"""
+        directory = self.hf_source_directory.value.strip()
+        file_extension = self.hf_file_type.value
+        sort_by = self.hf_sort_by.value
+        
+        if not directory or not os.path.isdir(directory):
+            self.hf_file_list.options = []
+            with self.hf_upload_output:
+                print(f"⚠️ Invalid directory: {directory}")
+            return
+        
+        files = self.manager.get_files_in_directory(directory, file_extension, sort_by)
+        self.hf_file_list.options = files
+        
+        with self.hf_upload_output:
+            if files:
+                print(f"✨ Found {len(files)} '.{file_extension}' files in '{directory}'")
             else:
-                self.upload_status.value = "<p><strong>❌ Status:</strong> Upload failed. Check logs.</p>"
+                print(f"🤷 No '.{file_extension}' files found in '{directory}'")
+
+    def on_file_type_change(self, change):
+        """Handle file type dropdown changes"""
+        self.refresh_file_list(None)
+
+    def on_sort_change(self, change):
+        """Handle sort order dropdown changes"""
+        self.refresh_file_list(None)
+
+    def progress_callback(self, current, total, filename):
+        """Update progress display during upload"""
+        self.hf_current_file_label.value = filename
+        self.hf_progress_label.value = f"{current}/{total}"
+        percentage = int((current / total) * 100)
+        self.hf_progress_bar.value = percentage
+
+    def run_enhanced_upload_to_hf(self, b):
+        """Enhanced multi-file upload to HuggingFace"""
+        self.hf_upload_output.clear_output(wait=True)
+        self.hf_progress_box.layout.visibility = 'visible'
+        
+        # Collect form data
+        hf_token = self.hf_token.value.strip()
+        owner = self.hf_owner.value.strip()
+        repo_name = self.hf_repo_name.value.strip()
+        repo_type = self.hf_repo_type.value
+        remote_folder = self.hf_remote_folder.value.strip()
+        selected_files = list(self.hf_file_list.value)
+        commit_message = self.hf_commit_message.value.strip()
+        create_pr = self.hf_create_pr.value
+        
+        with self.hf_upload_output:
+            print("🎯 Preparing enhanced upload...")
+            
+            # Validation
+            if not hf_token:
+                print("❌ Error: HuggingFace token is required")
+                print("💡 Get your token from: https://huggingface.co/settings/tokens")
+                return
+            
+            if not owner or not repo_name:
+                print("❌ Error: Owner and repository name are required")
+                return
+            
+            if not selected_files:
+                print("❌ Error: No files selected for upload")
+                print("💡 Select files from the list above")
+                return
+            
+            print(f"📁 Repository: {owner}/{repo_name} (type: {repo_type})")
+            if remote_folder:
+                print(f"📂 Remote folder: {remote_folder}")
+            print(f"📦 Files selected: {len(selected_files)}")
+            if self.manager.check_hf_transfer_availability():
+                print("🚀 HF_TRANSFER enabled for faster uploads")
+            
+            # Perform upload
+            results = self.manager.upload_multiple_files_to_huggingface(
+                hf_token=hf_token,
+                owner=owner,
+                repo_name=repo_name,
+                repo_type=repo_type,
+                selected_files=selected_files,
+                remote_folder=remote_folder,
+                commit_message=commit_message,
+                create_pr=create_pr,
+                progress_callback=self.progress_callback
+            )
+            
+            # Display results
+            if results["success"]:
+                print(f"\n✨ Upload completed! {results['success_count']}/{results['total_files']} files uploaded")
+                
+                if results["uploaded_files"]:
+                    print("\n✅ Successfully uploaded:")
+                    for file_info in results["uploaded_files"]:
+                        print(f"  • {file_info['file']} ({file_info['size']}) - {file_info['duration']}")
+                        print(f"    └─ {file_info['url']}")
+                
+                if results["failed_files"]:
+                    print("\n❌ Failed uploads:")
+                    for file_info in results["failed_files"]:
+                        print(f"  • {file_info['file']}: {file_info['error']}")
+                
+                if create_pr and results['success_count'] > 0:
+                    print(f"\n🎉 Pull request created! Check: https://huggingface.co/{results['repo_id']}/pulls")
+                elif results['success_count'] > 0:
+                    repo_url = f"https://huggingface.co/{results['repo_id']}"
+                    if remote_folder:
+                        repo_url += f"/tree/main/{remote_folder}"
+                    print(f"\n🎉 Files uploaded to: {repo_url}")
+                
+            else:
+                print(f"❌ Upload failed: {results.get('error', 'Unknown error')}")
+            
+            # Auto-clear after delay if enabled
+            if self.hf_clear_after.value and results["success"]:
+                import threading
+                def delayed_clear():
+                    time.sleep(5)
+                    self.hf_upload_output.clear_output(wait=True)
+                    self.hf_progress_box.layout.visibility = 'hidden'
+                threading.Thread(target=delayed_clear, daemon=True).start()
 
     def run_resize_lora(self, b):
         self.resize_output.clear_output()

@@ -108,6 +108,7 @@ GEMINI.md
 
 # Claude Code project instructions (private)
 CLAUDE.md
+CLAUDE_*.md
 
 # OS generated files
 .directory
@@ -140,3 +141,6 @@ debug_*.py
 
 # User submitted logs and debugging materials
 user_logs_submissions/
+
+# Research and development configs (many TOML files)
+research_dev/

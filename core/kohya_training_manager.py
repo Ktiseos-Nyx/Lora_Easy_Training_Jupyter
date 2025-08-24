@@ -577,9 +577,10 @@ class KohyaTrainingManager:
                 "text_encoder_lr": config.get('text_encoder_lr'),   # Widget provides this
                 "lr_scheduler": config.get('lr_scheduler'),         # Widget provides this  
                 "optimizer_type": config.get('optimizer'),          # Widget provides 'optimizer'
+                **self._get_optimizer_arguments(config.get('optimizer', ''))  # Add optimizer-specific args
             },
             "training_arguments": {
-                "pretrained_model_name_or_path": config.get('model_path'),      # Widget provides 'model_path'
+                "pretrained_model_name_or_path": self._get_absolute_model_path(config.get('model_path', '')),  # Convert to absolute path
                 "max_train_epochs": config.get('epochs'),                       # Widget provides 'epochs'
                 "train_batch_size": config.get('train_batch_size'),             # Widget provides 'train_batch_size'
                 "save_every_n_epochs": config.get('save_every_n_epochs'),       # Widget provides this
@@ -1338,3 +1339,66 @@ class KohyaTrainingManager:
         dataset_path = dataset_path.replace('\\', '/')  # Normalize path separators
         
         return dataset_path
+
+    def _get_optimizer_arguments(self, optimizer_name: str) -> Dict[str, Any]:
+        """Get optimizer-specific arguments from standard optimizer configurations"""
+        if not optimizer_name:
+            return {}
+        
+        # Handle different optimizer name formats
+        optimizer_key = optimizer_name
+        if optimizer_name == 'LoraEasyCustomOptimizer.came.CAME':
+            optimizer_key = 'Came'
+        elif optimizer_name == 'AdamW8bit':
+            optimizer_key = 'AdamW8bit'
+        
+        optimizer_config = self.standard_optimizers.get(optimizer_key, {})
+        
+        if not optimizer_config:
+            return {}
+        
+        # Parse args list into dictionary
+        args_dict = {}
+        for arg in optimizer_config.get('args', []):
+            if '=' in arg:
+                key, value = arg.split('=', 1)
+                # Convert string values to appropriate types
+                if value == 'True':
+                    value = True
+                elif value == 'False':
+                    value = False
+                elif value.startswith('[') and value.endswith(']'):
+                    # Parse list values like [0.9,0.999]
+                    try:
+                        value = eval(value)  # Safe for simple lists like [0.9,0.999]
+                    except:
+                        pass  # Keep as string if parsing fails
+                else:
+                    try:
+                        # Try to convert to float/int
+                        if '.' in value:
+                            value = float(value)
+                        else:
+                            value = int(value)
+                    except ValueError:
+                        pass  # Keep as string
+                
+                args_dict[key] = value
+        
+        return args_dict
+
+    def _get_absolute_model_path(self, model_path: str) -> str:
+        """Convert model path to absolute path for Kohya training"""
+        if not model_path:
+            return ""
+        
+        # If already absolute, return as-is
+        if model_path.startswith('/'):
+            return model_path
+        
+        # If just a filename, assume it's in pretrained_model directory
+        if '/' not in model_path:
+            return f"/workspace/Lora_Easy_Training_Jupyter/pretrained_model/{model_path}"
+        
+        # If relative path, convert to absolute using project root
+        return f"/workspace/Lora_Easy_Training_Jupyter/{model_path}"
