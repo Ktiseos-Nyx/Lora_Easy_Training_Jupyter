@@ -565,12 +565,14 @@ class KohyaTrainingManager:
 
         # 🎵 FIXED FIELD MAPPING: Use EXACT widget field names from debug output!
         # Widget debug showed: 'model_path', 'train_batch_size', 'unet_lr', etc.
+        # Get network configuration based on LoRA type selection
+        network_config = self._get_network_configuration(config.get('lora_type', ''))
+        
         toml_config = {
             "network_arguments": {
                 "network_dim": config.get('network_dim'),           # Widget provides this
                 "network_alpha": config.get('network_alpha'),       # Widget provides this
-                "network_module": "networks.lora",                  # Static value - widget doesn't provide
-                # Remove network_args for now - add back for LyCORIS later
+                **network_config  # Add network_module and network_args based on LoRA type
             },
             "optimizer_arguments": {
                 "learning_rate": config.get('unet_lr'),             # Widget provides 'unet_lr'
@@ -1102,6 +1104,12 @@ class KohyaTrainingManager:
     def _init_lycoris_methods(self) -> Dict[str, Dict[str, Any]]:
         """Initialize LyCORIS method configurations - OFFICIAL Algo-List.md specifications"""
         return {
+            'locon': {
+                'network_module': 'lycoris.kohya',
+                'network_args': ['algo=locon'],
+                'description': 'LoCon: LoRA + Convolution layers (combines Linear and Conv LoRA)',
+                'recommendations': 'Applies LoRA to both Linear and Convolution layers for better detail capture.'
+            },
             'loha': {
                 'network_module': 'lycoris.kohya',
                 'network_args': ['algo=loha'],
@@ -1402,3 +1410,60 @@ class KohyaTrainingManager:
         
         # If relative path, convert to absolute using project root
         return f"/workspace/Lora_Easy_Training_Jupyter/{model_path}"
+
+    def _get_network_configuration(self, lora_type: str) -> Dict[str, Any]:
+        """Get network configuration based on LoRA type selection"""
+        if not lora_type:
+            return {"network_module": "networks.lora"}  # Default to standard LoRA
+        
+        # Map widget display names to LyCORIS method keys
+        lora_type_mapping = {
+            'LoRA': None,  # Standard LoRA
+            'LoCon': 'locon',
+            'LoKR': 'lokr', 
+            'DyLoRA': 'dylora',
+            'DoRA (Weight Decomposition)': 'dora',  # Special case - DoRA with standard LoRA
+            'LoHa (Hadamard Product)': 'loha',
+            '(IA)³ (Few Parameters)': 'ia3',
+            'BOFT': 'boft',
+            'GLoRA': 'glora',
+            'Diag-OFT': 'diag_oft',
+            'Full': 'full'
+        }
+        
+        mapped_type = lora_type_mapping.get(lora_type)
+        
+        # Special handling for DoRA - it's an argument, not a separate algorithm
+        if mapped_type == 'dora':
+            return {
+                "network_module": "networks.lora",
+                "network_args": ["dora_wd=True"]
+            }
+        
+        if mapped_type is None:  # Standard LoRA
+            return {"network_module": "networks.lora"}
+        
+        # Special handling for native sd_scripts modules
+        if mapped_type == 'dylora':
+            return {
+                "network_module": "networks.dylora",
+                "network_args": ["unit=4"]  # Default unit size for DyLoRA
+            }
+        
+        # Get LyCORIS configuration
+        lycoris_config = self.lycoris_methods.get(mapped_type, {})
+        
+        if lycoris_config:
+            result = {
+                "network_module": lycoris_config.get('network_module', 'lycoris.kohya')
+            }
+            
+            # Add network_args if specified
+            network_args = lycoris_config.get('network_args', [])
+            if network_args:
+                result["network_args"] = network_args
+            
+            return result
+        
+        # Fallback to standard LoRA if mapping fails
+        return {"network_module": "networks.lora"}
