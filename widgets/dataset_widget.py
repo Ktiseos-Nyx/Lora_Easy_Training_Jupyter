@@ -804,8 +804,15 @@ class DatasetWidget:
                         if current_count > 0:
                             logger.info(f"🚀 AUTO-UPLOAD: Starting immediate upload of {current_count} files...")
                             
-                            # Check if folder exists
+                            # Check if folder exists - ADD DETAILED DEBUGGING
                             folder_path = self.dataset_directory.value.strip()
+                            logger.info(f"🔍 DEBUG: dataset_directory.value = '{self.dataset_directory.value}'")
+                            logger.info(f"🔍 DEBUG: folder_path after strip = '{folder_path}'") 
+                            logger.info(f"🔍 DEBUG: os.path.exists(folder_path) = {os.path.exists(folder_path) if folder_path else 'N/A - empty path'}")
+                            if folder_path:
+                                logger.info(f"🔍 DEBUG: os.path.abspath(folder_path) = '{os.path.abspath(folder_path)}'")
+                                logger.info(f"🔍 DEBUG: os.path.isdir(folder_path) = {os.path.isdir(folder_path)}")
+                            
                             if folder_path and os.path.exists(folder_path):
                                 # Determine if ZIP or images
                                 is_zip_selected = any(f['name'].lower().endswith('.zip') for f in current_files)
@@ -826,7 +833,19 @@ class DatasetWidget:
                                 logger.info(f"🧹 AUTO-CLEAR: Clearing file widget after upload trigger")
                                 # Note: We clear in the upload method, not here to avoid race conditions
                             else:
-                                logger.warning(f"🚀 AUTO-UPLOAD: No folder exists, cannot auto-upload. Create folder first!")
+                                if not folder_path:
+                                    logger.warning(f"🚀 AUTO-UPLOAD: No folder path set! dataset_directory.value is empty or None")
+                                elif not os.path.exists(folder_path):
+                                    logger.warning(f"🚀 AUTO-UPLOAD: Folder path '{folder_path}' does not exist on filesystem!")
+                                    logger.warning(f"🔍 DEBUG: Current working directory = '{os.getcwd()}'")
+                                    # List what IS in the current directory to help debug
+                                    try:
+                                        current_files_list = os.listdir('.')
+                                        logger.warning(f"🔍 DEBUG: Files in current dir: {current_files_list[:10]}")  # Show first 10
+                                    except Exception as e:
+                                        logger.warning(f"🔍 DEBUG: Could not list current directory: {e}")
+                                else:
+                                    logger.warning(f"🚀 AUTO-UPLOAD: Unknown folder validation issue!")
                                 # Still trigger observer for status updates
                                 change_event = {
                                     'new': current_files,
@@ -995,8 +1014,15 @@ class DatasetWidget:
                 print(f"✅ Created Kohya-compatible folder: {folder_path}")
                 print(f"📊 Repeat count: {repeat_count} (auto-detected by training)")
 
-                # Update shared dataset directory
-                self.dataset_directory.value = folder_path
+                # Update shared dataset directory - USE ABSOLUTE PATH FOR POLLING THREAD
+                self.dataset_directory.value = os.path.abspath(folder_path)
+                
+                # DEBUG: Check folder creation success
+                absolute_folder_path = os.path.abspath(folder_path)
+                print(f"🔍 DEBUG FOLDER: Created '{folder_path}' -> absolute: '{absolute_folder_path}'")
+                print(f"🔍 DEBUG FOLDER: os.path.exists('{folder_path}') = {os.path.exists(folder_path)}")
+                print(f"🔍 DEBUG FOLDER: os.path.exists('{absolute_folder_path}') = {os.path.exists(absolute_folder_path)}")
+                print(f"🔍 DEBUG FOLDER: dataset_directory.value now = '{self.dataset_directory.value}'")
 
                 # Check if files are already selected and enable appropriate buttons
                 if self.file_upload.value:

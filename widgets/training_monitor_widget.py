@@ -11,7 +11,8 @@ import ipywidgets as widgets
 from IPython.display import Image as IPImage
 from IPython.display import display
 
-from core.inference_utils import generate_sample_images
+# TEMPORARILY DISABLED: Inference functionality
+# from core.inference_utils import generate_sample_images
 from shared_managers import get_config_manager
 
 
@@ -20,15 +21,16 @@ class TrainingMonitorWidget:
         self.training_manager = training_manager_instance
         self.training_config = None # To store the config passed from TrainingWidget
 
+        # TEMPORARILY DISABLED: Sidecar functionality for inference
         # Initialize sidecars for different purposes
-        try:
-            from sidecar import Sidecar
-            self.sample_sidecar = Sidecar(title='🎨 Training Sample Images', anchor='split-right')
-            self.inference_sidecar = Sidecar(title='🎨 LoRA Test Inference', anchor='split-bottom')
-        except ImportError:
-            print("⚠️ Sidecar not available. Images will display in main notebook.")
-            self.sample_sidecar = None
-            self.inference_sidecar = None
+        # try:
+        #     from sidecar import Sidecar
+        #     self.sample_sidecar = Sidecar(title='🎨 Training Sample Images', anchor='split-right')
+        #     self.inference_sidecar = Sidecar(title='🎨 LoRA Test Inference', anchor='split-bottom')
+        # except ImportError:
+        #     print("⚠️ Sidecar not available. Images will display in main notebook.")
+        self.sample_sidecar = None
+        self.inference_sidecar = None
 
         self.create_widgets()
         self.current_epoch = 0
@@ -54,17 +56,18 @@ class TrainingMonitorWidget:
         # Create accordion sections
         self.create_training_control_section()
         self.create_progress_monitoring_section()
-        self.create_sample_viewing_section()
+        # TEMPORARILY DISABLED: Sample viewing/inference section
+        # self.create_sample_viewing_section()
 
-        # Create accordion
+        # Create accordion (INFERENCE SECTION TEMPORARILY REMOVED)
         self.accordion = widgets.Accordion(children=[
             self.training_control_box,
             self.progress_monitoring_box,
-            self.sample_viewing_box
+            # self.sample_viewing_box  # TEMPORARILY DISABLED
         ])
         self.accordion.set_title(0, "🚀 Start Training")
         self.accordion.set_title(1, "📊 Live Progress Monitor")
-        self.accordion.set_title(2, "🖼️ View Training Samples")
+        # self.accordion.set_title(2, "🖼️ View Training Samples")  # TEMPORARILY DISABLED
 
         # Main widget container
         self.widget_box = widgets.VBox([main_header, self.accordion])
