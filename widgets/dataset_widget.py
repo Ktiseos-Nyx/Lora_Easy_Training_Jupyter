@@ -724,7 +724,7 @@ class DatasetWidget:
         self.upload_images_button.on_click(self._handle_async_upload)
         self.upload_zip_button.on_click(self._handle_async_zip_upload)
         
-        logger.info("🔗 BUTTON HANDLERS: Upload button click handlers attached")
+        # Upload button click handlers attached
         # Gallery-dl scraper functionality integrated into URL download
         # self.gelbooru_button.on_click(self.run_gallery_dl_scraper)  # Button removed, functionality integrated
         self.preview_rename_button.on_click(self.run_preview_rename)
@@ -739,130 +739,7 @@ class DatasetWidget:
         self.upload_button.on_click(self.run_upload_to_huggingface)
 
         # --- File Upload Observer ---
-        logger.info(f"🔗 ATTACHING FILE UPLOAD OBSERVER")
-        logger.info(f"🔗 FileUpload widget type: {type(self.file_upload)}")
-        logger.info(f"🔗 FileUpload widget value: {self.file_upload.value}")
-        logger.info(f"🔗 FileUpload widget description: {self.file_upload.description}")
-        
         self.file_upload.observe(self.on_file_upload_change, names='value')
-        
-        logger.info(f"🔗 FILE UPLOAD OBSERVER ATTACHED SUCCESSFULLY")
-        logger.info(f"🔗 Observer method: {self.on_file_upload_change}")
-        
-        # Test if we can manually trigger the observer
-        logger.info(f"🧪 TESTING: Manual observer trigger...")
-        try:
-            test_change = {'new': [], 'old': [], 'type': 'change', 'name': 'value', 'owner': self.file_upload}
-            self.on_file_upload_change(test_change)
-            logger.info(f"🧪 TESTING: Manual trigger successful!")
-        except Exception as e:
-            logger.error(f"🧪 TESTING: Manual trigger failed: {e}")
-            
-        # WORKAROUND: Implement polling-based file detection since observer isn't working
-        logger.info(f"🔄 WORKAROUND: Starting file upload polling system...")
-        self._last_file_count = 0
-        self._last_file_names = set()
-        import threading
-        import time
-        
-        def poll_file_upload():
-            """Poll FileUpload widget for changes since observer isn't working"""
-            try:
-                logger.info("🔄 POLLING THREAD STARTED: Entering main loop")
-                poll_count = 0
-                while True:
-                    try:
-                        poll_count += 1
-                        current_files = self.file_upload.value
-                        current_count = len(current_files)
-                        current_names = {f['name'] for f in current_files} if current_files else set()
-                        
-                        # Removed heartbeat logging - it proved the thread works but spams logs
-                        # if poll_count % 10 == 0:
-                        #     logger.info(f"🔄 POLLING HEARTBEAT #{poll_count}: {current_count} files, widget_value={current_files}")
-                        
-                        # Check if files have changed
-                        if current_count != self._last_file_count or current_names != self._last_file_names:
-                            logger.info(f"🔄 POLLING DETECTED FILE CHANGE: {self._last_file_count} -> {current_count} files")
-                            logger.info(f"🔄 File names: {list(current_names)}")
-                            
-                            # AUTO-UPLOAD: Bypass broken observer system entirely
-                            if current_count > 0:
-                                logger.info(f"🚀 AUTO-UPLOAD: Starting immediate upload of {current_count} files...")
-                                
-                                # Check if folder exists - ADD DETAILED DEBUGGING
-                                folder_path = self.dataset_directory.value.strip()
-                                logger.info(f"🔍 DEBUG: dataset_directory.value = '{self.dataset_directory.value}'")
-                                logger.info(f"🔍 DEBUG: folder_path after strip = '{folder_path}'") 
-                                logger.info(f"🔍 DEBUG: os.path.exists(folder_path) = {os.path.exists(folder_path) if folder_path else 'N/A - empty path'}")
-                                if folder_path:
-                                    logger.info(f"🔍 DEBUG: os.path.abspath(folder_path) = '{os.path.abspath(folder_path)}'")
-                                    logger.info(f"🔍 DEBUG: os.path.isdir(folder_path) = {os.path.isdir(folder_path)}")
-                                
-                                if folder_path and os.path.exists(folder_path):
-                                    # Determine if ZIP or images
-                                    is_zip_selected = any(f['name'].lower().endswith('.zip') for f in current_files)
-                                    
-                                    if is_zip_selected:
-                                        logger.info(f"🚀 AUTO-UPLOAD: Detected ZIP file, uploading and extracting...")
-                                        # Use FileUploadManager for clean ZIP handling
-                                        zip_file = current_files[0]  # Should only be one ZIP
-                                        success, message = self.file_manager.upload_and_extract_zip(zip_file, folder_path)
-                                        self._update_upload_status(success, message)
-                                    else:
-                                        logger.info(f"🚀 AUTO-UPLOAD: Detected image files, uploading...")
-                                        # Use FileUploadManager for clean image handling
-                                        success, message = self.file_manager.upload_images(current_files, folder_path)
-                                        self._update_upload_status(success, message)
-                                        
-                                    # Clear the widget immediately after triggering upload
-                                    logger.info(f"🧹 AUTO-CLEAR: Clearing file widget after upload trigger")
-                                    # Note: We clear in the upload method, not here to avoid race conditions
-                                else:
-                                    if not folder_path:
-                                        logger.warning(f"🚀 AUTO-UPLOAD: No folder path set! dataset_directory.value is empty or None")
-                                    elif not os.path.exists(folder_path):
-                                        logger.warning(f"🚀 AUTO-UPLOAD: Folder path '{folder_path}' does not exist on filesystem!")
-                                        logger.warning(f"🔍 DEBUG: Current working directory = '{os.getcwd()}'")
-                                        # List what IS in the current directory to help debug
-                                        try:
-                                            current_files_list = os.listdir('.')
-                                            logger.warning(f"🔍 DEBUG: Files in current dir: {current_files_list[:10]}")  # Show first 10
-                                        except Exception as e:
-                                            logger.warning(f"🔍 DEBUG: Could not list current directory: {e}")
-                                    else:
-                                        logger.warning(f"🚀 AUTO-UPLOAD: Unknown folder validation issue!")
-                                    # Still trigger observer for status updates
-                                    change_event = {
-                                        'new': current_files,
-                                        'old': (),
-                                        'type': 'change',
-                                        'name': 'value',
-                                        'owner': self.file_upload
-                                    }
-                                    self.on_file_upload_change(change_event)
-                            
-                            # Update tracking
-                            self._last_file_count = current_count
-                            self._last_file_names = current_names
-                        
-                    except Exception as e:
-                        logger.error(f"🔄 POLLING ERROR: {e}")
-                        import traceback
-                        logger.error(f"🔄 POLLING TRACEBACK: {traceback.format_exc()}")
-                    
-                    # Poll every 2 seconds
-                    time.sleep(2)
-            
-            except Exception as e:
-                logger.error(f"🔥 POLLING THREAD CRASHED: {e}")
-                import traceback
-                logger.error(f"🔥 POLLING CRASH TRACEBACK: {traceback.format_exc()}")
-        
-        # Start polling in background thread
-        polling_thread = threading.Thread(target=poll_file_upload, daemon=True)
-        polling_thread.start()
-        logger.info(f"🔄 WORKAROUND: File upload polling thread started")
 
         # Reset upload button event handler (button created earlier)
         self.reset_upload_button.on_click(self.reset_upload_widget)
@@ -873,14 +750,7 @@ class DatasetWidget:
     def on_file_upload_change(self, change):
         """Handle file upload selection changes"""
         try:
-            logger.info(f"🔍 FILE UPLOAD CHANGE TRIGGERED!")
-            logger.info(f"🔍 Change object type: {type(change)}")
-            logger.info(f"🔍 Change object keys: {list(change.keys()) if hasattr(change, 'keys') else 'No keys'}")
-            
             new_files = change.get('new', [])
-            logger.info(f"🔍 Files count: {len(new_files)}")
-            logger.info(f"🔍 Change type: {change.get('type', 'No type')}")
-            logger.debug(f"🔍 Full change object: {change}")
             
             if new_files:  # Files have been selected
                 file_count = len(new_files)
@@ -924,8 +794,7 @@ class DatasetWidget:
                 if not self.dataset_directory.value.strip():
                     self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>Status:</strong> Select images/ZIP or create a folder to start uploading.</div>"
         except Exception as e:
-            logger.error(f"🚨 ERROR in file upload observer: {e}")
-            logger.exception("Full traceback:")
+            logger.error(f"ERROR in file upload observer: {e}")
             # Ensure buttons are disabled if error occurs
             self.upload_images_button.disabled = True
             self.upload_zip_button.disabled = True
@@ -940,12 +809,12 @@ class DatasetWidget:
 
             if not project_name:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a project name.</div>"
-                print("❌ Please enter a project name.")
+                logger.warning("URL download failed: no project name provided")
                 return
 
             if not dataset_url:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a dataset URL.</div>"
-                print("❌ Please enter a dataset URL.")
+                logger.warning("URL download failed: no dataset URL provided")
                 return
 
             # Sanitize project name
@@ -980,9 +849,6 @@ class DatasetWidget:
 
     def run_create_folder(self, b):
         """Create a new folder for image upload using Kohya's repeat count format"""
-        logger.info("🖱️ BUTTON CLICK: Create Folder button clicked!")
-        logger.info(f"📁 Folder name: '{self.folder_name.value}'")
-        logger.info(f"📁 Repeat count: {self.folder_repeats.value}")
         
         self.dataset_output.clear_output()
         folder_name = self.folder_name.value.strip()
@@ -1007,15 +873,8 @@ class DatasetWidget:
                 print(f"✅ Created Kohya-compatible folder: {folder_path}")
                 print(f"📊 Repeat count: {repeat_count} (auto-detected by training)")
 
-                # Update shared dataset directory - USE ABSOLUTE PATH FOR POLLING THREAD
+                # Update shared dataset directory
                 self.dataset_directory.value = os.path.abspath(folder_path)
-                
-                # DEBUG: Check folder creation success
-                absolute_folder_path = os.path.abspath(folder_path)
-                print(f"🔍 DEBUG FOLDER: Created '{folder_path}' -> absolute: '{absolute_folder_path}'")
-                print(f"🔍 DEBUG FOLDER: os.path.exists('{folder_path}') = {os.path.exists(folder_path)}")
-                print(f"🔍 DEBUG FOLDER: os.path.exists('{absolute_folder_path}') = {os.path.exists(absolute_folder_path)}")
-                print(f"🔍 DEBUG FOLDER: dataset_directory.value now = '{self.dataset_directory.value}'")
 
                 # Check if files are already selected and enable appropriate buttons
                 if self.file_upload.value:
@@ -1036,21 +895,15 @@ class DatasetWidget:
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder '{folder_path}' created! Now select images/ZIP to upload.</div>"
 
             except Exception as e:
-                print(f"❌ Failed to create folder: {e}")
+                logger.error(f"Failed to create folder: {e}")
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create folder.</div>"
 
     def _handle_async_upload(self, b):
         """Wrapper to handle async upload function"""
-        logger.info("🖱️ BUTTON CLICK: Upload Images button clicked!")
-        logger.info(f"🖱️ Button state - disabled: {self.upload_images_button.disabled}")
-        logger.info(f"🖱️ Files in widget: {len(self.file_upload.value)}")
         asyncio.create_task(self.run_upload_images(b))
 
     def _handle_async_zip_upload(self, b):
         """Wrapper to handle async ZIP upload function"""
-        logger.info("🖱️ BUTTON CLICK: Upload ZIP button clicked!")
-        logger.info(f"🖱️ Button state - disabled: {self.upload_zip_button.disabled}")
-        logger.info(f"🖱️ Files in widget: {len(self.file_upload.value)}")
         asyncio.create_task(self.run_upload_zip(b))
 
     async def run_upload_images(self, b):
@@ -1059,6 +912,7 @@ class DatasetWidget:
 
         if not self.dataset_directory.value:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
+            logger.warning("Image upload failed: no dataset directory set")
             return
 
         if not self.file_upload.value:
@@ -1136,6 +990,7 @@ class DatasetWidget:
 
         if not self.dataset_directory.value:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
+            logger.warning("ZIP upload failed: no dataset directory set")
             return
 
         if not self.file_upload.value:
@@ -1154,7 +1009,7 @@ class DatasetWidget:
 
         if not zip_file_info:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No ZIP file selected.</div>"
-            print("❌ No ZIP file selected for upload.")
+            logger.warning("ZIP upload failed: no ZIP file selected")
             return
 
         zip_filename = zip_file_info['name']
@@ -1205,7 +1060,6 @@ class DatasetWidget:
 
     def reset_upload_widget(self, b):
         """Reset the file upload widget to clear any cached state"""
-        logger.info("🔄 MANUAL RESET: User clicked reset upload button")
         # Clear the upload widget value
         self.file_upload.value = ()
 
@@ -1223,7 +1077,7 @@ class DatasetWidget:
         else:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔄 Status:</strong> Upload reset. Create a folder and select files to upload.</div>"
 
-        print("🔄 Upload widget reset! Ready for new file selection.")
+        logger.info("Upload widget reset")
 
     def auto_detect_existing_datasets(self):
         """Auto-detect existing dataset directories and set the first one as default"""
@@ -1240,7 +1094,7 @@ class DatasetWidget:
             # Auto-populate if dataset directory is empty
             if not self.dataset_directory.value.strip():
                 self.dataset_directory.value = most_recent
-                print(f"📁 Auto-detected existing dataset: {most_recent}")
+                logger.info(f"Auto-detected existing dataset: {most_recent}")
 
                 # Update status to show detection
                 self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔍 Status:</strong> Auto-detected dataset folder '{most_recent}'. Select files to upload here.</div>"
@@ -1274,12 +1128,12 @@ class DatasetWidget:
             # If custom URL is selected, ensure it's provided
             if site == 'custom' and not custom_url:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please provide a Custom URL when 'Custom URL' site is selected.</div>"
-                print("❌ Please provide a Custom URL when 'Custom URL' site is selected.")
+                logger.warning("Gallery-DL scrape failed: custom URL not provided")
                 return
 
             if not tags and not custom_url:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter tags or a Custom URL.</div>"
-                print("❌ Please enter tags or a Custom URL.")
+                logger.warning("Gallery-DL scrape failed: no tags or custom URL provided")
                 return
 
             try:
@@ -1315,7 +1169,7 @@ class DatasetWidget:
                     self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Gallery-DL scrape failed. Check logs.</div>"
 
             except Exception as e:
-                print(f"❌ Failed to run gallery-dl scraper: {e}")
+                logger.error(f"Failed to run gallery-dl scraper: {e}")
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Scraper encountered an error.</div>"
 
     def run_tagging(self, b):
@@ -1324,7 +1178,7 @@ class DatasetWidget:
         with self.tagging_output:
             if not self.dataset_directory.value:
                 self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Tagging failed: no dataset directory set")
                 return
 
             print(f"🏷️ Starting {self.tagging_method.value} tagging with {self.tagger_model.value.split('/')[-1]}...")
@@ -1354,14 +1208,14 @@ class DatasetWidget:
 
             if not dataset_dir:
                 self.cleanup_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Cleanup failed: no dataset directory set")
                 return
 
             print(f"🧩 Cleaning dataset: {dataset_dir}")
 
             if not os.path.exists(dataset_dir):
                 self.cleanup_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Dataset directory does not exist.</div>"
-                print(f"❌ Directory does not exist: {dataset_dir}")
+                logger.error(f"Directory does not exist: {dataset_dir}")
                 return
 
             # Find files to clean
@@ -1469,12 +1323,12 @@ class DatasetWidget:
         with self.caption_output:
             if not self.dataset_directory.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Add trigger failed: no dataset directory set")
                 return
 
             if not self.trigger_word.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify a trigger word.</div>"
-                print("❌ Please specify a trigger word.")
+                logger.warning("Add trigger failed: no trigger word specified")
                 return
 
             print(f"➕ Adding trigger word '{self.trigger_word.value}' to captions...")
@@ -1492,12 +1346,12 @@ class DatasetWidget:
         with self.caption_output:
             if not self.dataset_directory.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Remove tags failed: no dataset directory set")
                 return
 
             if not self.remove_tags.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify tags to remove.</div>"
-                print("❌ Please specify tags to remove.")
+                logger.warning("Remove tags failed: no tags specified")
                 return
 
             print(f"➖ Removing tags '{self.remove_tags.value}' from captions...")
@@ -1515,12 +1369,12 @@ class DatasetWidget:
         with self.caption_output:
             if not self.dataset_directory.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Search replace failed: no dataset directory set")
                 return
 
             if not self.search_tags.value.strip():
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify tags to search for.</div>"
-                print("❌ Please specify tags to search for.")
+                logger.warning("Search replace failed: no search tags specified")
                 return
 
             print("🔍 Search and replace operation:")
@@ -1548,7 +1402,7 @@ class DatasetWidget:
         with self.caption_output:
             if not self.dataset_directory.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Tag organization failed: no dataset directory set")
                 return
 
             operations = []
@@ -1559,7 +1413,7 @@ class DatasetWidget:
 
             if not operations:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> No operations selected.</div>"
-                print("⚠️ Please select at least one operation (sort or remove duplicates).")
+                logger.warning("Tag organization failed: no operations selected")
                 return
 
             print("📋 Tag organization:")
@@ -1583,11 +1437,11 @@ class DatasetWidget:
             self.rename_output.clear_output()
 
             if not self.rename_project_name.value.strip():
-                print("⚠️ Please enter a project name.")
+                logger.warning("Preview rename failed: no project name provided")
                 return
 
             if not self.dataset_directory.value.strip():
-                print("⚠️ Please set up a dataset directory first.")
+                logger.warning("Preview rename failed: no dataset directory set")
                 return
 
             project_name = self.rename_project_name.value.strip()
@@ -1633,7 +1487,7 @@ class DatasetWidget:
             self.rename_output.clear_output()
 
             if not hasattr(self, '_current_preview') or not self._current_preview:
-                print("⚠️ Please preview the changes first!")
+                logger.warning("Rename files failed: no preview data available")
                 return
 
             project_name = self.rename_project_name.value.strip()
@@ -1673,18 +1527,17 @@ class DatasetWidget:
             # Validation
             if not self.upload_dataset_path.value:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Dataset path required.</div>"
-                print("❌ Please specify the dataset path to upload.")
+                logger.warning("HuggingFace upload failed: no dataset path specified")
                 return
 
             if not self.upload_dataset_name.value:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Repository name required.</div>"
-                print("❌ Please specify a repository name.")
+                logger.warning("HuggingFace upload failed: no repository name specified")
                 return
 
             if not self.upload_hf_token.value:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> HuggingFace token required.</div>"
-                print("❌ Please provide your HuggingFace WRITE token.")
-                print("🔑 Get it here: https://huggingface.co/settings/tokens")
+                logger.warning("HuggingFace upload failed: no token provided")
                 return
 
             print("🤗 Starting HuggingFace dataset upload...")
@@ -1730,11 +1583,11 @@ class DatasetWidget:
         quality = self.conversion_quality.value
 
         if not dataset_path:
-            self.image_utils_output.append_stdout("❌ Please set up a dataset directory first.\n")
+            logger.warning("Format conversion failed: no dataset directory set")
             return
 
         if not os.path.exists(dataset_path):
-            self.image_utils_output.append_stdout(f"❌ Dataset directory not found: {dataset_path}\n")
+            logger.error(f"Format conversion failed: dataset directory not found: {dataset_path}")
             return
 
         self.image_utils_output.append_stdout(f"🔄 Starting format conversion to {target_format.upper()} (quality: {quality})...\n")
@@ -1754,7 +1607,7 @@ class DatasetWidget:
         self.caption_status.value = "<div style='background: #e2e3e5; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>📋 Status:</strong> Displaying tags...</div>"
         with self.caption_output:
             if not self.dataset_directory.value:
-                print("❌ Please specify a dataset directory first.")
+                logger.warning("Review tags failed: no dataset directory specified")
                 self.caption_status.value = "<div style='background: #f8d7da; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No dataset directory specified.</div>"
                 return
 
@@ -1771,7 +1624,6 @@ class DatasetWidget:
             self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {message}</div>"
             # Clear the widget after successful upload
             self.file_upload.value = ()
-            logger.info("🧹 AUTO-CLEAR: FileUpload widget cleared after successful upload")
         else:
             self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> {message}</div>"
 

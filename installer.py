@@ -418,12 +418,27 @@ class UnifiedInstaller:
         print("🔗 Checking for ONNX CUDA library symlink issues...")
         
         try:
-            # Check if we're in a containerized environment (likely needs fixing)
-            cuda_lib_dir = "/usr/local/cuda/lib64"
-            if not os.path.exists(cuda_lib_dir):
+            # Check multiple possible CUDA library locations
+            possible_cuda_dirs = [
+                "/usr/local/cuda/lib64",
+                "/usr/local/cuda-12/lib64", 
+                "/usr/local/cuda-11/lib64",
+                "/opt/cuda/lib64",
+                "/usr/lib/x86_64-linux-gnu"  # Ubuntu/Debian system location
+            ]
+            
+            cuda_lib_dir = None
+            for dir_path in possible_cuda_dirs:
+                if os.path.exists(dir_path):
+                    cuda_lib_dir = dir_path
+                    break
+                    
+            if not cuda_lib_dir:
                 self.logger.info("CUDA library directory not found. Skipping symlink fix.")
                 print("   - No CUDA installation detected. Skipping.")
                 return True
+                
+            print(f"   📁 Using CUDA library directory: {cuda_lib_dir}")
                 
             # Find available CUDA libraries - check for both libcublas and libcublasLt
             import glob
@@ -435,7 +450,11 @@ class UnifiedInstaller:
                 'libcufft': glob.glob(f"{cuda_lib_dir}/libcufft.so.*"),
                 'libcurand': glob.glob(f"{cuda_lib_dir}/libcurand.so.*"),
                 'libcusparse': glob.glob(f"{cuda_lib_dir}/libcusparse.so.*"),
-                'libcusolver': glob.glob(f"{cuda_lib_dir}/libcusolver.so.*")
+                'libcusolver': glob.glob(f"{cuda_lib_dir}/libcusolver.so.*"),
+                # Add critical CUDA runtime library that ONNX specifically needs
+                'libcudart': glob.glob(f"{cuda_lib_dir}/libcudart.so.*"),
+                # Add cuDNN libraries if available
+                'libcudnn': glob.glob(f"{cuda_lib_dir}/libcudnn.so.*")
             }
             
             # Check if any libraries were found
@@ -447,8 +466,8 @@ class UnifiedInstaller:
             
             created_links = []
             
-            # ONNX commonly needed version targets (10, 11, 12 covers most cases)
-            common_versions = ['10', '11', '12']
+            # ONNX commonly needed version targets - include specific versions ONNX looks for
+            common_versions = ['10', '11', '12', '11.0', '11.2', '11.8', '12.0', '12.1', '12.2']
             
             # Process each library type dynamically
             for lib_name, lib_files in found_libraries.items():

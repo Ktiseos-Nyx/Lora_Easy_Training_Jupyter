@@ -658,24 +658,64 @@ class TrainingWidget:
                 "network_dim": flat_config.get('network_dim'),
                 "network_alpha": flat_config.get('network_alpha'),
                 "network_module": "networks.lora",
+                # Add conv layer support for LyCORIS methods
+                "conv_dim": flat_config.get('conv_dim'),
+                "conv_alpha": flat_config.get('conv_alpha'),
             },
             "optimizer_arguments": {
                 "learning_rate": flat_config.get('unet_lr'),
                 "text_encoder_lr": flat_config.get('text_encoder_lr'),
                 "lr_scheduler": flat_config.get('lr_scheduler'),
+                "lr_scheduler_num_cycles": flat_config.get('lr_scheduler_number'),  # For cosine_with_restarts
+                "lr_warmup_ratio": flat_config.get('lr_warmup_ratio'),
                 "optimizer_type": flat_config.get('optimizer'),
+                # Add missing optimizer settings
+                "max_grad_norm": flat_config.get('max_grad_norm'),
             },
             "training_arguments": {
                 "pretrained_model_name_or_path": flat_config.get('model_path'),
                 "max_train_epochs": flat_config.get('epochs'),
                 "train_batch_size": flat_config.get('train_batch_size'),
                 "save_every_n_epochs": flat_config.get('save_every_n_epochs'),
+                "keep_only_last_n_epochs": flat_config.get('keep_only_last_n_epochs'),
                 "mixed_precision": flat_config.get('precision'),
                 "output_dir": "output",
                 "output_name": flat_config.get('project_name', 'lora'),
                 "clip_skip": flat_config.get('clip_skip', 2),
                 "save_model_as": "safetensors",
                 "seed": 42,
+                # Add critical missing training settings
+                "gradient_checkpointing": flat_config.get('gradient_checkpointing'),
+                "gradient_accumulation_steps": flat_config.get('gradient_accumulation_steps'),
+                "cache_latents": flat_config.get('cache_latents'),
+                "cache_latents_to_disk": flat_config.get('cache_latents_to_disk'),
+                "cache_text_encoder_outputs": flat_config.get('cache_text_encoder_outputs'),
+                # V-parameterization and model variant settings
+                "v2": flat_config.get('v2'),
+                "v_parameterization": flat_config.get('v_parameterization'),
+                "zero_terminal_snr": flat_config.get('zero_terminal_snr'),
+                # Cross attention and precision settings
+                "xformers": flat_config.get('cross_attention') == 'xformers',
+                "sdpa": flat_config.get('cross_attention') == 'sdpa',
+                "fp8_base": flat_config.get('fp8_base'),
+                "full_fp16": flat_config.get('full_fp16'),
+                # Noise and training stability
+                "noise_offset": flat_config.get('noise_offset'),
+                "min_snr_gamma": flat_config.get('min_snr_gamma') if flat_config.get('min_snr_gamma_enabled') else None,
+                "ip_noise_gamma": flat_config.get('ip_noise_gamma') if flat_config.get('ip_noise_gamma_enabled') else None,
+                "multires_noise_iterations": 6 if flat_config.get('multinoise') else None,
+                "adaptive_noise_scale": flat_config.get('adaptive_noise_scale') if flat_config.get('adaptive_noise_scale', 0) > 0 else None,
+                # Caption handling
+                "caption_dropout_rate": flat_config.get('caption_dropout_rate'),
+                "caption_tag_dropout_rate": flat_config.get('caption_tag_dropout_rate'),
+                "keep_tokens": flat_config.get('keep_tokens'),
+                # SDXL specific optimizations
+                "network_train_unet_only": flat_config.get('network_train_unet_only'),
+                # VAE settings
+                "vae_batch_size": flat_config.get('vae_batch_size'),
+                "no_half_vae": flat_config.get('no_half_vae'),
+                # Data augmentation
+                "random_crop": flat_config.get('random_crop'),
             },
             "datasets": [{
                 "subsets": [{
@@ -687,6 +727,13 @@ class TrainingWidget:
                 "resolution": formatted_resolution,
                 "shuffle_caption": flat_config.get('shuffle_caption'),
                 "flip_aug": flat_config.get('flip_aug'),
+                "caption_extension": ".txt",
+                # Bucketing settings
+                "enable_bucket": flat_config.get('enable_bucket'),
+                "bucket_no_upscale": flat_config.get('bucket_no_upscale'),
+                "bucket_reso_steps": flat_config.get('bucket_reso_steps', 64),
+                "min_bucket_reso": flat_config.get('min_bucket_reso'),
+                "max_bucket_reso": flat_config.get('max_bucket_reso'),
             },
             # Include widget-only fields for monitor widget compatibility
             "sample_prompt": flat_config.get('sample_prompt'),

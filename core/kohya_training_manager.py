@@ -572,13 +572,18 @@ class KohyaTrainingManager:
             "network_arguments": {
                 "network_dim": config.get('network_dim'),           # Widget provides this
                 "network_alpha": config.get('network_alpha'),       # Widget provides this
+                "conv_dim": config.get('conv_dim'),                 # Widget provides this for LyCORIS
+                "conv_alpha": config.get('conv_alpha'),             # Widget provides this for LyCORIS
                 **network_config  # Add network_module and network_args based on LoRA type
             },
             "optimizer_arguments": {
                 "learning_rate": config.get('unet_lr'),             # Widget provides 'unet_lr'
                 "text_encoder_lr": config.get('text_encoder_lr'),   # Widget provides this
                 "lr_scheduler": config.get('lr_scheduler'),         # Widget provides this  
+                "lr_scheduler_num_cycles": config.get('lr_scheduler_number'),  # Widget provides this
+                "lr_warmup_ratio": config.get('lr_warmup_ratio'),   # Widget provides this
                 "optimizer_type": config.get('optimizer'),          # Widget provides 'optimizer'
+                "max_grad_norm": config.get('max_grad_norm'),       # Widget provides this
                 **self._get_optimizer_arguments(config.get('optimizer', ''))  # Add optimizer-specific args
             },
             "training_arguments": {
@@ -586,6 +591,7 @@ class KohyaTrainingManager:
                 "max_train_epochs": config.get('epochs'),                       # Widget provides 'epochs'
                 "train_batch_size": config.get('train_batch_size'),             # Widget provides 'train_batch_size'
                 "save_every_n_epochs": config.get('save_every_n_epochs'),       # Widget provides this
+                "keep_only_last_n_epochs": config.get('keep_only_last_n_epochs'),  # Widget provides this
                 "mixed_precision": config.get('precision'),                     # Widget provides 'precision'
                 "output_dir": self.output_dir,                                   # Absolute path to output directory
                 "output_name": config.get('project_name', 'lora'),              # Widget provides 'project_name'
@@ -594,13 +600,34 @@ class KohyaTrainingManager:
                 "seed": 42,                                                      # Static seed
                 # Performance and memory optimization
                 "gradient_checkpointing": config.get('gradient_checkpointing', True),  # Widget provides this
+                "gradient_accumulation_steps": config.get('gradient_accumulation_steps', 1),  # Widget provides this
                 "cache_latents": config.get('cache_latents', True),             # Widget provides this
                 "cache_latents_to_disk": config.get('cache_latents_to_disk', True),  # Widget provides this
+                "cache_text_encoder_outputs": config.get('cache_text_encoder_outputs', False),  # Widget provides this
                 "vae_batch_size": config.get('vae_batch_size', 1),              # Widget provides this
                 "no_half_vae": config.get('no_half_vae', False),                # Widget provides this
-                # Training optimizations
-                "gradient_accumulation_steps": config.get('gradient_accumulation_steps', 1),  # Widget provides this
-                "max_grad_norm": config.get('max_grad_norm', 1.0),              # Widget provides this
+                # Model variant and training mode settings
+                "v2": config.get('v2', False),                                  # Widget provides this
+                "v_parameterization": config.get('v_parameterization', False), # Widget provides this
+                "zero_terminal_snr": config.get('zero_terminal_snr', False),   # Widget provides this
+                "network_train_unet_only": config.get('network_train_unet_only', False),  # Widget provides this
+                # Cross attention and precision settings
+                "xformers": config.get('cross_attention') == 'xformers',       # Widget provides cross_attention
+                "sdpa": config.get('cross_attention') == 'sdpa',               # Widget provides cross_attention
+                "fp8_base": config.get('fp8_base', False),                     # Widget provides this
+                "full_fp16": config.get('full_fp16', False),                   # Widget provides this
+                # Noise and training stability
+                "noise_offset": config.get('noise_offset', 0.0),              # Widget provides this
+                "min_snr_gamma": config.get('min_snr_gamma') if config.get('min_snr_gamma_enabled') else None,  # Widget provides both
+                "ip_noise_gamma": config.get('ip_noise_gamma') if config.get('ip_noise_gamma_enabled') else None,  # Widget provides both
+                "multires_noise_iterations": 6 if config.get('multinoise') else None,  # Widget provides multinoise
+                "adaptive_noise_scale": config.get('adaptive_noise_scale') if config.get('adaptive_noise_scale', 0) > 0 else None,  # Widget provides this
+                # Caption handling
+                "caption_dropout_rate": config.get('caption_dropout_rate', 0.0),  # Widget provides this
+                "caption_tag_dropout_rate": config.get('caption_tag_dropout_rate', 0.0),  # Widget provides this
+                "keep_tokens": config.get('keep_tokens', 0),                   # Widget provides this
+                # Data augmentation
+                "random_crop": config.get('random_crop', False),               # Widget provides this
             },
         }
 
@@ -690,16 +717,28 @@ class KohyaTrainingManager:
             general_section['flip_aug'] = config.get('flip_aug')
         # Always specify caption extension - default to .txt if not provided
         general_section['caption_extension'] = config.get('caption_extension', '.txt')
+        
+        # Bucketing settings - now properly from widget
         if config.get('enable_bucket') is not None:
             general_section['enable_bucket'] = config.get('enable_bucket')
         if config.get('bucket_no_upscale') is not None:
             general_section['bucket_no_upscale'] = config.get('bucket_no_upscale')
-        if config.get('bucket_reso_steps') is not None:
-            general_section['bucket_reso_steps'] = config.get('bucket_reso_steps')
+        
+        # Handle bucket_reso_steps with SDXL optimization
+        bucket_steps = config.get('bucket_reso_steps')
+        if bucket_steps is not None:
+            general_section['bucket_reso_steps'] = bucket_steps
+        elif config.get('sdxl_bucket_optimization'):
+            general_section['bucket_reso_steps'] = 32  # SDXL optimized
+        else:
+            general_section['bucket_reso_steps'] = 64  # Standard
+            
         if config.get('min_bucket_reso') is not None:
             general_section['min_bucket_reso'] = config.get('min_bucket_reso')
         if config.get('max_bucket_reso') is not None:
             general_section['max_bucket_reso'] = config.get('max_bucket_reso')
+            
+        # Caption handling settings from widget
         if config.get('caption_dropout_rate') is not None:
             general_section['caption_dropout_rate'] = config.get('caption_dropout_rate')
         if config.get('caption_tag_dropout_rate') is not None:
