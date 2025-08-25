@@ -412,6 +412,92 @@ class UnifiedInstaller:
         
         return True
 
+    def fix_cuda_symlinks(self):
+        """Auto-fix ONNX CUDA library symlink issues"""
+        self.logger.info("Checking for ONNX CUDA library symlink issues...")
+        print("🔗 Checking for ONNX CUDA library symlink issues...")
+        
+        try:
+            # Check if we're in a containerized environment (likely needs fixing)
+            cuda_lib_dir = "/usr/local/cuda/lib64"
+            if not os.path.exists(cuda_lib_dir):
+                self.logger.info("CUDA library directory not found. Skipping symlink fix.")
+                print("   - No CUDA installation detected. Skipping.")
+                return True
+                
+            # Find available CUDA libraries
+            import glob
+            cublas_libs = glob.glob(f"{cuda_lib_dir}/libcublasLt.so.*")
+            if not cublas_libs:
+                self.logger.info("No libcublasLt libraries found. Skipping symlink fix.")
+                print("   - No libcublasLt libraries found. Skipping.")
+                return True
+                
+            # Sort to get the highest version (should be most recent)
+            cublas_libs.sort(reverse=True)
+            latest_cublas = cublas_libs[0]
+            
+            # Extract version for logging
+            version = latest_cublas.split('.so.')[-1] if '.so.' in latest_cublas else 'unknown'
+            
+            # Common symlink targets that ONNX Runtime looks for
+            symlink_targets = [
+                f"{cuda_lib_dir}/libcublasLt.so.11",
+                f"{cuda_lib_dir}/libcublasLt.so.12", 
+                "/usr/lib/x86_64-linux-gnu/libcublasLt.so.11",
+                "/usr/lib/x86_64-linux-gnu/libcublasLt.so.12"
+            ]
+            
+            created_links = []
+            
+            for target in symlink_targets:
+                try:
+                    # Skip if symlink already exists and points correctly
+                    if os.path.islink(target):
+                        if os.readlink(target) == latest_cublas:
+                            print(f"   ✅ Symlink already exists: {target} -> {latest_cublas}")
+                            continue
+                        else:
+                            # Remove bad symlink
+                            os.unlink(target)
+                            
+                    # Skip if regular file exists (don't overwrite)
+                    if os.path.exists(target) and not os.path.islink(target):
+                        print(f"   - Regular file exists, skipping: {target}")
+                        continue
+                        
+                    # Create directory if needed (for /usr/lib paths)
+                    target_dir = os.path.dirname(target)
+                    if not os.path.exists(target_dir):
+                        print(f"   - Directory {target_dir} doesn't exist, skipping symlink")
+                        continue
+                        
+                    # Create symlink
+                    os.symlink(latest_cublas, target)
+                    created_links.append(target)
+                    print(f"   ✅ Created symlink: {target} -> {latest_cublas}")
+                    
+                except PermissionError:
+                    print(f"   ⚠️ Permission denied creating symlink: {target}")
+                    continue
+                except Exception as e:
+                    print(f"   ⚠️ Failed to create symlink {target}: {e}")
+                    continue
+            
+            if created_links:
+                self.logger.info(f"Created {len(created_links)} CUDA symlinks for ONNX compatibility")
+                print(f"   🎉 Created {len(created_links)} CUDA symlinks for ONNX compatibility")
+            else:
+                print(f"   - Found CUDA {version}, no symlinks needed or possible")
+                
+            return True
+            
+        except Exception as e:
+            error_msg = f"Error fixing CUDA symlinks: {e}"
+            self.logger.error(error_msg)
+            print(f"   ❌ {error_msg}")
+            return False
+
     def run_installation(self):
         """Run the complete installation process"""
         self.print_banner()
@@ -440,6 +526,12 @@ class UnifiedInstaller:
                 
             if not self.apply_special_fixes_and_installs():
                 warning_msg = "Some special fixes or editable installs failed."
+                self.logger.warning(warning_msg)
+                print(f"⚠️ {warning_msg}")
+
+            # Auto-fix ONNX CUDA symlink issues
+            if not self.fix_cuda_symlinks():
+                warning_msg = "CUDA symlink fixes failed (non-critical)."
                 self.logger.warning(warning_msg)
                 print(f"⚠️ {warning_msg}")
 
