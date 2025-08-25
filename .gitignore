@@ -1,3 +1,6 @@
+# Deprecated/archived code - do not use
+archive/
+
 # macOS (comprehensive - all directories)
 **/.DS_Store
 **/.DS_Store?
@@ -57,6 +60,9 @@ venv.bak/
 # Development documentation (private)
 docs/development/
 
+# Gemini research (private)
+docs/research/
+
 # Work-in-progress documentation (private)
 wip_documentation/
 
@@ -98,9 +104,11 @@ config.json
 secrets.json
 api_keys.txt
 hf_token.txt
+GEMINI.md
 
 # Claude Code project instructions (private)
 CLAUDE.md
+CLAUDE_*.md
 
 # OS generated files
 .directory
@@ -124,3 +132,15 @@ CLAUDE.md
 # Gemini-generated test files
 cuda_check.html
 *.html
+
+# Test and debug files
+test_*.py
+debug_*.py
+*_test.py
+*_debug.py
+
+# User submitted logs and debugging materials
+user_logs_submissions/
+
+# Research and development configs (many TOML files)
+research_dev/

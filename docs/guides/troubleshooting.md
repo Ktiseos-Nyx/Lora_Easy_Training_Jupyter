@@ -24,6 +24,16 @@ This guide provides solutions to the most common errors and issues you might enc
   2. Ensure sufficient disk space (15-20GB free)
   3. Try running installer again (it will resume downloads)
 
+### UV Package Manager Issues (Windows-specific)
+- **Error**: `Expected --hash, found --extra-index-url` or Rust compilation errors
+- **Cause**: UV on Windows is more aggressive about package detection and source compilation
+- **Why Windows-only**: UV behaves differently on Windows vs Linux/Mac for pyproject.toml handling
+- **Solution**: 
+  1. **Use pip instead**: The installer now defaults to pip (fixed in recent updates)
+  2. **If UV is forced**: Uninstall UV temporarily: `pip uninstall uv`
+  3. **Rust errors are false**: UV incorrectly tries to compile packages that have prebuilt wheels
+- **Note**: Linux/Mac users typically don't hit this issue; containerized environments (VastAI, RunPod) may have UV detection issues
+
 ## Training Errors
 
 ### CUDA Out of Memory

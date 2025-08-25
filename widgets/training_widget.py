@@ -1,18 +1,32 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2025 Ktiseos Nyx
+# Contributors: See README.md Credits section for full acknowledgements
+
 # widgets/training_widget.py
+
+import os
+import warnings
+
 import ipywidgets as widgets
 from IPython.display import display
-from core.training_manager import HybridTrainingManager
+
+from core.refactored_training_manager import RefactoredTrainingManager
+
 from .training_monitor_widget import TrainingMonitorWidget
+
+# Suppress FutureWarnings at import time
+warnings.filterwarnings('ignore', category=FutureWarning, module='diffusers')
+warnings.filterwarnings('ignore', category=FutureWarning, module='transformers')
 
 class TrainingWidget:
     def __init__(self, training_manager=None):
         # Use dependency injection - accept manager instance or create default
         if training_manager is None:
-            training_manager = HybridTrainingManager()
-            
+            training_manager = RefactoredTrainingManager()
+
         self.manager = training_manager
         self.create_widgets()
-    
+
     def _parse_learning_rate(self, lr_text):
         """Parse learning rate from text input supporting both scientific notation and decimals"""
         try:
@@ -29,11 +43,52 @@ class TrainingWidget:
         # --- Project Settings ---
         project_desc = widgets.HTML("<h3>▶️ Project Settings</h3><p>Define your project name, the path to your base model, and your dataset directory. You can also specify an existing LoRA to continue training from and your Weights & Biases API key for logging.</p>")
         self.project_name = widgets.Text(description="Project Name:", placeholder="e.g., my-awesome-lora (no spaces or special characters)", layout=widgets.Layout(width='99%'))
-        self.model_path = widgets.Text(description="Model Path:", placeholder="Absolute path to your base model (e.g., /path/to/model.safetensors)", layout=widgets.Layout(width='99%'))
+        self.model_type = widgets.Dropdown(options=['SD1.5/2.0', 'SDXL', 'Flux', 'SD3'], value='SDXL', description='Model Type:', style={'description_width': 'initial'})
+        # Model selection with auto-populated dropdown
+        self.model_dropdown = widgets.Dropdown(
+            options=[('Select a model...', '')],
+            description='Base Model:',
+            style={'description_width': 'initial'},
+            layout=widgets.Layout(width='400px')
+        )
+        self.model_refresh_btn = widgets.Button(description="🔄 Refresh", button_style='info', layout=widgets.Layout(width='100px'))
+        self.model_path = widgets.Text(description="Or custom path:", placeholder="Full path to model file", layout=widgets.Layout(width='99%'))
+
+        # Auto-populate models on widget creation
+        self._refresh_model_list()
+
+        # Connect refresh button
+        self.model_refresh_btn.on_click(lambda b: self._refresh_model_list())
+
+        # Update model_path when dropdown changes
+        def on_model_selected(change):
+            if change['new']:
+                self.model_path.value = change['new']
+        self.model_dropdown.observe(on_model_selected, names='value')
+
+        # Flux/SD3 specific widgets
+        self.clip_l_path = widgets.Text(description="CLIP-L Path:", placeholder="Path to clip_l.safetensors", layout=widgets.Layout(width='99%'))
+        self.clip_g_path = widgets.Text(description="CLIP-G Path:", placeholder="Path to clip_g.safetensors (for SD3)", layout=widgets.Layout(width='99%'))
+        self.t5xxl_path = widgets.Text(description="T5-XXL Path:", placeholder="Path to t5xxl.safetensors", layout=widgets.Layout(width='99%'))
+        self.flux_sd3_widgets = widgets.VBox([self.clip_l_path, self.clip_g_path, self.t5xxl_path])
+        self.flux_sd3_widgets.layout.display = 'none' # Initially hidden
+
         self.dataset_dir = widgets.Text(description="Dataset Dir:", placeholder="Absolute path to your dataset directory (e.g., /path/to/my_dataset)", layout=widgets.Layout(width='99%'))
         self.continue_from_lora = widgets.Text(description="Continue from LoRA:", placeholder="Absolute path to an existing LoRA to continue training (optional)", layout=widgets.Layout(width='99%'))
         self.wandb_key = widgets.Password(description="WandB API Key:", placeholder="Your key will be hidden (e.g., ••••••••••••••••••••••••)", layout=widgets.Layout(width='99%'))
-        project_box = widgets.VBox([project_desc, self.project_name, self.model_path, self.dataset_dir, self.continue_from_lora, self.wandb_key])
+
+        def _on_model_type_change(change):
+            if change['new'] in ['Flux', 'SD3']:
+                self.flux_sd3_widgets.layout.display = 'block'
+            else:
+                self.flux_sd3_widgets.layout.display = 'none'
+
+        self.model_type.observe(_on_model_type_change, names='value')
+
+        # Model selection layout
+        model_selection_box = widgets.HBox([self.model_dropdown, self.model_refresh_btn])
+
+        project_box = widgets.VBox([project_desc, self.project_name, self.model_type, model_selection_box, self.model_path, self.flux_sd3_widgets, self.dataset_dir, self.continue_from_lora, self.wandb_key])
 
         # --- Training Configuration (merged: Basic Settings + Learning Rate + Training Options) ---
         training_config_desc = widgets.HTML("""<h3>▶️ Training Configuration</h3>
@@ -44,15 +99,15 @@ class TrainingWidget:
         self.train_batch_size = widgets.IntText(value=4, description='Train Batch Size:', style={'description_width': 'initial'})
         self.flip_aug = widgets.Checkbox(value=False, description="Flip Augmentation (data augmentation)", indent=False)
         self.shuffle_caption = widgets.Checkbox(value=True, description="Shuffle Captions (improves variety, incompatible with text encoder caching)", indent=False)
-        
+
         # Basic training options (moved from advanced)
         self.keep_tokens = widgets.IntText(value=0, description='Keep Tokens:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.clip_skip = widgets.IntText(value=2, description='Clip Skip:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        
+
         # Auto-detected dataset size (will be updated when dataset directory changes)
         self.dataset_size = widgets.IntText(value=0, description="Dataset Size:", style={'description_width': 'initial'}, disabled=True)
         self.step_calculator = widgets.HTML()
-        
+
         # Auto-detect dataset size when dataset_dir changes
         def update_dataset_size(*args):
             dataset_path = self.dataset_dir.value.strip()
@@ -62,26 +117,26 @@ class TrainingWidget:
                     image_count = count_images_in_directory(dataset_path)
                     self.dataset_size.value = image_count
                     update_step_calculation()
-                except Exception as e:
+                except Exception:
                     self.dataset_size.value = 0
             else:
                 self.dataset_size.value = 0
             update_step_calculation()
-        
+
         self.dataset_dir.observe(update_dataset_size, names='value')
-        
+
         def update_step_calculation(*args):
             images = self.dataset_size.value
-            repeats = self.num_repeats.value 
+            repeats = self.num_repeats.value
             epochs = self.epochs.value
             batch_size = self.train_batch_size.value
-            
+
             if batch_size > 0 and images > 0:
                 total_steps = (images * repeats * epochs) // batch_size
-                
+
                 # Neutral color scheme
                 color = "#17a2b8"  # Blue-teal, neutral
-                
+
                 self.step_calculator.value = f"""
                 <div style='background: {color}20; padding: 10px; border-left: 4px solid {color}; margin: 5px 0;'>
                 <strong>📊 Total Steps: {total_steps}</strong><br>
@@ -96,35 +151,35 @@ class TrainingWidget:
                 <em>Select a dataset directory to calculate training steps</em>
                 </div>
                 """
-        
+
         # Attach observers to update calculation
         self.dataset_size.observe(update_step_calculation, names='value')
-        self.num_repeats.observe(update_step_calculation, names='value')  
+        self.num_repeats.observe(update_step_calculation, names='value')
         self.epochs.observe(update_step_calculation, names='value')
         self.train_batch_size.observe(update_step_calculation, names='value')
-        
+
         # Initial calculation
         update_step_calculation()
-        
+
         # Configuration warnings
         self.config_warnings = widgets.HTML()
-        
+
         def check_config_conflicts(*args):
             warnings = []
-            
+
             # Check text encoder caching vs shuffle caption conflict
             if self.cache_text_encoder_outputs.value and self.shuffle_caption.value:
                 warnings.append("⚠️ Cannot use Caption Shuffling with Text Encoder Caching")
 
-            # Check text encoder caching vs text encoder training conflict  
+            # Check text encoder caching vs text encoder training conflict
             if self.cache_text_encoder_outputs.value and float(self.text_encoder_lr.value) > 0:
                 warnings.append("⚠️ Cannot cache Text Encoder while training it (set Text LR to 0)")
                 self.text_encoder_lr.value = '0'
-            
+
             # Check random crop vs latent caching conflict
             if self.random_crop.value and self.cache_latents.value:
                 warnings.append("⚠️ Cannot use Random Crop with Latent Caching - choose one or the other")
-                
+
             if warnings:
                 warning_html = "<div style='padding: 10px; border: 1px solid #856404; border-radius: 5px; margin: 5px 0;'>"
                 warning_html += "<br>".join(warnings)
@@ -132,9 +187,9 @@ class TrainingWidget:
                 self.config_warnings.value = warning_html
             else:
                 self.config_warnings.value = ""
-        
+
         # Note: Observers will be attached after all widgets are created
-        
+
         # Learning rate widgets (no separate section header)
         self.unet_lr = widgets.Text(value='5e-4', placeholder='e.g., 5e-4 or 0.0005', description='🧠 UNet LR:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.text_encoder_lr = widgets.Text(value='1e-4', placeholder='e.g., 1e-4 or 0.0001', description='📝 Text LR:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
@@ -155,13 +210,13 @@ class TrainingWidget:
         self.max_grad_norm = widgets.Text(value='1.0', description='Max Grad Norm:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.full_fp16 = widgets.Checkbox(value=False, description="Full FP16 (more aggressive mixed precision)", indent=False)
         self.random_crop = widgets.Checkbox(value=False, description="Random Crop (data augmentation)", indent=False)
-        
+
         # Bucketing settings (moved from "advanced")
         self.sdxl_bucket_optimization = widgets.Checkbox(value=False, description="📐 SDXL Bucket Optimization (32 steps vs 64 standard)", indent=False)
         self.min_bucket_reso = widgets.IntSlider(value=256, min=128, max=512, step=64, description='Min Bucket Resolution:', style={'description_width': 'initial'}, continuous_update=False)
         self.max_bucket_reso = widgets.IntSlider(value=2048, min=1024, max=4096, step=512, description='Max Bucket Resolution:', style={'description_width': 'initial'}, continuous_update=False)
         self.bucket_no_upscale = widgets.Checkbox(value=False, description="No Bucket Upscale (prevent upscaling small images)", indent=False)
-        
+
         # VAE settings (moved from "advanced")
         self.vae_batch_size = widgets.IntSlider(value=1, min=1, max=8, step=1, description='VAE Batch Size:', style={'description_width': 'initial'}, continuous_update=False)
         self.no_half_vae = widgets.Checkbox(value=False, description="No Half VAE (fixes some VAE issues, uses more VRAM)", indent=False)
@@ -185,15 +240,15 @@ class TrainingWidget:
         """)
         self.lora_type = widgets.Dropdown(
             options=[
-                'LoRA', 'LoCon', 'LoKR', 'DyLoRA', 
-                'DoRA (Weight Decomposition)', 
-                'LoHa (Hadamard Product)', 
-                '(IA)³ (Few Parameters)', 
+                'LoRA', 'LoCon', 'LoKR', 'DyLoRA',
+                'DoRA (Weight Decomposition)',
+                'LoHa (Hadamard Product)',
+                '(IA)³ (Few Parameters)',
                 'GLoRA (Generalized LoRA)',
                 'BOFT (Butterfly Transform)'
-            ], 
-            value='LoRA', 
-            description='LoRA Type:', 
+            ],
+            value='LoRA',
+            description='LoRA Type:',
             style={'description_width': 'initial'}
         )
         self.network_dim = widgets.IntText(value=16, description='Network Dim:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
@@ -257,7 +312,7 @@ class TrainingWidget:
         • <strong>Lion:</strong> Fast and memory efficient<br>
         <em>Our environment fixes should resolve most compatibility issues! Try CAME or AdamW8bit for memory savings.</em>
         </div>""")
-        self.optimizer = widgets.Dropdown(options=['AdamW', 'AdamW8bit', 'Prodigy', 'DAdaptation', 'DadaptAdam', 'DadaptLion', 'Lion', 'SGDNesterov', 'SGDNesterov8bit', 'AdaFactor', 'Came'], value='AdamW', description='Optimizer:', style={'description_width': 'initial'})
+        self.optimizer = widgets.Dropdown(options=['AdamW', 'AdamW8bit', 'Prodigy', 'DAdaptation', 'DadaptAdam', 'DadaptLion', 'Lion', 'SGDNesterov', 'SGDNesterov8bit', 'AdaFactor', 'LoraEasyCustomOptimizer.came.CAME'], value='AdamW', description='Optimizer:', style={'description_width': 'initial'})
         self.cross_attention = widgets.Dropdown(options=['sdpa', 'xformers'], value='sdpa', description='Cross Attention:', style={'description_width': 'initial'})
         self.precision = widgets.Dropdown(options=['fp16', 'bf16', 'float'], value='fp16', description='Precision:', style={'description_width': 'initial'})
         self.fp8_base = widgets.Checkbox(value=False, description="FP8 Base (experimental, requires PyTorch 2.1+)", indent=False)
@@ -266,28 +321,28 @@ class TrainingWidget:
         self.cache_text_encoder_outputs = widgets.Checkbox(value=False, description="Cache Text Encoder Outputs (disables text encoder training)", indent=False)
         self.v2 = widgets.Checkbox(value=False, description="SD 2.x Base Model (enable for SD 2.0/2.1 base models)", indent=False)
         self.v_parameterization = widgets.Checkbox(value=False, description="V-Parameterization (enable for SDXL v-pred models or SD 2.x 768px models)", indent=False)
-        
+
         # SDXL-specific optimizations (highly recommended by Kohya SS docs)
         self.network_train_unet_only = widgets.Checkbox(value=False, description="🎯 Train U-Net Only (highly recommended for SDXL LoRA)", indent=False)
-        
+
         # Saving options (moved from separate section)
         self.save_every_n_epochs = widgets.IntText(value=1, description='Save Every N Epochs:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.keep_only_last_n_epochs = widgets.IntText(value=5, description='Keep Last N Epochs:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        
+
         # Create unified training configuration box (combines basic, learning rate, and training options)
         training_config_box = widgets.VBox([
-            training_config_desc, 
+            training_config_desc,
             # Dataset and basic settings
             self.dataset_size, self.resolution, self.num_repeats, self.epochs, self.train_batch_size, self.step_calculator,
             self.flip_aug, self.shuffle_caption, self.keep_tokens, self.clip_skip,
-            # Learning rate settings  
+            # Learning rate settings
             self.unet_lr, self.text_encoder_lr, self.lr_scheduler, self.lr_scheduler_number, self.lr_warmup_ratio,
-            self.min_snr_gamma_enabled, self.min_snr_gamma, self.ip_noise_gamma_enabled, self.ip_noise_gamma, 
+            self.min_snr_gamma_enabled, self.min_snr_gamma, self.ip_noise_gamma_enabled, self.ip_noise_gamma,
             self.multinoise, self.noise_offset,
             # Training options
             self.optimizer, self.cross_attention, self.precision, self.fp8_base,
             self.cache_latents, self.cache_latents_to_disk, self.cache_text_encoder_outputs,
-            self.v2, self.v_parameterization, self.network_train_unet_only, self.zero_terminal_snr, self.enable_bucket, 
+            self.v2, self.v_parameterization, self.network_train_unet_only, self.zero_terminal_snr, self.enable_bucket,
             self.gradient_checkpointing, self.gradient_accumulation_steps, self.max_grad_norm, self.full_fp16, self.random_crop,
             # Bucketing and VAE settings
             self.sdxl_bucket_optimization, self.min_bucket_reso, self.max_bucket_reso, self.bucket_no_upscale,
@@ -318,7 +373,7 @@ class TrainingWidget:
         </ul>
         </div>
         """)
-        
+
         # Caption dropout controls
         self.caption_dropout_rate = widgets.FloatSlider(
             value=0.0, min=0.0, max=0.5, step=0.05,
@@ -326,27 +381,27 @@ class TrainingWidget:
             style={'description_width': 'initial'},
             continuous_update=False
         )
-        
+
         self.caption_tag_dropout_rate = widgets.FloatSlider(
             value=0.0, min=0.0, max=0.5, step=0.05,
             description='Tag Dropout Rate:',
             style={'description_width': 'initial'},
             continuous_update=False
         )
-        
+
         # Noise and stability controls (keep tokens and noise offset moved to basic settings)
-        
+
         self.adaptive_noise_scale = widgets.FloatSlider(
             value=0.0, min=0.0, max=0.02, step=0.001,
             description='Adaptive Noise Scale:',
             style={'description_width': 'initial'},
             continuous_update=False
         )
-        
+
         # Zero Terminal SNR moved to basic training options
-        
+
         # Clip skip moved to basic settings
-        
+
         # VAE and performance options
         self.vae_batch_size = widgets.IntSlider(
             value=1, min=1, max=8, step=1,
@@ -354,13 +409,13 @@ class TrainingWidget:
             style={'description_width': 'initial'},
             continuous_update=False
         )
-        
+
         self.no_half_vae = widgets.Checkbox(
             value=False,
             description="No Half VAE (fixes some VAE issues, uses more VRAM)",
             indent=False
         )
-        
+
         # Dataset bucketing controls
         self.bucket_reso_steps = widgets.IntSlider(
             value=64, min=32, max=128, step=32,
@@ -368,27 +423,27 @@ class TrainingWidget:
             style={'description_width': 'initial'},
             continuous_update=False
         )
-        
+
         self.min_bucket_reso = widgets.IntSlider(
             value=256, min=128, max=512, step=64,
             description='Min Bucket Resolution:',
             style={'description_width': 'initial'},
             continuous_update=False
         )
-        
+
         self.max_bucket_reso = widgets.IntSlider(
             value=2048, min=1024, max=4096, step=512,
             description='Max Bucket Resolution:',
             style={'description_width': 'initial'},
             continuous_update=False
         )
-        
+
         self.bucket_no_upscale = widgets.Checkbox(
             value=False,
             description="No Bucket Upscale (prevent upscaling small images)",
             indent=False
         )
-        
+
         advanced_training_box = widgets.VBox([
             advanced_train_desc,
             widgets.HTML("<h4>📚 Caption Controls</h4>"),
@@ -417,17 +472,6 @@ class TrainingWidget:
         accordion.set_title(3, "▶️ Sample Generation Settings")
         accordion.set_title(4, "🚀 Additional Options")
 
-        # --- Status Summary (stays visible) ---
-        self.status_bar = widgets.HTML(value="<div style='padding: 10px; border: 1px solid #007acc; border-radius: 5px;'><strong>📊 Status:</strong> Ready to configure training. Use the Training Progress section below to start training.</div>")
-        
-        # --- Detailed Training Log (scrollable) ---
-        self.training_output = widgets.Output(layout=widgets.Layout(height='400px', overflow='scroll', border='1px solid #ddd', margin='10px 0'))
-        
-        # --- Progress Summary ---
-        progress_desc = widgets.HTML("<h3>📊 Training Progress</h3><p>Status updates appear above, detailed logs below.</p>")
-        
-        # Start training button moved to the Training Progress Monitor widget
-
         # Attach observers for real-time validation (after all widgets are created)
         self.cache_text_encoder_outputs.observe(check_config_conflicts, names='value')
         self.shuffle_caption.observe(check_config_conflicts, names='value')
@@ -443,6 +487,16 @@ class TrainingWidget:
         )
         self.prepare_config_button.on_click(self.run_training) # This will now trigger config collection
 
+        # Progress description (was missing!)
+        progress_desc = widgets.HTML("""<h3>📊 Training Progress</h3>
+        <p>Monitor your training progress and status below. The system will automatically update with real-time information.</p>""")
+
+        # Status bar widget (was also missing!)
+        self.status_bar = widgets.HTML(value="<div style='padding: 10px; border: 1px solid #6c757d; border-radius: 5px;'><strong>📊 Status:</strong> Ready to configure training</div>")
+
+        # Training output widget
+        self.training_output = widgets.Output()
+
         self.widget_box = widgets.VBox([
             header_main,
             accordion,
@@ -456,13 +510,13 @@ class TrainingWidget:
         """Update the status bar with current training progress"""
         status_colors = {
             "info": "#007acc",      # Blue
-            "success": "#28a745",   # Green  
+            "success": "#28a745",   # Green
             "warning": "#ffc107",   # Yellow
             "error": "#dc3545",     # Red
             "progress": "#17a2b8"   # Teal
         }
         color = status_colors.get(status_type, "#007acc")
-        
+
         self.status_bar.value = f"<div style='padding: 10px; border: 1px solid {color}; border-radius: 5px;'><strong>📊 Status:</strong> {message}</div>"
 
     def run_training(self, b):
@@ -504,8 +558,12 @@ class TrainingWidget:
         """Helper method to gather all config settings from widget values"""
         return {
             'project_name': self.project_name.value,
+            'model_type': self.model_type.value.lower().replace('/', '_').replace('.', ''), # e.g. sd1.5/2.0 -> sd1_5_2_0
             'model_path': self.model_path.value,
-            'dataset_dir': self.dataset_dir.value,
+            'clip_l_path': self.clip_l_path.value,
+            'clip_g_path': self.clip_g_path.value,
+            't5xxl_path': self.t5xxl_path.value,
+            'dataset_path': self.dataset_dir.value,
             'continue_from_lora': self.continue_from_lora.value,
             'wandb_key': self.wandb_key.value,
             'resolution': self.resolution.value,
@@ -574,32 +632,98 @@ class TrainingWidget:
             'experimental_features': self._get_experimental_features(),
         }
 
+    def _convert_to_structured_config(self, flat_config):
+        """Convert flat widget config to structured TOML format"""
+        
+        # 🔍 DEBUG: What's actually in the flat config?
+        print("🚨 === FLAT CONFIG DEBUG (BEFORE CONVERSION) ===")
+        print(f"📊 All flat config keys: {list(flat_config.keys())}")
+        print(f"📊 network_dim: {repr(flat_config.get('network_dim'))}")
+        print(f"📊 network_alpha: {repr(flat_config.get('network_alpha'))}")
+        print(f"📊 unet_lr: {repr(flat_config.get('unet_lr'))}")
+        print(f"📊 model_path: {repr(flat_config.get('model_path'))}")
+        print(f"📊 epochs: {repr(flat_config.get('epochs'))}")
+        print(f"📊 optimizer: {repr(flat_config.get('optimizer'))}")
+        print("🚨 === END FLAT CONFIG DEBUG ===")
+        
+        # Handle resolution formatting like our KohyaTrainingManager does
+        resolution = flat_config.get('resolution')
+        if isinstance(resolution, (int, str)):
+            formatted_resolution = f"{resolution},{resolution}"
+        else:
+            formatted_resolution = "512,512"
+
+        structured_config = {
+            "network_arguments": {
+                "network_dim": flat_config.get('network_dim'),
+                "network_alpha": flat_config.get('network_alpha'),
+                "network_module": "networks.lora",
+            },
+            "optimizer_arguments": {
+                "learning_rate": flat_config.get('unet_lr'),
+                "text_encoder_lr": flat_config.get('text_encoder_lr'),
+                "lr_scheduler": flat_config.get('lr_scheduler'),
+                "optimizer_type": flat_config.get('optimizer'),
+            },
+            "training_arguments": {
+                "pretrained_model_name_or_path": flat_config.get('model_path'),
+                "max_train_epochs": flat_config.get('epochs'),
+                "train_batch_size": flat_config.get('train_batch_size'),
+                "save_every_n_epochs": flat_config.get('save_every_n_epochs'),
+                "mixed_precision": flat_config.get('precision'),
+                "output_dir": "output",
+                "output_name": flat_config.get('project_name', 'lora'),
+                "clip_skip": flat_config.get('clip_skip', 2),
+                "save_model_as": "safetensors",
+                "seed": 42,
+            },
+            "datasets": [{
+                "subsets": [{
+                    "image_dir": flat_config.get('dataset_path'),
+                    "num_repeats": flat_config.get('num_repeats'),
+                }]
+            }],
+            "general": {
+                "resolution": formatted_resolution,
+                "shuffle_caption": flat_config.get('shuffle_caption'),
+                "flip_aug": flat_config.get('flip_aug'),
+            },
+            # Include widget-only fields for monitor widget compatibility
+            "sample_prompt": flat_config.get('sample_prompt'),
+            "sample_num_images": flat_config.get('sample_num_images'),
+            "sample_resolution": flat_config.get('sample_resolution'),
+            "sample_seed": flat_config.get('sample_seed'),
+            "dataset_size": flat_config.get('dataset_size'),  # For step calculation
+            "epochs": flat_config.get('epochs'),  # For total epochs calculation
+        }
+        return structured_config
+
     def _create_combined_advanced_section(self, advanced_training_box):
         """Create combined advanced section merging Advanced Training Options with Advanced Mode"""
         combined_desc = widgets.HTML("""<h3>🧪 Advanced Options</h3>
         <p>Advanced training controls, experimental features, and optimization settings. Use with caution - these can significantly impact training behavior.</p>""")
-        
+
         # Get the original advanced mode content
         original_advanced = self._create_advanced_section()
-        
+
         # Combine with advanced training options
         return widgets.VBox([combined_desc, advanced_training_box, original_advanced])
 
     def _create_advanced_section(self):
         """Creates the Advanced Mode section with educational explanations"""
-        
+
         # Advanced Mode Toggle
         advanced_header = widgets.HTML("""
         <h3>🧪 Advanced Training Mode</h3>
         <p><strong>⚠️ For experienced users only!</strong> These features are experimental and may require VastAI or high-end hardware.</p>
         """)
-        
+
         self.advanced_mode = widgets.Checkbox(
             value=False,
             description="🧪 Show More Training Options",
             style={'description_width': 'initial'}
         )
-        
+
         # Advanced options container (initially hidden)
         self.advanced_container = widgets.VBox([
             self._create_advanced_optimizer_section(),
@@ -607,10 +731,10 @@ class TrainingWidget:
             self._create_lycoris_advanced_section(),
             self._create_experimental_section()
         ])
-        
+
         # Initially hide advanced options
         self.advanced_container.layout.display = 'none'
-        
+
         # Show/hide based on toggle
         def toggle_advanced_mode(change):
             if change['new']:
@@ -618,23 +742,23 @@ class TrainingWidget:
                 self._show_advanced_warning()
             else:
                 self.advanced_container.layout.display = 'none'
-        
+
         self.advanced_mode.observe(toggle_advanced_mode, names='value')
-        
+
         return widgets.VBox([
             advanced_header,
             self.advanced_mode,
             self.advanced_container
         ])
-    
+
     def _create_advanced_optimizer_section(self):
         """Advanced optimizers with educational explanations"""
-        
+
         optimizer_info = widgets.HTML("""
         <h4>🚀 Advanced Optimizers</h4>
         <p><strong>Choose your optimization algorithm:</strong></p>
         """)
-        
+
         self.advanced_optimizer = widgets.Dropdown(
             options=[
                 ('Standard (Use basic options)', 'standard'),
@@ -647,10 +771,10 @@ class TrainingWidget:
             description='Optimizer:',
             style={'description_width': 'initial'}
         )
-        
+
         # Dynamic explanation based on selection
         self.optimizer_explanation = widgets.HTML()
-        
+
         def update_optimizer_explanation(change):
             explanations = {
                 'standard': """
@@ -702,33 +826,33 @@ class TrainingWidget:
                 """
             }
             self.optimizer_explanation.value = explanations.get(change['new'], '')
-            
+
             # Auto-update scheduler recommendations
             self._update_scheduler_recommendations(change['new'])
-        
+
         self.advanced_optimizer.observe(update_optimizer_explanation, names='value')
-        
+
         return widgets.VBox([
             optimizer_info,
             self.advanced_optimizer,
             self.optimizer_explanation
         ])
-    
+
     def _create_memory_optimization_section(self):
         """Memory optimization techniques"""
-        
+
         memory_info = widgets.HTML("""
         <h4>💾 Memory Wizardry</h4>
         <p><strong>Advanced VRAM reduction techniques:</strong></p>
         """)
-        
+
         self.fused_back_pass = widgets.Checkbox(
             value=False,
             description="🚧 Fused Back Pass (Requires OneTrainer - Coming Soon)",
             style={'description_width': 'initial'},
             disabled=True  # Disable until OneTrainer integration
         )
-        
+
         fused_explanation = widgets.HTML("""
         <div style='padding: 10px; border: 1px solid #856404; border-radius: 5px;'>
         <strong>🚧 Fused Back Pass - OneTrainer Integration Required</strong><br><br>
@@ -745,21 +869,21 @@ class TrainingWidget:
         <em>🎯 For now: Use gradient checkpointing + cache settings for VRAM optimization</em>
         </div>
         """)
-        
+
         return widgets.VBox([
             memory_info,
             self.fused_back_pass,
             fused_explanation
         ])
-    
+
     def _create_lycoris_advanced_section(self):
         """Advanced LyCORIS methods"""
-        
+
         lycoris_info = widgets.HTML("""
         <h4>🦄 LyCORIS Advanced Methods</h4>
         <p><strong>Beyond standard LoRA - cutting-edge adaptation techniques:</strong></p>
         """)
-        
+
         self.lycoris_method = widgets.Dropdown(
             options=[
                 ('None (Use Main LoRA Type)', 'none'),
@@ -769,9 +893,9 @@ class TrainingWidget:
             description='Advanced LyCORIS:',
             style={'description_width': 'initial'}
         )
-        
+
         self.lycoris_explanation = widgets.HTML()
-        
+
         def update_lycoris_explanation(change):
             explanations = {
                 'none': """
@@ -815,23 +939,23 @@ class TrainingWidget:
                 """
             }
             self.lycoris_explanation.value = explanations.get(change['new'], '')
-        
+
         self.lycoris_method.observe(update_lycoris_explanation, names='value')
-        
+
         return widgets.VBox([
             lycoris_info,
             self.lycoris_method,
             self.lycoris_explanation
         ])
-    
+
     def _create_experimental_section(self):
         """Experimental features section"""
-        
+
         experimental_info = widgets.HTML("""
         <h4>🔬 Experimental Lab</h4>
         <p><strong>⚠️ Dragons be here! Use at your own risk:</strong></p>
         """)
-        
+
         self.experimental_options = widgets.VBox([
             widgets.Checkbox(
                 value=False,
@@ -853,12 +977,12 @@ class TrainingWidget:
             </div>
             """)
         ])
-        
+
         return widgets.VBox([
             experimental_info,
             self.experimental_options
         ])
-    
+
     def _update_scheduler_recommendations(self, optimizer):
         """Update scheduler recommendations based on optimizer choice"""
         if hasattr(self, 'advanced_scheduler'):
@@ -867,11 +991,11 @@ class TrainingWidget:
                 'prodigy_plus': 'constant',  # Schedule-free
                 'standard': 'cosine'
             }
-            
+
             recommended = recommendations.get(optimizer, 'cosine')
             if recommended in [option[1] for option in self.lr_scheduler.options]:
                 self.lr_scheduler.value = recommended
-    
+
     def _show_advanced_warning(self):
         """Show warning when advanced mode is enabled"""
         warning = widgets.HTML("""
@@ -887,11 +1011,11 @@ class TrainingWidget:
         <em>"Either gonna work or blow up!" - You asked for it! 😄</em>
         </div>
         """)
-        
+
         # Add warning to the container
         if len(self.advanced_container.children) == 4:  # Only add once
             self.advanced_container.children = [warning] + list(self.advanced_container.children)
-    
+
     def _get_experimental_features(self):
         """Collect experimental feature settings"""
         if hasattr(self, 'experimental_options'):
@@ -903,9 +1027,51 @@ class TrainingWidget:
             return features
         return {}
 
+    def _refresh_model_list(self):
+        """Scan pretrained_model directory and populate dropdown"""
+        try:
+            import glob
+
+            # Look for models in common locations
+            search_paths = [
+                "pretrained_model/*.safetensors",
+                "pretrained_model/*.ckpt",
+                "pretrained_model/*.pth",
+                "models/*.safetensors",
+                "models/*.ckpt",
+                "*/pretrained_model/*.safetensors",  # Check subdirectories
+            ]
+
+            found_models = []
+            for pattern in search_paths:
+                found_models.extend(glob.glob(pattern))
+
+            # Remove duplicates and sort
+            found_models = sorted(list(set(found_models)))
+
+            if found_models:
+                # Create dropdown options with friendly names
+                options = [('Select a model...', '')]
+                for model_path in found_models:
+                    model_name = os.path.basename(model_path)
+                    # Truncate long names for dropdown display
+                    display_name = model_name if len(model_name) <= 50 else model_name[:47] + "..."
+                    options.append((display_name, model_path))
+
+                self.model_dropdown.options = options
+                print(f"✅ Found {len(found_models)} models in pretrained_model directory")
+            else:
+                self.model_dropdown.options = [('No models found - use custom path below', '')]
+                print("📁 No models found in pretrained_model/ directory")
+                print("💡 Place your .safetensors/.ckpt files in pretrained_model/ folder or use custom path")
+
+        except Exception as e:
+            print(f"⚠️ Error scanning for models: {e}")
+            self.model_dropdown.options = [('Error scanning - use custom path', '')]
+
     def display(self):
         display(self.widget_box)
-        
+
         # Make this training widget globally available for the monitor widget
         import __main__
         __main__.training_widget = self
