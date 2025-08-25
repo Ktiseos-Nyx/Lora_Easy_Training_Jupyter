@@ -1472,7 +1472,7 @@ class DatasetManager:
 
         return True
 
-    def display_dataset_tags(self, dataset_dir, max_files=20):
+    def display_dataset_tags(self, dataset_dir, max_files=100):
         """Display the generated tags/captions for review (simple text display)"""
         if not os.path.exists(dataset_dir):
             print(f"❌ Dataset directory not found: {dataset_dir}")

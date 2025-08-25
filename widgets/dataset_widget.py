@@ -273,23 +273,7 @@ class DatasetWidget:
             self.dataset_output
         ])
 
-        # Add FiftyOne integration button
-        self.fiftyone_explorer_button = widgets.Button(
-            description="🔍 Open Visual Explorer",
-            button_style='info',
-            layout=widgets.Layout(width='99%')
-        )
-        self.fiftyone_explorer_button.on_click(self.launch_fiftyone_explorer)
-
-        # Add Apply Curation Changes button
-        self.apply_curation_button = widgets.Button(
-            description="💾 Apply Curation Changes",
-            button_style='success',
-            layout=widgets.Layout(width='99%')
-        )
-        self.apply_curation_button.on_click(self.apply_fiftyone_curation)
-
-        dataset_setup_box.children = list(dataset_setup_box.children) + [self.fiftyone_explorer_button, self.apply_curation_button]
+        # FiftyOne integration buttons REMOVED - feature on pause
 
         # --- File Renaming Section ---
         rename_desc = widgets.HTML("""<h3>📝 File Renaming</h3>
@@ -1261,134 +1245,8 @@ class DatasetWidget:
                 # Update status to show detection
                 self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔍 Status:</strong> Auto-detected dataset folder '{most_recent}'. Select files to upload here.</div>"
 
-    def launch_fiftyone_explorer(self, b):
-        """Launch FiftyOne dataset explorer in sidecar"""
-        dataset_path = self.dataset_directory.value
-        if not dataset_path or not os.path.exists(dataset_path):
-            print("❌ Please set up a dataset first")
-            return
-
-        # Check for sidecar availability first
-        try:
-            from sidecar import Sidecar
-            has_sidecar = True
-        except ImportError:
-            has_sidecar = False
-            print("⚠️ Sidecar not available - FiftyOne will open in browser tab")
-            print("   Install with: pip install sidecar")
-
-        try:
-            import fiftyone as fo
-
-            # Create dataset
-            print("📁 Loading dataset for FiftyOne...")
-            dataset = self.manager.create_fiftyone_dataset(dataset_path)
-            print(f"✅ Dataset loaded: {len(dataset)} images")
-
-            if has_sidecar:
-                # Use sidecar integration
-                print("🔧 Opening FiftyOne in Jupyter sidecar...")
-
-                # Create the sidecar
-                self.fiftyone_sidecar = Sidecar(
-                    title='🔍 Dataset Explorer - FiftyOne',
-                    anchor='split-right'
-                )
-
-                # Launch FiftyOne session in sidecar context
-                with self.fiftyone_sidecar:
-                    session = fo.launch_app(dataset, auto=False, height=800)
-                    self.current_fo_session = session  # Store for curation
-
-                print("✅ FiftyOne launched in sidecar panel!")
-                print("   Use the panel on the right to explore your dataset")
-
-            else:
-                # Fallback to browser-based launch
-                print("🌐 Opening FiftyOne in browser...")
-                session = fo.launch_app(dataset, auto=True)
-                self.current_fo_session = session
-                print("✅ FiftyOne launched in browser tab")
-
-            # Add optional analysis (using real data structure)
-            try:
-                print("📊 Running dataset analysis...")
-
-                # Basic stats
-                print(f"   📁 Total images: {len(dataset)}")
-
-                # Check for captions
-                captioned_samples = 0
-                total_tags = 0
-                trigger_words = set()
-
-                for sample in dataset:
-                    if hasattr(sample, 'tag_count') and sample.tag_count > 0:
-                        captioned_samples += 1
-                        total_tags += sample.tag_count
-                    if hasattr(sample, 'trigger_word') and sample.trigger_word:
-                        trigger_words.add(sample.trigger_word)
-
-                print(f"   📝 Captioned images: {captioned_samples}/{len(dataset)} ({captioned_samples/len(dataset)*100:.1f}%)")
-                print(f"   🏷️ Total tags: {total_tags}")
-                print(f"   🎯 Unique triggers: {len(trigger_words)}")
-
-                # Show trigger words
-                if trigger_words:
-                    print("   🔥 Trigger words found:")
-                    for trigger in sorted(trigger_words):
-                        print(f"      - {trigger}")
-
-                # Show top tags if available
-                if len(dataset) > 0:
-                    first_sample = dataset.first()
-                    if hasattr(first_sample, 'wd14_tags') and first_sample.wd14_tags:
-                        print("   ✅ WD14 tags loaded and available for editing")
-                    else:
-                        print("   ℹ️ No WD14 tags found - may need to run tagging first")
-
-            except Exception as e:
-                print(f"   ⚠️ Analysis failed: {e}")
-
-        except ImportError:
-            print("❌ FiftyOne not available. Install with:")
-            print("   pip install fiftyone")
-        except Exception as e:
-            print(f"❌ Failed to launch FiftyOne: {e}")
-            print(f"   Error details: {str(e)}")
-
-    def apply_fiftyone_curation(self, b):
-        """Apply changes made in FiftyOne back to the local dataset."""
-        dataset_path = self.dataset_directory.value
-        if not dataset_path or not os.path.exists(dataset_path):
-            print("❌ Please set up a dataset first")
-            return
-
-        # Check if we have an active FiftyOne session
-        if not hasattr(self, 'current_fo_session') or self.current_fo_session is None:
-            print("❌ No active FiftyOne session found")
-            print("   Please launch the FiftyOne Explorer first")
-            return
-
-        print("💾 Applying FiftyOne curation changes to local dataset...")
-        try:
-            # Get the current dataset from the session
-            dataset = self.current_fo_session.dataset
-            print(f"📊 Processing {len(dataset)} samples...")
-
-            # This will call the new method in DatasetManager with FiftyOne dataset
-            success = self.manager.apply_curation_to_dataset(dataset_path, fiftyone_dataset=dataset)
-            if success:
-                print("✅ Curation changes applied successfully!")
-                print("🔄 Changes applied:")
-                print("   - Updated captions from FiftyOne edits")
-                print("   - Synced tag modifications")
-                print("   - Applied any sample filtering")
-            else:
-                print("❌ Failed to apply curation changes.")
-        except Exception as e:
-            print(f"❌ Error applying curation: {e}")
-            print("   Make sure FiftyOne Explorer is open and contains your dataset")
+    # FiftyOne methods REMOVED - feature on pause
+    # def launch_fiftyone_explorer() and def apply_fiftyone_curation() removed
 
     def run_gallery_dl_scraper(self, b):
         """Handle image scraping using gallery-dl"""

@@ -428,46 +428,44 @@ class UnifiedInstaller:
             # Find available CUDA libraries - check for both libcublas and libcublasLt
             import glob
             
-            # Check for both library types that ONNX needs
-            cublas_libs = glob.glob(f"{cuda_lib_dir}/libcublas.so.*")
-            cublaslt_libs = glob.glob(f"{cuda_lib_dir}/libcublasLt.so.*")
+            # Check for all CUDA library types that ONNX needs
+            cuda_libraries = {
+                'libcublas': glob.glob(f"{cuda_lib_dir}/libcublas.so.*"),
+                'libcublasLt': glob.glob(f"{cuda_lib_dir}/libcublasLt.so.*"), 
+                'libcufft': glob.glob(f"{cuda_lib_dir}/libcufft.so.*"),
+                'libcurand': glob.glob(f"{cuda_lib_dir}/libcurand.so.*"),
+                'libcusparse': glob.glob(f"{cuda_lib_dir}/libcusparse.so.*"),
+                'libcusolver': glob.glob(f"{cuda_lib_dir}/libcusolver.so.*")
+            }
             
-            if not cublas_libs and not cublaslt_libs:
-                self.logger.info("No libcublas or libcublasLt libraries found. Skipping symlink fix.")
-                print("   - No CUDA BLAS libraries found. Skipping.")
+            # Check if any libraries were found
+            found_libraries = {name: libs for name, libs in cuda_libraries.items() if libs}
+            if not found_libraries:
+                self.logger.info("No CUDA libraries found for ONNX symlink fix. Skipping.")
+                print("   - No CUDA libraries found. Skipping.")
                 return True
             
             created_links = []
             
-            # Handle regular libcublas (the one causing the error!)
-            if cublas_libs:
-                cublas_libs.sort(reverse=True)
-                latest_cublas = cublas_libs[0]
-                version = latest_cublas.split('.so.')[-1] if '.so.' in latest_cublas else 'unknown'
-                print(f"   - Found libcublas version {version}")
-                
-                cublas_targets = [
-                    f"{cuda_lib_dir}/libcublas.so.11",
-                    f"{cuda_lib_dir}/libcublas.so.12", 
-                    "/usr/lib/x86_64-linux-gnu/libcublas.so.11",
-                    "/usr/lib/x86_64-linux-gnu/libcublas.so.12"
-                ]
-                created_links.extend(self._create_cuda_symlinks(latest_cublas, cublas_targets))
+            # ONNX commonly needed version targets (10, 11, 12 covers most cases)
+            common_versions = ['10', '11', '12']
             
-            # Handle libcublasLt  
-            if cublaslt_libs:
-                cublaslt_libs.sort(reverse=True)
-                latest_cublaslt = cublaslt_libs[0]
-                version = latest_cublaslt.split('.so.')[-1] if '.so.' in latest_cublaslt else 'unknown'
-                print(f"   - Found libcublasLt version {version}")
+            # Process each library type dynamically
+            for lib_name, lib_files in found_libraries.items():
+                lib_files.sort(reverse=True)  # Get latest version
+                latest_lib = lib_files[0]
+                version = latest_lib.split('.so.')[-1] if '.so.' in latest_lib else 'unknown'
+                print(f"   - Found {lib_name} version {version}")
                 
-                cublaslt_targets = [
-                    f"{cuda_lib_dir}/libcublasLt.so.11",
-                    f"{cuda_lib_dir}/libcublasLt.so.12", 
-                    "/usr/lib/x86_64-linux-gnu/libcublasLt.so.11",
-                    "/usr/lib/x86_64-linux-gnu/libcublasLt.so.12"
-                ]
-                created_links.extend(self._create_cuda_symlinks(latest_cublaslt, cublaslt_targets))
+                # Generate symlink targets for this library
+                targets = []
+                for ver in common_versions:
+                    targets.extend([
+                        f"{cuda_lib_dir}/{lib_name}.so.{ver}",
+                        f"/usr/lib/x86_64-linux-gnu/{lib_name}.so.{ver}"
+                    ])
+                
+                created_links.extend(self._create_cuda_symlinks(latest_lib, targets))
             
             if created_links:
                 self.logger.info(f"Created {len(created_links)} CUDA symlinks for ONNX compatibility")
