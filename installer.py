@@ -425,78 +425,103 @@ class UnifiedInstaller:
                 print("   - No CUDA installation detected. Skipping.")
                 return True
                 
-            # Find available CUDA libraries
+            # Find available CUDA libraries - check for both libcublas and libcublasLt
             import glob
-            cublas_libs = glob.glob(f"{cuda_lib_dir}/libcublasLt.so.*")
-            if not cublas_libs:
-                self.logger.info("No libcublasLt libraries found. Skipping symlink fix.")
-                print("   - No libcublasLt libraries found. Skipping.")
+            
+            # Check for both library types that ONNX needs
+            cublas_libs = glob.glob(f"{cuda_lib_dir}/libcublas.so.*")
+            cublaslt_libs = glob.glob(f"{cuda_lib_dir}/libcublasLt.so.*")
+            
+            if not cublas_libs and not cublaslt_libs:
+                self.logger.info("No libcublas or libcublasLt libraries found. Skipping symlink fix.")
+                print("   - No CUDA BLAS libraries found. Skipping.")
                 return True
-                
-            # Sort to get the highest version (should be most recent)
-            cublas_libs.sort(reverse=True)
-            latest_cublas = cublas_libs[0]
-            
-            # Extract version for logging
-            version = latest_cublas.split('.so.')[-1] if '.so.' in latest_cublas else 'unknown'
-            
-            # Common symlink targets that ONNX Runtime looks for
-            symlink_targets = [
-                f"{cuda_lib_dir}/libcublasLt.so.11",
-                f"{cuda_lib_dir}/libcublasLt.so.12", 
-                "/usr/lib/x86_64-linux-gnu/libcublasLt.so.11",
-                "/usr/lib/x86_64-linux-gnu/libcublasLt.so.12"
-            ]
             
             created_links = []
             
-            for target in symlink_targets:
-                try:
-                    # Skip if symlink already exists and points correctly
-                    if os.path.islink(target):
-                        if os.readlink(target) == latest_cublas:
-                            print(f"   ✅ Symlink already exists: {target} -> {latest_cublas}")
-                            continue
-                        else:
-                            # Remove bad symlink
-                            os.unlink(target)
-                            
-                    # Skip if regular file exists (don't overwrite)
-                    if os.path.exists(target) and not os.path.islink(target):
-                        print(f"   - Regular file exists, skipping: {target}")
-                        continue
-                        
-                    # Create directory if needed (for /usr/lib paths)
-                    target_dir = os.path.dirname(target)
-                    if not os.path.exists(target_dir):
-                        print(f"   - Directory {target_dir} doesn't exist, skipping symlink")
-                        continue
-                        
-                    # Create symlink
-                    os.symlink(latest_cublas, target)
-                    created_links.append(target)
-                    print(f"   ✅ Created symlink: {target} -> {latest_cublas}")
-                    
-                except PermissionError:
-                    print(f"   ⚠️ Permission denied creating symlink: {target}")
-                    continue
-                except Exception as e:
-                    print(f"   ⚠️ Failed to create symlink {target}: {e}")
-                    continue
+            # Handle regular libcublas (the one causing the error!)
+            if cublas_libs:
+                cublas_libs.sort(reverse=True)
+                latest_cublas = cublas_libs[0]
+                version = latest_cublas.split('.so.')[-1] if '.so.' in latest_cublas else 'unknown'
+                print(f"   - Found libcublas version {version}")
+                
+                cublas_targets = [
+                    f"{cuda_lib_dir}/libcublas.so.11",
+                    f"{cuda_lib_dir}/libcublas.so.12", 
+                    "/usr/lib/x86_64-linux-gnu/libcublas.so.11",
+                    "/usr/lib/x86_64-linux-gnu/libcublas.so.12"
+                ]
+                created_links.extend(self._create_cuda_symlinks(latest_cublas, cublas_targets))
+            
+            # Handle libcublasLt  
+            if cublaslt_libs:
+                cublaslt_libs.sort(reverse=True)
+                latest_cublaslt = cublaslt_libs[0]
+                version = latest_cublaslt.split('.so.')[-1] if '.so.' in latest_cublaslt else 'unknown'
+                print(f"   - Found libcublasLt version {version}")
+                
+                cublaslt_targets = [
+                    f"{cuda_lib_dir}/libcublasLt.so.11",
+                    f"{cuda_lib_dir}/libcublasLt.so.12", 
+                    "/usr/lib/x86_64-linux-gnu/libcublasLt.so.11",
+                    "/usr/lib/x86_64-linux-gnu/libcublasLt.so.12"
+                ]
+                created_links.extend(self._create_cuda_symlinks(latest_cublaslt, cublaslt_targets))
             
             if created_links:
                 self.logger.info(f"Created {len(created_links)} CUDA symlinks for ONNX compatibility")
                 print(f"   🎉 Created {len(created_links)} CUDA symlinks for ONNX compatibility")
+                return True
             else:
-                print(f"   - Found CUDA {version}, no symlinks needed or possible")
+                print(f"   - All symlinks already exist or no symlinks needed")
+                return True
                 
-            return True
-            
         except Exception as e:
             error_msg = f"Error fixing CUDA symlinks: {e}"
             self.logger.error(error_msg)
             print(f"   ❌ {error_msg}")
             return False
+
+    def _create_cuda_symlinks(self, source_lib, target_list):
+        """Helper function to create CUDA library symlinks"""
+        created_links = []
+        
+        for target in target_list:
+            try:
+                # Skip if symlink already exists and points correctly
+                if os.path.islink(target):
+                    if os.readlink(target) == source_lib:
+                        print(f"   ✅ Symlink already exists: {target} -> {source_lib}")
+                        continue
+                    else:
+                        # Remove bad symlink
+                        os.unlink(target)
+                        
+                # Skip if regular file exists (don't overwrite)
+                if os.path.exists(target) and not os.path.islink(target):
+                    print(f"   - Regular file exists, skipping: {target}")
+                    continue
+                    
+                # Create directory if needed (for /usr/lib paths)
+                target_dir = os.path.dirname(target)
+                if not os.path.exists(target_dir):
+                    print(f"   - Directory {target_dir} doesn't exist, skipping symlink")
+                    continue
+                    
+                # Create symlink
+                os.symlink(source_lib, target)
+                created_links.append(target)
+                print(f"   ✅ Created symlink: {target} -> {source_lib}")
+                
+            except PermissionError:
+                print(f"   ⚠️ Permission denied creating symlink: {target}")
+                continue
+            except Exception as e:
+                print(f"   ⚠️ Failed to create symlink {target}: {e}")
+                continue
+        
+        return created_links
 
     def run_installation(self):
         """Run the complete installation process"""

@@ -3,6 +3,8 @@
 # Contributors: See README.md Credits section for full acknowledgements
 
 # widgets/utilities_widget.py
+import os
+import time
 import ipywidgets as widgets
 from IPython.display import display
 

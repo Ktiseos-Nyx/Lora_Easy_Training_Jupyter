@@ -6,6 +6,7 @@
 import os
 import re
 import threading
+import time
 
 import ipywidgets as widgets
 from IPython.display import Image as IPImage
@@ -38,6 +39,9 @@ class TrainingMonitorWidget:
         self.current_step = 0
         self.total_steps = 0
         self.training_phase = "Initializing..."
+        self._last_checkpoint_time = None
+        self._completion_check_timer = None
+        self._is_final_epoch = False
 
         # Inference parameters
         self.sample_prompt = ""
@@ -162,13 +166,7 @@ class TrainingMonitorWidget:
             )
         )
 
-        # Sample generation button
-        self.view_samples_button = widgets.Button(
-            description="🖼️ View Latest Samples",
-            button_style='info',
-            layout=widgets.Layout(width='200px')
-        )
-        self.view_samples_button.on_click(lambda b: self.generate_and_display_samples())
+        # Sample generation button - REMOVED (inference disabled)
 
         # Auto-save status (fix theme colors)
         self.autosave_status = widgets.HTML(
@@ -187,7 +185,6 @@ class TrainingMonitorWidget:
             self.resource_info,
             widgets.HTML("<h4>📋 Training Log</h4>"),
             self.training_log,
-            self.view_samples_button,
             self.autosave_status
         ])
 
@@ -420,39 +417,29 @@ class TrainingMonitorWidget:
             self.update_phase("Creating resolution buckets...", "info")
         elif "start training" in line.lower():
             self.update_phase("Training started!", "success")
-        elif "epoch" in line.lower() and "step" in line.lower():
-            # Try to parse epoch/step from training output
-            epoch_match = re.search(r'epoch[:\s]+(\d+)', line.lower())
+        elif "epoch" in line.lower() and ("step" in line.lower() or "epoch is incremented" in line.lower()):
+            # Parse Kohya's dual-epoch format: "current_epoch: 0, epoch: 3"
+            current_epoch_match = re.search(r'current_epoch:\s*(\d+)', line)
+            epoch_match = re.search(r'epoch:\s*(\d+)', line)
             step_match = re.search(r'step[:\s]+(\d+)', line.lower())
-
+            
+            # Use the more reliable epoch number (the one starting)
             if epoch_match:
-                current_epoch = int(epoch_match.group(1))
-
-                # Check if epoch has just completed and samples are enabled
-                if current_epoch > self.current_epoch and self.sample_num_images > 0:
-                    print(f"\n🎉 Epoch {self.current_epoch} completed! Generating and displaying samples...")
-                    self.view_samples_button.disabled = True # Disable while generating
-                    self.view_samples_button.description = "🖼️ Generating..."
-
-                    # Define a callback to re-enable the button
-                    def on_generation_complete():
-                        self.view_samples_button.disabled = False
-                        self.view_samples_button.description = "🖼️ View Latest Samples"
-                        print("✅ Sample generation complete. Click 'View Latest Samples' to see results.")
-
-                    # Call the inference function in a separate thread to not block training log
-                    threading.Thread(target=self.generate_and_display_samples, args=(on_generation_complete,)).start()
-
-                # Try to extract total epochs from line or use stored value
-                total_match = re.search(r'epoch[:\s]+\d+[/\\s]+(\d+)', line.lower())
-                if total_match:
-                    total_epochs = int(total_match.group(1))
-                    self.update_epoch_progress(current_epoch, total_epochs)
+                epoch_starting = int(epoch_match.group(1))
+                
+                # Check if we're starting the final epoch
+                if epoch_starting >= self.total_epochs and self.total_epochs > 0:
+                    self.update_phase(f"Starting final epoch ({epoch_starting}/{self.total_epochs})!", "warning")
+                    self._is_final_epoch = True
                 elif self.total_epochs > 0:
-                    self.update_epoch_progress(current_epoch, self.total_epochs)
-
-                self.update_phase(f"Training - Epoch {current_epoch}", "success")
-
+                    self.update_phase(f"Training - Epoch {epoch_starting}/{self.total_epochs}", "success")
+                    self._is_final_epoch = False
+                
+                # Update epoch progress using the starting epoch number
+                if self.total_epochs > 0:
+                    self.update_epoch_progress(epoch_starting, self.total_epochs)
+                    
+            # Handle step progress
             if step_match:
                 current_step = int(step_match.group(1))
                 # Calculate total steps from training config if available
@@ -464,11 +451,53 @@ class TrainingMonitorWidget:
                 self.update_step_progress(current_step, total_steps)
 
         elif "saving checkpoint" in line.lower() or "saved" in line.lower():
-            self.update_phase("Saving checkpoint...", "warning")
-        elif "training complete" in line.lower() or "finished" in line.lower():
+            # Check if this is the final checkpoint save
+            if self._is_final_epoch:
+                self.update_phase("Saving final checkpoint - Training completing! 🎉", "success")
+                # Cancel any existing timer since we know this is the end
+                if self._completion_check_timer:
+                    self._completion_check_timer.cancel()
+                self._training_completed()
+            else:
+                self.update_phase("Saving checkpoint...", "warning")
+            
+        elif ("training complete" in line.lower() or "finished" in line.lower() or 
+              "training finished" in line.lower() or "done" in line.lower() or
+              "training done" in line.lower() or "completed" in line.lower() or
+              "end of training" in line.lower() or "training ended" in line.lower()):
+            # Cancel completion timer since we got explicit completion
+            if self._completion_check_timer:
+                self._completion_check_timer.cancel()
             self.update_phase("Training completed successfully! 🎉", "success")
+            self._training_completed()
+            
         elif "error" in line.lower() or "failed" in line.lower():
+            if self._completion_check_timer:
+                self._completion_check_timer.cancel()
             self.update_phase("Training error occurred", "error")
+
+    def _check_training_completion(self):
+        """Check if training has completed based on time since last checkpoint"""
+        try:
+            # This runs 30 seconds after the last checkpoint save
+            # If no new logs have appeared, assume training completed
+            self.update_phase("Training completed successfully! 🎉", "success")
+            self._training_completed()
+        except Exception as e:
+            print(f"⚠️ Error in completion check: {e}")
+
+    def _training_completed(self):
+        """Handle training completion - re-enable buttons"""
+        try:
+            self.start_training_button.disabled = False
+            self.stop_training_button.disabled = True
+            # Update control status
+            self.control_status.value = (
+                "<div style='padding: 10px; border: 1px solid #28a745; border-radius: 5px; margin: 10px 0;'>"
+                "<strong>Status:</strong> 🎉 Training completed! You can start a new training session.</div>"
+            )
+        except Exception as e:
+            print(f"⚠️ Error in training completion handler: {e}")
 
     def clear_log(self):
         """Clear the training log"""

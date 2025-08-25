@@ -783,88 +783,97 @@ class DatasetWidget:
         
         def poll_file_upload():
             """Poll FileUpload widget for changes since observer isn't working"""
-            poll_count = 0
-            while True:
-                try:
-                    poll_count += 1
-                    current_files = self.file_upload.value
-                    current_count = len(current_files)
-                    current_names = {f['name'] for f in current_files} if current_files else set()
-                    
-                    # Removed heartbeat logging - it proved the thread works but spams logs
-                    # if poll_count % 10 == 0:
-                    #     logger.info(f"🔄 POLLING HEARTBEAT #{poll_count}: {current_count} files, widget_value={current_files}")
-                    
-                    # Check if files have changed
-                    if current_count != self._last_file_count or current_names != self._last_file_names:
-                        logger.info(f"🔄 POLLING DETECTED FILE CHANGE: {self._last_file_count} -> {current_count} files")
-                        logger.info(f"🔄 File names: {list(current_names)}")
+            try:
+                logger.info("🔄 POLLING THREAD STARTED: Entering main loop")
+                poll_count = 0
+                while True:
+                    try:
+                        poll_count += 1
+                        current_files = self.file_upload.value
+                        current_count = len(current_files)
+                        current_names = {f['name'] for f in current_files} if current_files else set()
                         
-                        # AUTO-UPLOAD: Bypass broken observer system entirely
-                        if current_count > 0:
-                            logger.info(f"🚀 AUTO-UPLOAD: Starting immediate upload of {current_count} files...")
+                        # Removed heartbeat logging - it proved the thread works but spams logs
+                        # if poll_count % 10 == 0:
+                        #     logger.info(f"🔄 POLLING HEARTBEAT #{poll_count}: {current_count} files, widget_value={current_files}")
+                        
+                        # Check if files have changed
+                        if current_count != self._last_file_count or current_names != self._last_file_names:
+                            logger.info(f"🔄 POLLING DETECTED FILE CHANGE: {self._last_file_count} -> {current_count} files")
+                            logger.info(f"🔄 File names: {list(current_names)}")
                             
-                            # Check if folder exists - ADD DETAILED DEBUGGING
-                            folder_path = self.dataset_directory.value.strip()
-                            logger.info(f"🔍 DEBUG: dataset_directory.value = '{self.dataset_directory.value}'")
-                            logger.info(f"🔍 DEBUG: folder_path after strip = '{folder_path}'") 
-                            logger.info(f"🔍 DEBUG: os.path.exists(folder_path) = {os.path.exists(folder_path) if folder_path else 'N/A - empty path'}")
-                            if folder_path:
-                                logger.info(f"🔍 DEBUG: os.path.abspath(folder_path) = '{os.path.abspath(folder_path)}'")
-                                logger.info(f"🔍 DEBUG: os.path.isdir(folder_path) = {os.path.isdir(folder_path)}")
-                            
-                            if folder_path and os.path.exists(folder_path):
-                                # Determine if ZIP or images
-                                is_zip_selected = any(f['name'].lower().endswith('.zip') for f in current_files)
+                            # AUTO-UPLOAD: Bypass broken observer system entirely
+                            if current_count > 0:
+                                logger.info(f"🚀 AUTO-UPLOAD: Starting immediate upload of {current_count} files...")
                                 
-                                if is_zip_selected:
-                                    logger.info(f"🚀 AUTO-UPLOAD: Detected ZIP file, uploading and extracting...")
-                                    # Use FileUploadManager for clean ZIP handling
-                                    zip_file = current_files[0]  # Should only be one ZIP
-                                    success, message = self.file_manager.upload_and_extract_zip(zip_file, folder_path)
-                                    self._update_upload_status(success, message)
-                                else:
-                                    logger.info(f"🚀 AUTO-UPLOAD: Detected image files, uploading...")
-                                    # Use FileUploadManager for clean image handling
-                                    success, message = self.file_manager.upload_images(current_files, folder_path)
-                                    self._update_upload_status(success, message)
+                                # Check if folder exists - ADD DETAILED DEBUGGING
+                                folder_path = self.dataset_directory.value.strip()
+                                logger.info(f"🔍 DEBUG: dataset_directory.value = '{self.dataset_directory.value}'")
+                                logger.info(f"🔍 DEBUG: folder_path after strip = '{folder_path}'") 
+                                logger.info(f"🔍 DEBUG: os.path.exists(folder_path) = {os.path.exists(folder_path) if folder_path else 'N/A - empty path'}")
+                                if folder_path:
+                                    logger.info(f"🔍 DEBUG: os.path.abspath(folder_path) = '{os.path.abspath(folder_path)}'")
+                                    logger.info(f"🔍 DEBUG: os.path.isdir(folder_path) = {os.path.isdir(folder_path)}")
+                                
+                                if folder_path and os.path.exists(folder_path):
+                                    # Determine if ZIP or images
+                                    is_zip_selected = any(f['name'].lower().endswith('.zip') for f in current_files)
                                     
-                                # Clear the widget immediately after triggering upload
-                                logger.info(f"🧹 AUTO-CLEAR: Clearing file widget after upload trigger")
-                                # Note: We clear in the upload method, not here to avoid race conditions
-                            else:
-                                if not folder_path:
-                                    logger.warning(f"🚀 AUTO-UPLOAD: No folder path set! dataset_directory.value is empty or None")
-                                elif not os.path.exists(folder_path):
-                                    logger.warning(f"🚀 AUTO-UPLOAD: Folder path '{folder_path}' does not exist on filesystem!")
-                                    logger.warning(f"🔍 DEBUG: Current working directory = '{os.getcwd()}'")
-                                    # List what IS in the current directory to help debug
-                                    try:
-                                        current_files_list = os.listdir('.')
-                                        logger.warning(f"🔍 DEBUG: Files in current dir: {current_files_list[:10]}")  # Show first 10
-                                    except Exception as e:
-                                        logger.warning(f"🔍 DEBUG: Could not list current directory: {e}")
+                                    if is_zip_selected:
+                                        logger.info(f"🚀 AUTO-UPLOAD: Detected ZIP file, uploading and extracting...")
+                                        # Use FileUploadManager for clean ZIP handling
+                                        zip_file = current_files[0]  # Should only be one ZIP
+                                        success, message = self.file_manager.upload_and_extract_zip(zip_file, folder_path)
+                                        self._update_upload_status(success, message)
+                                    else:
+                                        logger.info(f"🚀 AUTO-UPLOAD: Detected image files, uploading...")
+                                        # Use FileUploadManager for clean image handling
+                                        success, message = self.file_manager.upload_images(current_files, folder_path)
+                                        self._update_upload_status(success, message)
+                                        
+                                    # Clear the widget immediately after triggering upload
+                                    logger.info(f"🧹 AUTO-CLEAR: Clearing file widget after upload trigger")
+                                    # Note: We clear in the upload method, not here to avoid race conditions
                                 else:
-                                    logger.warning(f"🚀 AUTO-UPLOAD: Unknown folder validation issue!")
-                                # Still trigger observer for status updates
-                                change_event = {
-                                    'new': current_files,
-                                    'old': (),
-                                    'type': 'change',
-                                    'name': 'value',
-                                    'owner': self.file_upload
-                                }
-                                self.on_file_upload_change(change_event)
+                                    if not folder_path:
+                                        logger.warning(f"🚀 AUTO-UPLOAD: No folder path set! dataset_directory.value is empty or None")
+                                    elif not os.path.exists(folder_path):
+                                        logger.warning(f"🚀 AUTO-UPLOAD: Folder path '{folder_path}' does not exist on filesystem!")
+                                        logger.warning(f"🔍 DEBUG: Current working directory = '{os.getcwd()}'")
+                                        # List what IS in the current directory to help debug
+                                        try:
+                                            current_files_list = os.listdir('.')
+                                            logger.warning(f"🔍 DEBUG: Files in current dir: {current_files_list[:10]}")  # Show first 10
+                                        except Exception as e:
+                                            logger.warning(f"🔍 DEBUG: Could not list current directory: {e}")
+                                    else:
+                                        logger.warning(f"🚀 AUTO-UPLOAD: Unknown folder validation issue!")
+                                    # Still trigger observer for status updates
+                                    change_event = {
+                                        'new': current_files,
+                                        'old': (),
+                                        'type': 'change',
+                                        'name': 'value',
+                                        'owner': self.file_upload
+                                    }
+                                    self.on_file_upload_change(change_event)
+                            
+                            # Update tracking
+                            self._last_file_count = current_count
+                            self._last_file_names = current_names
                         
-                        # Update tracking
-                        self._last_file_count = current_count
-                        self._last_file_names = current_names
-                        
-                except Exception as e:
-                    logger.error(f"🔄 POLLING ERROR: {e}")
-                
-                # Poll every 2 seconds
-                time.sleep(2)
+                    except Exception as e:
+                        logger.error(f"🔄 POLLING ERROR: {e}")
+                        import traceback
+                        logger.error(f"🔄 POLLING TRACEBACK: {traceback.format_exc()}")
+                    
+                    # Poll every 2 seconds
+                    time.sleep(2)
+            
+            except Exception as e:
+                logger.error(f"🔥 POLLING THREAD CRASHED: {e}")
+                import traceback
+                logger.error(f"🔥 POLLING CRASH TRACEBACK: {traceback.format_exc()}")
         
         # Start polling in background thread
         polling_thread = threading.Thread(target=poll_file_upload, daemon=True)
