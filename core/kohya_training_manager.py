@@ -631,11 +631,46 @@ class KohyaTrainingManager:
             },
         }
 
+        # Ensure numeric values are properly typed for TOML
+        self._fix_numeric_types(toml_config)
+        
         with open(config_path, 'w') as f:
             toml.dump(toml_config, f)
 
         logger.info(f"Created config TOML: {config_path}")
         return config_path
+
+    def _fix_numeric_types(self, config_dict: Dict):
+        """
+        Recursively convert string representations of numbers to proper numeric types for TOML.
+        Prevents 'TypeError: full_like(): argument fill_value must be Number, not str'
+        """
+        numeric_fields = {
+            'min_snr_gamma', 'max_grad_norm', 'noise_offset', 'lr_warmup_ratio',
+            'learning_rate', 'text_encoder_lr', 'unet_lr', 'weight_decay',
+            'caption_dropout_rate', 'caption_tag_dropout_rate', 'keep_tokens',
+            'train_batch_size', 'gradient_accumulation_steps', 'max_train_epochs',
+            'save_every_n_epochs', 'keep_only_last_n_epochs', 'clip_skip',
+            'vae_batch_size', 'network_dim', 'network_alpha', 'conv_dim', 'conv_alpha'
+        }
+        
+        def convert_recursive(obj):
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if key in numeric_fields and value is not None:
+                        try:
+                            # Convert string numbers to proper numeric types
+                            if isinstance(value, str) and value.replace('.', '').replace('-', '').isdigit():
+                                obj[key] = float(value) if '.' in value else int(value)
+                        except (ValueError, AttributeError):
+                            pass  # Keep original value if conversion fails
+                    else:
+                        convert_recursive(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    convert_recursive(item)
+        
+        convert_recursive(config_dict)
 
     def create_dataset_toml(self, config: Dict) -> str:
         """

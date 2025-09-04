@@ -256,7 +256,44 @@ class UnifiedInstaller:
             install_cmd = self.get_install_command('-r', requirements_file)
             success = self.run_command(install_cmd, "Installing Python packages with pip (fallback)")
         
+        # Post-installation: Force correct CUDA 12 ONNX runtime
+        if success:
+            self.fix_onnx_runtime()
+        
         return success
+
+    def fix_onnx_runtime(self):
+        """Force install correct CUDA 12 ONNX runtime to prevent version conflicts"""
+        self.logger.info("🔧 Ensuring correct CUDA 12 ONNX runtime installation...")
+        print("🔧 Ensuring correct CUDA 12 ONNX runtime installation...")
+        
+        # Uninstall any existing onnxruntime packages to prevent conflicts
+        uninstall_cmd = [self.python_cmd, '-m', 'pip', 'uninstall', '-y', 'onnxruntime', 'onnxruntime-gpu']
+        self.run_command(uninstall_cmd, "Removing existing ONNX runtime packages")
+        
+        # Install correct CUDA 12 version
+        onnx_cmd = [
+            self.python_cmd, '-m', 'pip', 'install', 
+            'onnx==1.16.1',
+            'protobuf<4'
+        ]
+        
+        cuda12_cmd = [
+            self.python_cmd, '-m', 'pip', 'install',
+            '--extra-index-url', 'https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/',
+            'onnxruntime-gpu==1.17.1'
+        ]
+        
+        success = self.run_command(onnx_cmd, "Installing ONNX and protobuf")
+        if success:
+            success = self.run_command(cuda12_cmd, "Installing ONNX Runtime GPU with CUDA 12 support")
+            
+        if success:
+            self.logger.info("✅ ONNX runtime CUDA 12 installation completed successfully")
+            print("✅ ONNX runtime CUDA 12 installation completed successfully")
+        else:
+            self.logger.warning("⚠️ ONNX runtime installation encountered issues - will fallback to CPU")
+            print("⚠️ ONNX runtime installation encountered issues - will fallback to CPU")
 
     def check_system_dependencies(self):
         """Check and attempt to install required system packages like aria2c"""

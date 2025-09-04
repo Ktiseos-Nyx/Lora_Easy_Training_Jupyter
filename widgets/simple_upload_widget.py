@@ -109,16 +109,10 @@ class LocalFileUploader:
         )
 
         # --- Action Buttons ---
-        self.upload_button = Button(
-            description='⬆️ Upload Selected Files', 
-            button_style='success', 
-            tooltip='Start upload process', 
-            layout=Layout(width='auto', height='auto')
-        )
         self.clear_output_button = Button(
-            description='🧹 Clear Output Log', 
+            description='🧹 Clear Cache & Reset', 
             button_style='warning', 
-            tooltip='Clear the output log area', 
+            tooltip='Clear widget cache and reset selections (preserves folder)', 
             layout=Layout(width='auto')
         )
 
@@ -168,10 +162,40 @@ class LocalFileUploader:
 
     def _bind_events(self):
         self.directory_update_btn.on_click(self._update_directory_and_files)
-        self.upload_button.on_click(self._upload_files_handler)
-        self.clear_output_button.on_click(lambda _: self.output_area.clear_output(wait=True))
+        self.clear_output_button.on_click(self._clear_cache_and_reset)
         self.file_type_dropdown.observe(self._update_files, names='value')
         self.sort_by_dropdown.observe(self._update_files, names='value')
+
+    def _clear_cache_and_reset(self, _):
+        """
+        Cache cleaner that resets widget state without touching the destination folder.
+        Fixes the 'upload once' limitation by clearing all widget caches and selections.
+        """
+        # Clear output area
+        self.output_area.clear_output(wait=True)
+        
+        # Reset progress display
+        self.progress_display_box.layout.visibility = 'hidden'
+        self.progress_bar.value = 0
+        self.progress_percent_label.value = "0%"
+        self.current_file_label.value = "N/A"
+        self.file_count_label.value = "File 0/0"
+        
+        # Clear file selections but keep directory
+        self.file_picker_selectmultiple.value = ()  # Clear selections
+        
+        # Reset checkboxes to defaults (but preserve folder path!)
+        self.overwrite_checkbox.value = False
+        self.preserve_structure_checkbox.value = False
+        self.clear_after_checkbox.value = True
+        
+        # Force refresh file list to clear any cached state
+        self._update_files(None)
+        
+        # Provide feedback
+        with self.output_area:
+            print("🧹 Widget cache cleared! Ready for fresh uploads.")
+            print(f"📁 Destination folder preserved: {self.dest_folder_text.value}")
 
     def _update_directory_and_files(self, _):
         new_dir = self.directory_text.value.strip()
