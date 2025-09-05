@@ -906,22 +906,6 @@ class DatasetWidget:
         """Wrapper to handle async ZIP upload function"""
         asyncio.create_task(self.run_upload_zip(b))
 
-    def _reset_upload_cache(self, b):
-        """
-        Clear the FileUpload widget cache to allow multiple uploads.
-        Fixes the 'upload once' limitation by clearing file_upload.value.
-        """
-        self.file_upload.value = ()  # Clear the cached files
-        self.dataset_status.value = "🔄 Upload cache cleared! Ready for new uploads."
-        
-        # Clear output area for fresh start
-        self.dataset_output.clear_output()
-        
-        # Provide user feedback
-        with self.dataset_output:
-            print("🔄 Upload widget reset complete!")
-            print("📁 You can now select and upload new files.")
-            print("💡 The previous upload data has been cleared from memory.")
 
     async def run_upload_images(self, b):
         """Upload multiple images to the created folder with async batch processing"""
