@@ -6,6 +6,29 @@ A user-friendly LoRA training system powered by Kohya's proven training backend 
 |---|---|---|---|---|
 | ![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/badge/Discord-Join%20Our%20Server-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/HhBSM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a> |
 
+## 🧪 Experimental Branch Notice
+
+> **⚠️ You are on the `submodule-updates` branch - This is our experimental development branch!**
+>
+> This branch includes cutting-edge features and model support that may be unstable:
+> - 🔬 **FLUX training** (transformer-based diffusion)
+> - 🧬 **SD3/SD3.5 training** (advanced diffusion architecture)
+> - 🌟 **Lumina2 training** (NextDiT + Gemma2 text encoder)
+> - 🔧 **Latest bug fixes** and performance improvements
+> - ⚡ **Enhanced upload widgets** (fixed cache issues)
+>
+> **For stable training**, switch to the `unified` branch:
+> ```bash
+> git checkout unified
+> ```
+> 
+> **To use this experimental branch**:
+> ```bash
+> git checkout submodule-updates
+> # Run installer normally - it will set up the experimental environment
+> ./jupyter.sh
+> ```
+
 ## 🌟 Overview & Key Features
 
 - **What is this project?** A user-friendly LoRA training system based on KohyaSS, powered by interactive Jupyter widgets. Instead of typing lengthy Python commands, you get helpful widgets that walk you through each step. Works on your own local computer or rented GPU servers.
@@ -14,7 +37,7 @@ A user-friendly LoRA training system powered by Kohya's proven training backend 
     - **🧮 Training calculator**: Shows roughly how long training could take.
     - **🛠️ Easy setup**: Works with VastAI, RunPod, and local computers.
     - **📊 Dataset tools**: Auto-tag images, upload files, manage captions.
-    - **🚀 Multiple architectures**: SDXL, SD 1.5 (production-ready), plus experimental Flux & SD3 support with various optimizers and LoRA types.
+    - **🚀 Multiple architectures**: SDXL, SD 1.5 (production-ready), plus experimental FLUX, SD3, and Lumina2 support with various optimizers and LoRA types.
 
 <details><summary>What You Need</summary>
 
