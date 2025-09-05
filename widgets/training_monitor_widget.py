@@ -418,6 +418,7 @@ class TrainingMonitorWidget:
         elif "start training" in line.lower():
             self.update_phase("Training started!", "success")
         elif "epoch" in line.lower() and ("step" in line.lower() or "epoch is incremented" in line.lower()):
+            # PRIORITY: Epoch detection ALWAYS overrides other phases (like "Saving checkpoint")
             # Parse Kohya's dual-epoch format: "current_epoch: 0, epoch: 3"
             current_epoch_match = re.search(r'current_epoch:\s*(\d+)', line)
             epoch_match = re.search(r'epoch:\s*(\d+)', line)
@@ -459,7 +460,7 @@ class TrainingMonitorWidget:
                     self._completion_check_timer.cancel()
                 self._training_completed()
             else:
-                self.update_phase("Saving checkpoint...", "warning")
+                self.update_phase("Checkpoint saved ✅ - Continuing training...", "success")  # Brief success message that doesn't get stuck
             
         elif ("training complete" in line.lower() or "finished" in line.lower() or 
               "training finished" in line.lower() or "done" in line.lower() or
@@ -471,10 +472,21 @@ class TrainingMonitorWidget:
             self.update_phase("Training completed successfully! 🎉", "success")
             self._training_completed()
             
-        elif "error" in line.lower() or "failed" in line.lower():
+        # Better error vs warning detection
+        elif any(phrase in line.lower() for phrase in [
+            "training failed", "fatal error", "cuda out of memory", "error:", "exception:", 
+            "traceback", "failed to start", "cannot load", "file not found", "permission denied"
+        ]):
+            # These are actual errors that should stop training
             if self._completion_check_timer:
                 self._completion_check_timer.cancel()
             self.update_phase("Training error occurred", "error")
+        elif any(phrase in line.lower() for phrase in [
+            "warning:", "deprecated", "futurewarning", "userwarning", "ignore", 
+            "fallback", "not found (ignoring)"
+        ]):
+            # These are warnings - don't change phase, just note them
+            pass  # Let training continue, warnings are normal
 
     def _check_training_completion(self):
         """Check if training has completed based on time since last checkpoint"""

@@ -14,6 +14,7 @@ import math
 from huggingface_hub import HfApi, login
 
 from .managers import get_subprocess_environment
+from .logging_config import setup_logging
 
 
 class UtilitiesManager:
@@ -21,6 +22,9 @@ class UtilitiesManager:
         self.project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
         self.trainer_dir = os.path.join(self.project_root, "trainer")
         self.sd_scripts_dir = os.path.join(self.trainer_dir, "derrian_backend", "sd_scripts")
+        
+        # Initialize logging
+        self.logger = setup_logging("utilities_manager")
         
         # File types for enhanced uploader
         self.file_types = [
@@ -44,16 +48,22 @@ class UtilitiesManager:
 
     def get_files_in_directory(self, directory_path, file_extension, sort_by='name'):
         """Get list of files in directory with specified extension"""
+        self.logger.debug(f"Scanning directory: {directory_path} for *.{file_extension}")
+        
         if not os.path.isdir(directory_path):
+            self.logger.warning(f"Directory does not exist: {directory_path}")
             return []
         
         try:
             glob_pattern = f"*.{file_extension}"
             found_paths = list(Path(directory_path).glob(glob_pattern))
+            self.logger.debug(f"Glob pattern '{glob_pattern}' found {len(found_paths)} raw matches")
             
             valid_files_info = []
             for p in found_paths:
+                self.logger.debug(f"Checking file: {p} - is_file: {p.is_file()}, is_symlink: {p.is_symlink()}")
                 if p.is_symlink() or not p.is_file():
+                    self.logger.debug(f"Skipping {p} - failed file checks")
                     continue
                 
                 if sort_by == 'date':
@@ -68,9 +78,14 @@ class UtilitiesManager:
             else:  # 'name'
                 valid_files_info.sort(key=lambda item: item[1])
             
-            return [item[0] for item in valid_files_info]
+            final_list = [item[0] for item in valid_files_info]
+            self.logger.info(f"Final file list: {len(final_list)} files passed all checks")
+            self.logger.debug(f"Files: {[os.path.basename(f) for f in final_list]}")
+            
+            return final_list
         
         except Exception as e:
+            self.logger.error(f"Error scanning directory: {e}", exc_info=True)
             print(f"❌ Error listing files: {type(e).__name__} - {str(e)}")
             return []
 

@@ -9,6 +9,7 @@ import ipywidgets as widgets
 from IPython.display import display
 
 from core.utilities_manager import UtilitiesManager
+from core.logging_config import setup_logging
 
 
 class UtilitiesWidget:
@@ -18,6 +19,10 @@ class UtilitiesWidget:
             utilities_manager = UtilitiesManager()
 
         self.manager = utilities_manager
+        
+        # Initialize logging
+        self.logger = setup_logging("utilities_widget")
+        
         self.create_widgets()
 
     def create_widgets(self):
@@ -245,7 +250,10 @@ class UtilitiesWidget:
         file_extension = self.hf_file_type.value
         sort_by = self.hf_sort_by.value
         
+        self.logger.info(f"Refreshing file list: directory='{directory}', extension='{file_extension}', sort='{sort_by}'")
+        
         if not directory or not os.path.isdir(directory):
+            self.logger.warning(f"Invalid directory: {directory}")
             self.hf_file_list.options = []
             with self.hf_upload_output:
                 print(f"⚠️ Invalid directory: {directory}")
@@ -253,6 +261,10 @@ class UtilitiesWidget:
         
         files = self.manager.get_files_in_directory(directory, file_extension, sort_by)
         self.hf_file_list.options = files
+        
+        self.logger.info(f"File scan complete: found {len(files)} files")
+        if files:
+            self.logger.debug(f"Files found: {files}")
         
         with self.hf_upload_output:
             if files:
