@@ -19,6 +19,7 @@ A user-friendly LoRA training system powered by Kohya's proven training backend 
 >
 > **Setup for experimental features**:
 > ```bash
+> git checkout submodule-updates
 > # Run installer normally - it will set up the experimental environment
 > ./jupyter.sh
 > ```
