@@ -31,6 +31,12 @@ class UtilitiesWidget:
         # Repository configuration
         self.hf_token = widgets.Password(description="HF Write Token:", placeholder="HuggingFace Write API Token", layout=widgets.Layout(width='99%'))
         
+        hf_token_help = widgets.HTML("""
+        <div style='background: #fff3cd; padding: 8px; border-radius: 5px; margin: 5px 0;'>
+        🔑 Get your <strong>WRITE</strong> token <a href='https://huggingface.co/settings/tokens' target='_blank'>here</a>
+        </div>
+        """)
+        
         repo_config_box = widgets.HBox([
             widgets.VBox([
                 widgets.Label("Owner:"),
@@ -113,6 +119,7 @@ class UtilitiesWidget:
         hf_upload_box = widgets.VBox([
             upload_desc,
             self.hf_token,
+            hf_token_help,
             repo_config_box,
             self.hf_remote_folder,
             file_select_box,
