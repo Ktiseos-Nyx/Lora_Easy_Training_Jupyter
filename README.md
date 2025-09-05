@@ -40,6 +40,8 @@ A user-friendly LoRA training system powered by Kohya's proven training backend 
 - **GPU**: Nvidia (For built-in CUDA support) or AMD Cards for ROCm. (Future Support for ARC and otherwise coming)
 - **Python**: Version 3.10+ (3.10.6 recommended for maximum compatibility)
 - **Platform**: Windows or Linux based Operating Systems.
+
+**Windows Users:** If you encounter Rust compilation errors during safetensors installation, this is not related to our notebook setup. It's a common Python packaging issue on Windows. Feel free to reach out on our [Discord](https://discord.gg/HhBSM9gBY) for assistance - we're happy to help guide you through the solution!
 </details>
 
 ## 🚀 Quick Start (Installation & Setup)
