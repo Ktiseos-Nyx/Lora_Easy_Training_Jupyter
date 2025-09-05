@@ -17,14 +17,8 @@ A user-friendly LoRA training system powered by Kohya's proven training backend 
 > - 🔧 **Latest bug fixes** and performance improvements
 > - ⚡ **Enhanced upload widgets** (fixed cache issues)
 >
-> **For stable training**, switch to the `unified` branch:
+> **Setup for experimental features**:
 > ```bash
-> git checkout unified
-> ```
-> 
-> **To use this experimental branch**:
-> ```bash
-> git checkout submodule-updates
 > # Run installer normally - it will set up the experimental environment
 > ./jupyter.sh
 > ```
