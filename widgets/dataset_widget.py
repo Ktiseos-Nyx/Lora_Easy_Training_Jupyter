@@ -33,6 +33,8 @@ class DatasetWidget:
 
         self.manager = dataset_manager
         self.file_manager = file_upload_manager
+        # Race condition guard: prevent observer conflicts during programmatic changes
+        self._programmatic_change = False
         self.create_widgets()
 
     def create_widgets(self):
@@ -247,7 +249,7 @@ class DatasetWidget:
             if change['new'] == 'url':
                 self.url_method_box.layout.display = 'block'
                 self.upload_method_box.layout.display = 'none'
-                self.gelbooru_method_box.layout.display = 'none'
+                self.gallery_dl_method_box.layout.display = 'none'
             elif change['new'] == 'upload':
                 self.url_method_box.layout.display = 'none'
                 self.upload_method_box.layout.display = 'block'
@@ -750,6 +752,11 @@ class DatasetWidget:
     def on_file_upload_change(self, change):
         """Handle file upload selection changes"""
         try:
+            # Race condition guard: ignore programmatic changes (like cache resets)
+            if self._programmatic_change:
+                logger.debug("Ignoring programmatic file upload change to prevent race condition")
+                return
+                
             new_files = change.get('new', [])
             
             if new_files:  # Files have been selected
@@ -910,9 +917,16 @@ class DatasetWidget:
         """
         Clear the FileUpload widget cache to allow multiple uploads.
         Fixes the 'upload once' limitation by clearing file_upload.value.
+        Uses race condition guard to prevent observer conflicts.
         """
-        self.file_upload.value = ()  # Clear the cached files
-        self.dataset_status.value = "🔄 Upload cache cleared! Ready for new uploads."
+        # Set guard flag to prevent observer race condition
+        self._programmatic_change = True
+        try:
+            self.file_upload.value = ()  # Clear the cached files (won't trigger observer now)
+            self.dataset_status.value = "🔄 Upload cache cleared! Ready for new uploads."
+        finally:
+            # Always clear the guard flag even if something goes wrong
+            self._programmatic_change = False
         
         # Clear output area for fresh start
         self.dataset_output.clear_output()
@@ -937,33 +951,50 @@ class DatasetWidget:
             return
 
         upload_folder = self.dataset_directory.value
-        uploaded_files = self.file_upload.value
-        total_files = len(uploaded_files)
+        
+        # --- START OF FIX ---
+        # Eagerly and synchronously read all file data into a stable list.
+        # This is the critical step to avoid the race condition where the
+        # underlying memory buffer for `file_upload.value` is cleared.
+        captured_files = []
+        for file_info in self.file_upload.value:
+            captured_files.append({
+                'name': file_info['name'],
+                'content': file_info['content'].tobytes() # Read into bytes NOW
+            })
+        
+        # Now that we have the data, we can safely clear the widget.
+        # This provides immediate user feedback and prevents re-uploads.
+        # Use race condition guard to prevent observer conflicts
+        self._programmatic_change = True
+        try:
+            self.file_upload.value = ()
+        finally:
+            self._programmatic_change = False
+        # --- END OF FIX ---
+
+        total_files = len(captured_files)
         batch_size = 5  # Process 5 files at a time
 
         with self.dataset_output:
             uploaded_count = 0
             total_size = 0
 
-            print(f"📁 Uploading {total_files} images to: {upload_folder}")
+            print(f" Uploading {total_files} images to: {upload_folder}")
             print("="*60)
 
-            # Process files in batches
+            # Process files in batches from our captured list
             for i in range(0, total_files, batch_size):
-                batch = uploaded_files[i:i + batch_size]
+                batch = captured_files[i:i + batch_size]
                 batch_start = i + 1
                 batch_end = min(i + batch_size, total_files)
                 
-                # Update status for current batch
                 self.dataset_status.value = f"⚙️ Status: Processing batch {batch_start}-{batch_end} of {total_files} images..."
                 
-                for file_info in batch:
+                for file_data in batch:
                     try:
-                        filename = file_info['name']
-                        content_memview = file_info['content']
-
-                        # Convert memory view to bytes
-                        content = content_memview.tobytes()
+                        filename = file_data['name']
+                        content = file_data['content'] # Use the captured bytes
 
                         if not content:
                             print(f"⚠️ Warning: {filename} has no content, skipping")
@@ -971,7 +1002,6 @@ class DatasetWidget:
 
                         file_path = os.path.join(upload_folder, filename)
 
-                        # Write file content
                         with open(file_path, 'wb') as f:
                             f.write(content)
 
@@ -984,20 +1014,16 @@ class DatasetWidget:
                     except Exception as e:
                         print(f"❌ Failed to upload {filename if 'filename' in locals() else 'unknown file'}: {e}")
 
-                # Yield control back to the event loop after each batch
-                await asyncio.sleep(0)
+                await asyncio.sleep(0) # Yield control after each batch
 
             total_size_mb = total_size / (1024 * 1024)
-            print("\n🎉 Upload complete!")
-            print(f"📊 Uploaded: {uploaded_count}/{total_files} images")
-            print(f"💾 Total size: {total_size_mb:.2f} MB")
-            print(f"📁 Location: {upload_folder}")
+            print("\n Upload complete!")
+            print(f" Uploaded: {uploaded_count}/{total_files} images")
+            print(f" Total size: {total_size_mb:.2f} MB")
+            print(f" Location: {upload_folder}")
 
             if uploaded_count > 0:
                 self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
-
-                # DISABLED: Auto-clear causes race condition where widget resets before user can upload
-                # self.file_upload.value = ()  # Users can manually reset if needed
             else:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
 
@@ -1015,22 +1041,34 @@ class DatasetWidget:
             return
 
         upload_folder = self.dataset_directory.value
-        uploaded_files = self.file_upload.value
-
-        # Find the first ZIP file in the uploaded files
-        zip_file_info = None
-        for file_info in uploaded_files:
+        
+        # --- START OF FIX ---
+        # Find the first ZIP file and eagerly read its content.
+        zip_file_data = None
+        for file_info in self.file_upload.value:
             if file_info['name'].lower().endswith('.zip'):
-                zip_file_info = file_info
+                zip_file_data = {
+                    'name': file_info['name'],
+                    'content': file_info['content'].tobytes() # Read into bytes NOW
+                }
                 break
+        
+        # Safely clear the widget now that data is captured.
+        # Use race condition guard to prevent observer conflicts
+        self._programmatic_change = True
+        try:
+            self.file_upload.value = ()
+        finally:
+            self._programmatic_change = False
+        # --- END OF FIX ---
 
-        if not zip_file_info:
+        if not zip_file_data:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No ZIP file selected.</div>"
-            logger.warning("ZIP upload failed: no ZIP file selected")
+            logger.warning("ZIP upload failed: no ZIP file selected in the upload batch")
             return
 
-        zip_filename = zip_file_info['name']
-        zip_content = zip_file_info['content'].tobytes()
+        zip_filename = zip_file_data['name']
+        zip_content = zip_file_data['content']
 
         self.dataset_status.value = f"⚙️ Status: Uploading and extracting {zip_filename}..."
 
@@ -1038,33 +1076,30 @@ class DatasetWidget:
             temp_zip_path = os.path.join(upload_folder, zip_filename)
 
             try:
-                print(f"📦 Saving {zip_filename} to {temp_zip_path}")
+                print(f" Saving {zip_filename} to {temp_zip_path}")
                 with open(temp_zip_path, 'wb') as f:
                     f.write(zip_content)
 
                 print(f"✨ Extracting {zip_filename} to {upload_folder}")
+                # This part is synchronous, but we can still yield after for responsiveness
                 with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
                     zip_ref.extractall(upload_folder)
-                # Yield control during extraction
-                await asyncio.sleep(0)
+                
+                await asyncio.sleep(0) # Yield control
                 print("✅ Extraction complete.")
 
-                # Clean up the temporary zip file
                 os.remove(temp_zip_path)
-                print(f"🗑️ Removed temporary zip file: {temp_zip_path}")
+                print(f"️ Removed temporary zip file: {temp_zip_path}")
 
-                # Count images after extraction
                 try:
                     from core.image_utils import count_images_in_directory
                     image_count = count_images_in_directory(upload_folder)
-                    print(f"📁 Found {image_count} images in {upload_folder}")
+                    print(f" Found {image_count} images in {upload_folder}")
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}. Found {image_count} images.</div>"
                 except Exception as e:
                     print(f"⚠️ Image counting error: {e}")
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}.</div>"
 
-                # DISABLED: Auto-clear causes race condition where widget resets before user can upload
-                # self.file_upload.value = ()  # Users can manually reset if needed
                 self.upload_images_button.disabled = True
                 self.upload_zip_button.disabled = True
 
@@ -1077,8 +1112,12 @@ class DatasetWidget:
 
     def reset_upload_widget(self, b):
         """Reset the file upload widget to clear any cached state"""
-        # Clear the upload widget value
-        self.file_upload.value = ()
+        # Clear the upload widget value using race condition guard
+        self._programmatic_change = True
+        try:
+            self.file_upload.value = ()
+        finally:
+            self._programmatic_change = False
 
         # Reset button states
         self.upload_images_button.disabled = True
@@ -1639,8 +1678,12 @@ class DatasetWidget:
         """Update upload status widget with result message."""
         if success:
             self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {message}</div>"
-            # Clear the widget after successful upload
-            self.file_upload.value = ()
+            # Clear the widget after successful upload using race condition guard
+            self._programmatic_change = True
+            try:
+                self.file_upload.value = ()
+            finally:
+                self._programmatic_change = False
         else:
             self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> {message}</div>"
 

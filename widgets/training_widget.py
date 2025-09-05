@@ -67,12 +67,13 @@ class TrainingWidget:
                 self.model_path.value = change['new']
         self.model_dropdown.observe(on_model_selected, names='value')
 
-        # Flux/SD3 specific widgets
-        self.clip_l_path = widgets.Text(description="CLIP-L Path:", placeholder="Path to clip_l.safetensors", layout=widgets.Layout(width='99%'))
-        self.clip_g_path = widgets.Text(description="CLIP-G Path:", placeholder="Path to clip_g.safetensors (for SD3)", layout=widgets.Layout(width='99%'))
-        self.t5xxl_path = widgets.Text(description="T5-XXL Path:", placeholder="Path to t5xxl.safetensors", layout=widgets.Layout(width='99%'))
-        self.flux_sd3_widgets = widgets.VBox([self.clip_l_path, self.clip_g_path, self.t5xxl_path])
-        self.flux_sd3_widgets.layout.display = 'none' # Initially hidden
+        # Flux/SD3 specific widgets (individual widgets for better unified config integration)
+        self.clip_l_path = widgets.Text(description="CLIP-L Path:", placeholder="Path to clip_l.safetensors", layout=widgets.Layout(width='99%', display='none'))
+        self.clip_g_path = widgets.Text(description="CLIP-G Path:", placeholder="Path to clip_g.safetensors (for SD3)", layout=widgets.Layout(width='99%', display='none'))
+        self.t5xxl_path = widgets.Text(description="T5-XXL Path:", placeholder="Path to t5xxl.safetensors", layout=widgets.Layout(width='99%', display='none'))
+        # Legacy container for backward compatibility (but now empty)
+        self.flux_sd3_widgets = widgets.VBox([])
+        self.flux_sd3_widgets.layout.display = 'none'
 
         self.dataset_dir = widgets.Text(description="Dataset Dir:", placeholder="Absolute path to your dataset directory (e.g., /path/to/my_dataset)", layout=widgets.Layout(width='99%'))
         self.continue_from_lora = widgets.Text(description="Continue from LoRA:", placeholder="Absolute path to an existing LoRA to continue training (optional)", layout=widgets.Layout(width='99%'))
@@ -80,16 +81,20 @@ class TrainingWidget:
 
         def _on_model_type_change(change):
             if change['new'] in ['Flux', 'SD3']:
-                self.flux_sd3_widgets.layout.display = 'block'
+                self.clip_l_path.layout.display = 'block'
+                self.clip_g_path.layout.display = 'block'
+                self.t5xxl_path.layout.display = 'block'
             else:
-                self.flux_sd3_widgets.layout.display = 'none'
+                self.clip_l_path.layout.display = 'none'
+                self.clip_g_path.layout.display = 'none'
+                self.t5xxl_path.layout.display = 'none'
 
         self.model_type.observe(_on_model_type_change, names='value')
 
         # Model selection layout
         model_selection_box = widgets.HBox([self.model_dropdown, self.model_refresh_btn])
 
-        project_box = widgets.VBox([project_desc, self.project_name, self.model_type, model_selection_box, self.model_path, self.vae_path, self.flux_sd3_widgets, self.dataset_dir, self.continue_from_lora, self.wandb_key])
+        project_box = widgets.VBox([project_desc, self.project_name, self.model_type, model_selection_box, self.model_path, self.vae_path, self.clip_l_path, self.clip_g_path, self.t5xxl_path, self.dataset_dir, self.continue_from_lora, self.wandb_key])
 
         # --- Training Configuration (merged: Basic Settings + Learning Rate + Training Options) ---
         training_config_desc = widgets.HTML("""<h3>▶️ Training Configuration</h3>
@@ -229,10 +234,10 @@ class TrainingWidget:
             continuous_update=False
         )
         
-        # Loss section widgets
-        self.loss_type = widgets.Dropdown(options=['l2', 'huber'], value='l2', description='Loss Type:', style={'description_width': 'initial'})
-        self.huber_c = widgets.Text(value='0.1', description='Huber C:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        self.huber_schedule = widgets.Text(value='snr', description='Huber Schedule:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        # Loss section widgets - HUBER LOSS DELETED (was corrupting safetensors files)
+        # self.loss_type = widgets.Dropdown(options=['l2', 'huber'], value='l2', description='Loss Type:', style={'description_width': 'initial'})
+        # self.huber_c = widgets.Text(value='0.1', description='Huber C:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        # self.huber_schedule = widgets.Text(value='snr', description='Huber Schedule:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         # Training options widgets (no separate section header)
         self.zero_terminal_snr = widgets.Checkbox(value=False, description="Zero Terminal SNR (recommended for SDXL)", indent=False)
         self.enable_bucket = widgets.Checkbox(value=True, description="Enable Bucket (resolution bucketing)", indent=False)
@@ -324,6 +329,9 @@ class TrainingWidget:
         # Create unified training configuration box (combines ALL training settings)
         training_config_box = widgets.VBox([
             training_config_desc,
+            # Resume Training Settings
+            widgets.HTML("<h4>🔄 Resume Training Settings</h4><p>Continue from existing LoRA checkpoint.</p>"),
+            self.continue_from_lora,
             # Dataset and basic settings
             self.dataset_size, self.resolution, self.num_repeats, self.epochs, self.max_train_steps, self.train_batch_size, self.seed, self.step_calculator,
             self.flip_aug, self.shuffle_caption, self.keep_tokens, self.clip_skip,
@@ -334,9 +342,9 @@ class TrainingWidget:
             # Noise & stability (moved from advanced)
             self.min_snr_gamma_enabled, self.min_snr_gamma, self.ip_noise_gamma_enabled, self.ip_noise_gamma,
             self.multinoise, self.multires_noise_discount, self.noise_offset, self.adaptive_noise_scale,
-            # Loss configuration
-            widgets.HTML("<h4>📉 Loss Configuration</h4><p>Loss function settings for training stability.</p>"),
-            self.loss_type, self.huber_c, self.huber_schedule,
+            # Loss configuration - HUBER LOSS DELETED (was corrupting files)
+            # widgets.HTML("<h4>📉 Loss Configuration</h4><p>Loss function settings for training stability.</p>"),
+            # self.loss_type, self.huber_c, self.huber_schedule,
             # LoRA Structure (merged from separate section)
             widgets.HTML("<h4>🧩 LoRA Structure</h4><p><strong>16 dim/8 alpha</strong> balances capacity and stability (~100MB). Conv layers help with textures/details.</p>"),
             self.lora_type, self.network_dim, self.network_alpha, self.dim_from_weights, self.network_dropout, 
@@ -558,9 +566,10 @@ class TrainingWidget:
             'fused_back_pass': getattr(self, 'fused_back_pass', widgets.Checkbox(value=False)).value,
             'lycoris_method': getattr(self, 'lycoris_method', type('obj', (object,), {'value': 'none'})).value,
             # Loss configuration
-            'loss_type': self.loss_type.value,
-            'huber_c': self.huber_c.value,
-            'huber_schedule': self.huber_schedule.value,
+            # HUBER LOSS DELETED - was corrupting safetensors files 
+            # 'loss_type': self.loss_type.value,
+            # 'huber_c': self.huber_c.value,
+            # 'huber_schedule': self.huber_schedule.value,
         }
 
     def _convert_to_structured_config(self, flat_config):
@@ -677,15 +686,15 @@ class TrainingWidget:
                 if len(betas_part) >= 2:
                     optimizer_args_section["betas"] = f"{betas_part[0]},{betas_part[1]}" + (f",{betas_part[2]}" if len(betas_part) > 2 else "")
         
-        # Build loss_arguments section
-        loss_arguments_section = {}
-        if flat_config.get('loss_type') and flat_config.get('loss_type') != 'l2':
-            loss_arguments_section["loss_type"] = flat_config.get('loss_type')
-            if flat_config.get('loss_type') == 'huber':
-                if flat_config.get('huber_c'):
-                    loss_arguments_section["huber_c"] = flat_config.get('huber_c')
-                if flat_config.get('huber_schedule'):
-                    loss_arguments_section["huber_schedule"] = flat_config.get('huber_schedule')
+        # HUBER LOSS SECTION DELETED - was corrupting safetensors files during training
+        # loss_arguments_section = {}
+        # if flat_config.get('loss_type') and flat_config.get('loss_type') != 'l2':
+        #     loss_arguments_section["loss_type"] = flat_config.get('loss_type')
+        #     if flat_config.get('loss_type') == 'huber':
+        #         if flat_config.get('huber_c'):
+        #             loss_arguments_section["huber_c"] = flat_config.get('huber_c')
+        #         if flat_config.get('huber_schedule'):
+        #             loss_arguments_section["huber_schedule"] = flat_config.get('huber_schedule')
 
         structured_config = {
             "network_arguments": network_args,
@@ -772,8 +781,9 @@ class TrainingWidget:
             structured_config["network_args"] = network_args_section
         if optimizer_args_section:
             structured_config["optimizer_args"] = optimizer_args_section  
-        if loss_arguments_section:
-            structured_config["loss_arguments"] = loss_arguments_section
+        # HUBER LOSS SECTION DELETED - was corrupting safetensors files
+        # if loss_arguments_section:
+        #     structured_config["loss_arguments"] = loss_arguments_section
         
         # Include widget-only fields for monitor widget compatibility
         structured_config.update({
