@@ -1,6 +1,6 @@
 # LoRA Easy Training - Jupyter Widget Edition 🚀
 
-A user-friendly LoRA training system powered by Kohya's proven training backend and interactive Jupyter widgets. Features unified model detection and streamlined workflows for VastAI, RunPod, and local environments.
+A LoRA training system built on Derrian Distro & Kohya SS with interactive Jupyter widget interfaces. Supports local and cloud deployment on VastAI, RunPod, and similar platforms.
 
 | Python Version | License | Discord | Twitch | Support |
 |---|---|---|---|---|
@@ -12,16 +12,14 @@ A user-friendly LoRA training system powered by Kohya's proven training backend 
 >
 > This branch includes experimental features that are available in the Kohya backend but may not be fully tested in our setup:
 > - 🔬 **FLUX training** - Available in Kohya, integration status unknown
-> - 🧬 **SD3/SD3.5 training** - Available in Kohya, integration status unknown  
+> - 🧬 **SD3/SD3.5 training** - Available in Kohya, integration status unknown
 > - 🌟 **Lumina2 training** - Available in Kohya, integration status unknown
 > - 🔧 **Latest bug fixes** and performance improvements
 > - ⚡ **Enhanced upload widgets** (fixed cache issues)
->
-> **Note**: These experimental features exist in the underlying Kohya scripts but haven't been thoroughly tested with our widget system. Use at your own risk and expect possible issues.
+> - ⚡ **Language Cleanup** Cleaned up a lot of marketing speak and started the roadmap to check inconsistencies on missing content.
+> **Note**: These experimental features exist in the underlying Kohya scripts but haven't been thoroughly tested with our widget system. Use at your own risk and expect possible issues. If they look like they're exposed in our widget setup, there is no saying if they current work due to our unified setup. We're working on fast trying to figure out how this works and get functionality quickly.
 
 ## 🌟 Overview & Key Features
-
-A LoRA training system built on Kohya's proven training backend with interactive Jupyter widget interfaces. Supports local development and cloud deployment on VastAI, RunPod, and similar platforms.
 
 **Key Features:**
 - Widget-based configuration interface
@@ -31,46 +29,23 @@ A LoRA training system built on Kohya's proven training backend with interactive
 - Multiple LoRA variants and optimizers
 - Cross-platform compatibility
 
-<details><summary>What You Need</summary>
+## 🚀 Quick Start (Installation & Setup)
+
+**What You Need**
 
 - **GPU**: Nvidia (For built-in CUDA support) or AMD Cards for ROCm. (Future Support for ARC and otherwise coming)
 - **Python**: Version 3.10+ required
 - **Platform**: Windows or Linux based Operating Systems.
-
-**Windows Users:** If you encounter Rust compilation errors during safetensors installation, this is not related to our notebook setup. It's a common Python packaging issue on Windows. Feel free to reach out on our [Discord](https://discord.gg/HhBSM9gBY) for assistance - we're happy to help guide you through the solution!
-</details>
-
-## 🚀 Quick Start (Installation & Setup)
-
-Our trainer directly handles the task of installing major requirements depending on your environment.
-
-- **Note for Cloud Users**: If you are on platforms like Vast.AI or RunPod, Jupyter is often launched automatically after your instance starts. You can usually proceed directly to the "Usage Guide" once your environment is ready.
-
-<details><summary>📋 Installation Prerequisites</summary>
+-
+More details on installation can be found here [Quick Start Guide](docs/quickstart.md) or in our [Installation Setup](docs/guides/installation.md).
 
 You will need Git and Python 3.10+.
-
-**Check your Python version first:**
-
-```bash
-python --version
-# Need: Python 3.10+ required
-```
-
-You can install Python 3.10+ from Python's [main website here](https://www.python.org/downloads/).
-
-**Quick Git Check:**
-
-```bash
-git --version  # If this fails, install Git first
-```
+If you don't have python, you can install Python 3.10+ from Python's [main website here](https://www.python.org/downloads/). Our set up prefers 3.10.6 at a minimum.
 
 **Install Git if needed:**
 - **Windows**: Download from [git-scm.com](https://git-scm.com/download/win)
 - **Mac**: `xcode-select --install` in Terminal
 - **Linux**: `sudo apt install git` (Ubuntu/Debian)
-
-</details>
 
 **Main Installation Steps:**
 
@@ -112,12 +87,9 @@ For detailed workflow instructions, see our [Quick Start Guide](docs/quickstart.
 
 ## 🛠️ Troubleshooting & Support
 
-**Known Issues & Compatibility**:
+For more help and support please check [Troubleshooting](docs/guides/troubleshooting.md) this has more comprehensive information.
 
-- ⚠️ **Triton/ONNX Compatibility Warnings**: Docker/VastAI users may encounter issues with AdamW8bit optimizer.
-- ⚠️ **NO SUPPORT FOR LOCAL MACINTOSH ARM/M1-M4 MACHINES**
-- 🐛 **FileUpload Widget Issues**: In some container environments, the file upload widget may not respond to file selection. **Workaround**: Use the manual upload buttons or direct file copying to dataset directories.
-- 🔧 **CAME Optimizer Path Issues**: Due to container environment differences, you may need to manually edit the generated TOML config file. If training fails with "module 'LoraEasyCustomOptimizer' has no attribute 'CAME'", change `optimizer_type = "LoraEasyCustomOptimizer.CAME"` to `optimizer_type = "LoraEasyCustomOptimizer.came.CAME"` in your training config files.
+**Windows Users:** If you encounter Rust compilation errors during safetensors installation, this is not related to our notebook setup. It's a common Python packaging issue on Windows. Feel free to reach out on our [Discord](https://discord.gg/HhBSM9gBY) for assistance - we're happy to help guide you through the solution!
 
 **Getting Help**:
     - If you encounter issues or have questions, please:

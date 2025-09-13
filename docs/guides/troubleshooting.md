@@ -4,16 +4,23 @@ This guide provides solutions to the most common errors and issues you might enc
 
 ## Installation Issues
 
+### Rust/Cargo on Windows
+- **Cause**: Plausible Path issues on Windows, a tutorial is in the works to help users.
+- **Solution** Fix your Rust/Cargo paths.
+    1.Rust/Cargo Path Fixing is related to Safetensors in the Requirements.
+    2.This has only effected certain windows users.
+    3. A proper tutorial is in the works.
+
 ### "Module not found" errors
 - **Cause**: Python dependencies not properly installed
-- **Solution**: 
+- **Solution**:
   1. Re-run the installer: `python installer.py`
   2. Ensure you're using the correct Python version (3.10+)
   3. Check that you're in the project directory
 
-### "Jupyter not found" error  
+### "Jupyter not found" error
 - **Cause**: Jupyter Lab/Notebook not installed on system
-- **Solution**: 
+- **Solution**:
   1. Install Jupyter: `pip install jupyterlab` or `pip install notebook`
   2. Alternatively, use Anaconda which includes Jupyter
 
@@ -23,16 +30,6 @@ This guide provides solutions to the most common errors and issues you might enc
   1. Check internet connection
   2. Ensure sufficient disk space (15-20GB free)
   3. Try running installer again (it will resume downloads)
-
-### UV Package Manager Issues (Windows-specific)
-- **Error**: `Expected --hash, found --extra-index-url` or Rust compilation errors
-- **Cause**: UV on Windows is more aggressive about package detection and source compilation
-- **Why Windows-only**: UV behaves differently on Windows vs Linux/Mac for pyproject.toml handling
-- **Solution**: 
-  1. **Use pip instead**: The installer now defaults to pip (fixed in recent updates)
-  2. **If UV is forced**: Uninstall UV temporarily: `pip uninstall uv`
-  3. **Rust errors are false**: UV incorrectly tries to compile packages that have prebuilt wheels
-- **Note**: Linux/Mac users typically don't hit this issue; containerized environments (VastAI, RunPod) may have UV detection issues
 
 ## Training Errors
 
@@ -258,6 +255,18 @@ du -sh * | sort -hr
 2. **Smaller Datasets**: 15-20 images instead of 50+
 3. **Efficient Settings**: Use proven parameter combinations
 4. **Close Background Apps**: Maximize available resources
+
+## Current Bugs
+
+### Known Current Bugs
+
+**Known Issues & Compatibility**:
+
+- ⚠️ **Triton/Bits and Bytes**: Docker/VastAI users may encounter issues with AdamW8bit optimizer.
+- ⚠️ **NO SUPPORT FOR LOCAL MACINTOSH ARM/M1-M4 MACHINES**
+- ⚠️ **Onnx/CuDNN**: Some Machines still may encounter cuDNN compatibility issues, may be fixed on the current testing branch.
+- 🐛 **FileUpload Widget Issues**: In some container environments, the file upload widget may not respond to file selection. **Workaround**: Use the manual upload buttons or direct file copying to dataset directories.
+~~- 🔧 **CAME Optimizer Path Issues**: Due to container environment differences, you may need to manually edit the generated TOML config file. If training fails with "module 'LoraEasyCustomOptimizer' has no attribute 'CAME'", change `optimizer_type = "LoraEasyCustomOptimizer.CAME"` to `optimizer_type = "LoraEasyCustomOptimizer.came.CAME"` in your training config files.~~
 
 ## Getting Help
 

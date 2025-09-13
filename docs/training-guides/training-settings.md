@@ -1,6 +1,6 @@
 # Training Settings Reference
 
-These are starting point suggestions for different scenarios. Training is experimental - adjust based on your results and hardware.
+These are starting point suggestions for different scenarios. Training is experimental - adjust based on your results and hardware. Please note that training parameters have not been factored into this document guide as of yet, and training is an absolute art and always depends on what you're doing. If your system doesn't work with a specific setting always experiment.
 
 ## Suggested Starting Points by Dataset Size
 
@@ -10,7 +10,7 @@ These are starting point suggestions for different scenarios. Training is experi
 
 **Settings:**
 - Batch Size: 1-3
-- Epochs: 7-10  
+- Epochs: 7-10
 - Learning Rate: 5e-4 (UNet), 1e-4 (Text Encoder)
 - Memory Usage: 6-8GB VRAM
 - Training Time: 2-4 hours
