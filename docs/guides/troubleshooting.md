@@ -268,14 +268,81 @@ du -sh * | sort -hr
 - 🐛 **FileUpload Widget Issues**: In some container environments, the file upload widget may not respond to file selection. **Workaround**: Use the manual upload buttons or direct file copying to dataset directories.
 ~~- 🔧 **CAME Optimizer Path Issues**: Due to container environment differences, you may need to manually edit the generated TOML config file. If training fails with "module 'LoraEasyCustomOptimizer' has no attribute 'CAME'", change `optimizer_type = "LoraEasyCustomOptimizer.CAME"` to `optimizer_type = "LoraEasyCustomOptimizer.came.CAME"` in your training config files.~~
 
+## Support Guidelines & Boundaries
+
+### Before Asking for Help: Required Steps
+
+We're happy to help solve problems, but **effective troubleshooting requires your participation**. Please complete ALL basic steps before requesting assistance:
+
+#### ✅ **Required Information Checklist**
+- [ ] Full error message (copy the entire error, not just "it doesn't work")
+- [ ] System specifications (OS, Python version, GPU if applicable)
+- [ ] Exact steps you took that caused the issue
+- [ ] Output from basic diagnostic commands (see below)
+
+#### 🔍 **Basic Diagnostic Commands**
+When reporting path or file issues, run ALL of these commands and provide the output:
+
+```bash
+# Check your current location
+pwd
+
+# Check if your file exists (replace with your actual path)
+ls -la "/path/to/your/model.safetensors"
+
+# Check directory contents (replace with your directory)
+ls -la "/path/to/your/directory/"
+
+# Check Python version
+python --version
+```
+
+#### 🚫 **What We Cannot Help With**
+
+- **Incomplete troubleshooting**: "I tried one command and it didn't work"
+- **Vague descriptions**: "It's broken" without specifics
+- **Refusing to run diagnostic commands**: We need information to help you
+- **Cherry-picking instructions**: All troubleshooting steps must be completed in order
+- **Expecting magic solutions**: Some problems require effort on your part
+
+#### 💡 **Why These Requirements Exist**
+
+1. **Efficiency**: Proper information prevents back-and-forth guessing
+2. **Learning**: You understand your system better through troubleshooting
+3. **Community**: Clear questions help others with similar issues
+4. **Respect**: Our time is valuable too
+
+**Remember**: We want to help you succeed! These guidelines ensure we can provide effective assistance. 🎯
+
+---
+
 ## Getting Help
 
 ### Where to Get Support
 
-1. **Check Documentation**: Review relevant guides first
-2. **Discord Community**: Join for real-time help
-3. **GitHub Issues**: Report bugs and feature requests
-4. **Community Forums**: Civitai and Reddit communities
+#### ✅ **Official Support Channels (We Actually Monitor These!)**
+
+1. **GitHub Issues**: [Open an Issue](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/issues) - Best for bugs and feature requests
+2. **Our Discord**: [Join Here](https://discord.gg/HhBSM9gBY) - Real-time help and community support
+
+#### ❌ **Where We DON'T Provide Support**
+We cannot monitor every platform on the internet. Please DO NOT expect support on:
+- Random Discord servers (use OUR discord)
+- Reddit comments/DMs
+- Twitter/X mentions
+- Civitai comments
+- YouTube comments
+- Steam forums (seriously, we've seen this)
+- Your cousin's gaming Discord
+- Any platform not listed above
+
+#### 🎯 **Submodule Issues Exception**
+If your issue is clearly with a submodule component (sd-scripts, LyCORIS, etc.), you're welcome to:
+1. **Open an issue on the original repo** (kohya-ss/sd-scripts, KohakuBlueleaf/LyCORIS, etc.)
+2. **Mention you're using our integration** - totally fine to blame us! 😄
+3. **Cross-reference in our GitHub** if you want us to track it too
+
+**Why This Matters**: We're a small team and can't chase support requests across 20+ platforms. Centralizing support helps us actually help you!
 
 ### Information to Include When Asking for Help
 

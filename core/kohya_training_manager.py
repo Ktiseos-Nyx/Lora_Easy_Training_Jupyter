@@ -625,9 +625,16 @@ class KohyaTrainingManager:
                 # Caption handling
                 "caption_dropout_rate": config.get('caption_dropout_rate', 0.0),  # Widget provides this
                 "caption_tag_dropout_rate": config.get('caption_tag_dropout_rate', 0.0),  # Widget provides this
+                "caption_dropout_every_n_epochs": config.get('caption_dropout_every_n_epochs'),  # Advanced caption dropout scheduling
                 "keep_tokens": config.get('keep_tokens', 0),                   # Widget provides this
+                "keep_tokens_separator": config.get('keep_tokens_separator'),  # Separator for keep_tokens feature
+                "shuffle_caption": config.get('shuffle_caption', False),      # Randomly shuffle caption order
+                "secondary_separator": config.get('secondary_separator'),     # Additional separator for captions
+                "enable_wildcard": config.get('enable_wildcard', False),      # Support wildcard notation in captions
                 # Data augmentation
                 "random_crop": config.get('random_crop', False),               # Widget provides this
+                "color_aug": config.get('color_aug', False),                  # Color augmentation
+                "flip_aug": config.get('flip_aug', False),                    # Horizontal flip augmentation
             },
         }
 
@@ -778,6 +785,20 @@ class KohyaTrainingManager:
             general_section['caption_dropout_rate'] = config.get('caption_dropout_rate')
         if config.get('caption_tag_dropout_rate') is not None:
             general_section['caption_tag_dropout_rate'] = config.get('caption_tag_dropout_rate')
+        if config.get('caption_dropout_every_n_epochs') is not None:
+            general_section['caption_dropout_every_n_epochs'] = config.get('caption_dropout_every_n_epochs')
+        if config.get('keep_tokens_separator') is not None:
+            general_section['keep_tokens_separator'] = config.get('keep_tokens_separator')
+        if config.get('secondary_separator') is not None:
+            general_section['secondary_separator'] = config.get('secondary_separator')
+        if config.get('enable_wildcard') is not None:
+            general_section['enable_wildcard'] = config.get('enable_wildcard')
+
+        # Data augmentation settings
+        if config.get('color_aug') is not None:
+            general_section['color_aug'] = config.get('color_aug')
+        if config.get('random_crop') is not None:
+            general_section['random_crop'] = config.get('random_crop')
 
         # Build final structure
         dataset_config = {
@@ -1509,9 +1530,15 @@ class KohyaTrainingManager:
         
         # Special handling for DoRA - it's an argument, not a separate algorithm
         if mapped_type == 'dora':
+            network_args = ["dora_wd=True"]
+
+            # Add additional DoRA parameters from widget config
+            if config.get('dora_alpha'):
+                network_args.append(f"dora_alpha={config['dora_alpha']}")
+
             return {
                 "network_module": "networks.lora",
-                "network_args": ["dora_wd=True"]
+                "network_args": network_args
             }
         
         if mapped_type is None:  # Standard LoRA
@@ -1519,9 +1546,15 @@ class KohyaTrainingManager:
         
         # Special handling for native sd_scripts modules
         if mapped_type == 'dylora':
+            network_args = []
+
+            # Add unit parameter (default to 4 if not specified)
+            unit = config.get('dylora_unit', 4)
+            network_args.append(f"unit={unit}")
+
             return {
                 "network_module": "networks.dylora",
-                "network_args": ["unit=4"]  # Default unit size for DyLoRA
+                "network_args": network_args
             }
         
         # Get LyCORIS configuration
@@ -1533,7 +1566,33 @@ class KohyaTrainingManager:
             }
             
             # Add network_args if specified
-            network_args = lycoris_config.get('network_args', [])
+            network_args = lycoris_config.get('network_args', []).copy()  # Start with base args (e.g., ['algo=loha'])
+
+            # Add additional parameters from widget config
+            if config.get('conv_dim'):
+                network_args.append(f"conv_dim={config['conv_dim']}")
+
+            if config.get('conv_alpha'):
+                network_args.append(f"conv_alpha={config['conv_alpha']}")
+
+            if config.get('preset'):  # Like "attn-mlp", "full", "attn-only"
+                network_args.append(f"preset={config['preset']}")
+
+            if config.get('rank_dropout'):
+                network_args.append(f"rank_dropout={config['rank_dropout']}")
+
+            if config.get('module_dropout'):
+                network_args.append(f"module_dropout={config['module_dropout']}")
+
+            if config.get('use_tucker') is not None:  # Boolean parameter
+                network_args.append(f"use_tucker={str(config['use_tucker']).lower()}")
+
+            if config.get('decompose_both') is not None:  # Boolean parameter
+                network_args.append(f"decompose_both={str(config['decompose_both']).lower()}")
+
+            if config.get('factor'):  # For LoKr
+                network_args.append(f"factor={config['factor']}")
+
             if network_args:
                 result["network_args"] = network_args
             

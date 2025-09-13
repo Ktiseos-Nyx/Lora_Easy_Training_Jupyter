@@ -97,6 +97,7 @@ class CustomLoRAValidator:
         self._validate_scheduler(config, errors)
         self._validate_network_config(config, errors)
         self._validate_training_config(config, errors)
+        self._validate_advanced_parameters(config, errors)  # New validation for advanced parameters
         
         return len(errors) == 0, errors
 
@@ -302,6 +303,76 @@ class CustomLoRAValidator:
                     errors.append("❌ Resolution must be 512, 768, or 1024")
             except (ValueError, TypeError):
                 errors.append("❌ Resolution must be a valid integer")
+
+    def _validate_advanced_parameters(self, config: Dict, errors: List[str]):
+        """Validate advanced parameters we just added"""
+
+        # Caption dropout validation
+        caption_dropout_rate = config.get('caption_dropout_rate')
+        if caption_dropout_rate is not None:
+            try:
+                rate = float(caption_dropout_rate)
+                if rate < 0 or rate > 1:
+                    errors.append("❌ Caption dropout rate must be between 0 and 1")
+            except (ValueError, TypeError):
+                errors.append("❌ Caption dropout rate must be a valid number")
+
+        caption_tag_dropout_rate = config.get('caption_tag_dropout_rate')
+        if caption_tag_dropout_rate is not None:
+            try:
+                rate = float(caption_tag_dropout_rate)
+                if rate < 0 or rate > 1:
+                    errors.append("❌ Caption tag dropout rate must be between 0 and 1")
+            except (ValueError, TypeError):
+                errors.append("❌ Caption tag dropout rate must be a valid number")
+
+        # Caption dropout scheduling validation
+        caption_dropout_every_n = config.get('caption_dropout_every_n_epochs')
+        if caption_dropout_every_n is not None:
+            try:
+                n_val = int(caption_dropout_every_n)
+                if n_val <= 0:
+                    errors.append("❌ Caption dropout every N epochs must be positive")
+            except (ValueError, TypeError):
+                errors.append("❌ Caption dropout every N epochs must be a valid integer")
+
+        # Bucketing validation improvements
+        min_bucket = config.get('min_bucket_reso')
+        max_bucket = config.get('max_bucket_reso')
+        if min_bucket is not None and max_bucket is not None:
+            try:
+                min_val = int(min_bucket)
+                max_val = int(max_bucket)
+                if min_val >= max_val:
+                    errors.append("❌ Minimum bucket resolution must be less than maximum bucket resolution")
+                if min_val < 256:
+                    errors.append("❌ Minimum bucket resolution should be at least 256")
+                if max_val > 2048:
+                    errors.append("⚠️ Maximum bucket resolution above 2048 may cause memory issues")
+            except (ValueError, TypeError):
+                errors.append("❌ Bucket resolutions must be valid integers")
+
+        # Network args validation for LyCORIS
+        if config.get('conv_dim') is not None:
+            try:
+                conv_dim = int(config['conv_dim'])
+                if conv_dim <= 0:
+                    errors.append("❌ Convolution dimension must be positive")
+                elif conv_dim > 512:
+                    errors.append("⚠️ Convolution dimension above 512 may cause memory issues")
+            except (ValueError, TypeError):
+                errors.append("❌ Convolution dimension must be a valid integer")
+
+        # Validate rank_dropout and module_dropout
+        for dropout_name in ['rank_dropout', 'module_dropout']:
+            dropout_val = config.get(dropout_name)
+            if dropout_val is not None:
+                try:
+                    rate = float(dropout_val)
+                    if rate < 0 or rate > 1:
+                        errors.append(f"❌ {dropout_name.replace('_', ' ').title()} must be between 0 and 1")
+                except (ValueError, TypeError):
+                    errors.append(f"❌ {dropout_name.replace('_', ' ').title()} must be a valid number")
 
 def validate_training_config(config: Dict, project_root: str = None) -> Tuple[bool, List[str]]:
     """

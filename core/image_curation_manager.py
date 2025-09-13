@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Image Curation Manager - Pre-tagging image curation workflow using FiftyOne
-Implements HoloStrawberry's approach: Upload → FiftyOne Curation → WD14 Tagging → Training
+Image Curation Manager - Pre-tagging image curation workflow
+Simplified approach: Upload → Basic Curation → WD14 Tagging → Training
 
 This handles the BEFORE tagging workflow:
-1. Upload raw images to staging directory  
-2. Create FiftyOne dataset for visual inspection
-3. Compute CLIP embeddings for duplicate detection
-4. Visual curation interface for manual review
+1. Upload raw images to staging directory
+2. Create FiftyOne dataset for visual inspection (when available)
+3. Simple duplicate detection based on file signatures
+4. Visual curation interface for manual review (when FiftyOne available)
 5. Export curated images for WD14 tagging
+
+Note: Advanced features require FiftyOne Brain installation
 """
 
 import os
@@ -177,65 +179,68 @@ class ImageCurationManager:
         print(f"✅ Added metadata to {samples_updated} samples")
 
     def _compute_duplicate_detection(self, dataset) -> bool:
-        """Compute CLIP embeddings for duplicate detection like HoloStrawberry"""
+        """Simple duplicate detection based on filename and file size similarity"""
+
+        print("🔍 Running simple duplicate detection...")
 
         try:
-            import fiftyone.brain as fob
-
-            # Compute CLIP embeddings for visual similarity
-            fob.compute_similarity(
-                dataset,
-                model="clip-vit-base32-torch",  # Use CLIP like HoloStrawberry
-                brain_key="clip_similarity",
-                batch_size=16  # Conservative batch size
-            )
-
-            print(f"🧠 CLIP embeddings computed for {len(dataset)} images")
-
-            # Find potential duplicates with high similarity (>90%)
-            print("🔍 Identifying potential duplicates...")
-
-            # Create similarity index for duplicate detection
-            results = dataset.load_brain_results("clip_similarity")
-
-            # Mark potential duplicates
+            # Mark potential duplicates based on filename patterns and file sizes
             duplicate_count = 0
+            file_signatures = {}  # Track files by size and base name
 
+            # First pass: collect file signatures
             for sample in dataset:
                 try:
-                    # Get top 5 most similar images
-                    similar_samples = dataset.sort_by_similarity(
-                        sample.id,
-                        brain_key="clip_similarity",
-                        k=5,
-                        reverse=False
-                    )
-
-                    # Check if any are very similar (>0.95 similarity)
-                    # Skip first result (self)
-                    for similar_sample in similar_samples.skip(1).limit(4):
-                        # This is a simplified check - FiftyOne Brain provides similarity scores
-                        # In practice, you'd use the actual similarity scores from the brain results
-                        pass
-
-                    # For now, mark based on filename similarity as backup
                     base_name = os.path.splitext(os.path.basename(sample.filepath))[0]
-                    if any(base_name in os.path.basename(s.filepath) for s in dataset if s.id != sample.id):
-                        sample['duplicate_candidate'] = True
-                        duplicate_count += 1
+                    file_size = sample.get('file_size', os.path.getsize(sample.filepath))
 
-                    sample.save()
+                    # Create a signature based on base name and file size
+                    signature = f"{base_name}_{file_size}"
+
+                    if signature not in file_signatures:
+                        file_signatures[signature] = []
+                    file_signatures[signature].append(sample)
 
                 except Exception:
-                    # Continue processing other samples
-                    pass
+                    continue
 
-            print(f"🔍 Found {duplicate_count} potential duplicate candidates")
+            # Second pass: mark duplicates
+            for signature, samples in file_signatures.items():
+                if len(samples) > 1:
+                    # Mark all but the first as potential duplicates
+                    for sample in samples[1:]:
+                        sample['duplicate_candidate'] = True
+                        duplicate_count += 1
+                        sample.save()
+
+            # Additional check: similar base names (e.g., img001, img002, img003)
+            for sample in dataset:
+                if sample.get('duplicate_candidate', False):
+                    continue  # Already marked
+
+                try:
+                    base_name = os.path.splitext(os.path.basename(sample.filepath))[0]
+
+                    # Check for numbered sequences (img001, img002, etc.)
+                    import re
+                    base_pattern = re.sub(r'\d+$', '', base_name)
+                    if len(base_pattern) > 3:  # Only check meaningful base names
+                        similar_count = sum(1 for s in dataset
+                                          if re.sub(r'\d+$', '', os.path.splitext(os.path.basename(s.filepath))[0]) == base_pattern
+                                          and s.id != sample.id)
+
+                        if similar_count >= 3:  # 4+ similar files suggests a sequence
+                            sample['duplicate_candidate'] = True
+                            duplicate_count += 1
+                            sample.save()
+
+                except Exception:
+                    continue
+
+            print(f"🔍 Found {duplicate_count} potential duplicate candidates using simple detection")
+            print("💡 Tip: For advanced duplicate detection, consider enabling FiftyOne Brain")
             return True
 
-        except ImportError:
-            print("⚠️ FiftyOne Brain not available - install with: pip install fiftyone[brain]")
-            return False
         except Exception as e:
             print(f"⚠️ Duplicate detection failed: {e}")
             return False

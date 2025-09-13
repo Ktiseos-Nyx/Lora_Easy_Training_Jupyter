@@ -89,13 +89,16 @@ For detailed workflow instructions, see our [Quick Start Guide](docs/quickstart.
 
 For more help and support please check [Troubleshooting](docs/guides/troubleshooting.md) this has more comprehensive information.
 
+### 📋 **Support Requirements**
+Before asking for help, please review our [Support Guidelines](docs/guides/troubleshooting.md#support-guidelines--boundaries). We're happy to assist, but effective troubleshooting requires your participation - this means running the basic diagnostic commands and providing complete error information. Cherry-picking troubleshooting steps won't lead to solutions!
+
 **Windows Users:** If you encounter Rust compilation errors during safetensors installation, this is not related to our notebook setup. It's a common Python packaging issue on Windows. Feel free to reach out on our [Discord](https://discord.gg/HhBSM9gBY) for assistance - we're happy to help guide you through the solution!
 
 **Getting Help**:
-    - If you encounter issues or have questions, please:
-        - Check our GitHub [Issues](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/issues) or [Discussions](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/discussions).
-        - Join our [Discord Server](https://discord.gg/HhBSM9gBY) for community support.
-    - We maintain a running tab of common issues and solutions in our [docs/](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/tree/main/docs) folder.
+    - ✅ **Official Support**: [GitHub Issues](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/issues) or [Our Discord](https://discord.gg/HhBSM9gBY)
+    - ❌ **No Support**: Random discords, Reddit DMs, social media comments, etc.
+    - 📚 **Self-Help**: Check our comprehensive [docs/](https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter/tree/main/docs) folder first
+    - 🎯 **Submodule Issues**: Feel free to blame us on the original repos (kohya-ss, LyCORIS, etc.)!
 
 ## 🙏 Credits & Acknowledgements
 

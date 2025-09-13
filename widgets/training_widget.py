@@ -145,6 +145,29 @@ class TrainingWidget:
             style={'description_width': 'initial'},
             continuous_update=False
         )
+        # Advanced caption controls
+        self.caption_dropout_every_n_epochs = widgets.IntText(
+            value=0, min=0,
+            description='Caption Dropout Every N Epochs (0=disabled):',
+            style={'description_width': 'initial'}
+        )
+        self.keep_tokens_separator = widgets.Text(
+            value='',
+            description='Keep Tokens Separator:',
+            style={'description_width': 'initial'},
+            placeholder='|||'
+        )
+        self.secondary_separator = widgets.Text(
+            value='',
+            description='Secondary Caption Separator:',
+            style={'description_width': 'initial'},
+            placeholder=';'
+        )
+        self.enable_wildcard = widgets.Checkbox(
+            value=False,
+            description="Enable Wildcard Notation in Captions",
+            indent=False
+        )
 
         # Auto-detected dataset size (will be updated when dataset directory changes)
         self.dataset_size = widgets.IntText(value=0, description="Dataset Size:", style={'description_width': 'initial'}, disabled=True)
@@ -323,6 +346,9 @@ class TrainingWidget:
         # LyCORIS advanced parameters
         self.factor = widgets.IntText(value=-1, description='🔧 Factor (LoKR decomposition, -1=auto):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.train_norm = widgets.Checkbox(value=False, description="Train Normalization Layers (LyCORIS)", indent=False)
+        # LyCORIS dropout parameters
+        self.rank_dropout = widgets.FloatSlider(value=0.0, min=0.0, max=1.0, step=0.05, description='🧩 Rank Dropout (LyCORIS):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.module_dropout = widgets.FloatSlider(value=0.0, min=0.0, max=1.0, step=0.05, description='🧩 Module Dropout (LyCORIS):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         
         # Advanced LoRA configuration (Weights, Blocks, Conv)
         self.down_lr_weight = widgets.Text(value='', description='Down LR Weight:', placeholder='e.g., 1,1,1,1,1,1,1,1,1,1,1,1 (12 values, leave empty for default)', style={'description_width': 'initial'}, layout=widgets.Layout(width='99%'))
@@ -378,6 +404,8 @@ class TrainingWidget:
             self.flip_aug, self.shuffle_caption, self.keep_tokens, self.clip_skip,
             # Caption dropout (moved from advanced)
             self.caption_dropout_rate, self.caption_tag_dropout_rate,
+            # Advanced caption controls
+            self.caption_dropout_every_n_epochs, self.keep_tokens_separator, self.secondary_separator, self.enable_wildcard,
             # Learning rate settings
             self.unet_lr, self.text_encoder_lr, self.lr_scheduler, self.lr_scheduler_number, self.lr_warmup_ratio, self.lr_warmup_steps, self.lr_power,
             # Noise & stability (moved from advanced)
@@ -390,6 +418,8 @@ class TrainingWidget:
             widgets.HTML("<h4>🧩 LoRA Structure</h4><p><strong>16 dim/8 alpha</strong> balances capacity and stability (~100MB). Conv layers help with textures/details.</p>"),
             self.lora_type, self.network_dim, self.network_alpha, self.dim_from_weights, self.network_dropout, 
             self.conv_dim, self.conv_alpha, self.factor, self.train_norm,
+            # LyCORIS dropout parameters
+            self.rank_dropout, self.module_dropout,
             self.down_lr_weight, self.mid_lr_weight, self.up_lr_weight, self.block_lr_zero_threshold,
             self.block_dims, self.block_alphas, self.conv_block_dims, self.conv_block_alphas,
             # Training options
@@ -541,6 +571,8 @@ class TrainingWidget:
             'network_dropout': self.network_dropout.value,
             'conv_dim': self.conv_dim.value,
             'conv_alpha': self.conv_alpha.value,
+            'rank_dropout': self.rank_dropout.value,
+            'module_dropout': self.module_dropout.value,
             'factor': self.factor.value,
             'train_norm': self.train_norm.value,
             # Advanced LoRA configuration
@@ -583,6 +615,10 @@ class TrainingWidget:
             # Advanced training options
             'caption_dropout_rate': self.caption_dropout_rate.value,
             'caption_tag_dropout_rate': self.caption_tag_dropout_rate.value,
+            'caption_dropout_every_n_epochs': self.caption_dropout_every_n_epochs.value if self.caption_dropout_every_n_epochs.value > 0 else None,
+            'keep_tokens_separator': self.keep_tokens_separator.value or None,
+            'secondary_separator': self.secondary_separator.value or None,
+            'enable_wildcard': self.enable_wildcard.value,
             'keep_tokens': self.keep_tokens.value,
             'noise_offset': self.noise_offset.value,
             'adaptive_noise_scale': self.adaptive_noise_scale.value,
