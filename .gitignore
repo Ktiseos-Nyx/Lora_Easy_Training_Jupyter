@@ -145,3 +145,7 @@ user_logs_submissions/
 
 # Research and development configs (many TOML files)
 research_dev/
+
+# Documentation hold folders (temporary storage for review)
+docs/reference/_hold/
+docs/*/_hold/

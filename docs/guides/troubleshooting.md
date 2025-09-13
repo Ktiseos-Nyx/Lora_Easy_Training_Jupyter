@@ -197,6 +197,49 @@ This guide provides solutions to the most common errors and issues you might enc
   3. **Training Length**: May need more or fewer steps
   4. **Base Model**: Try different base models
 
+## Terminal Diagnostic Commands
+
+For advanced users who want to diagnose issues via command line:
+
+### Check Python and Package Status
+```bash
+# Check Python version
+python --version
+
+# Check if key packages are installed
+pip list | grep torch
+pip list | grep transformers
+pip list | grep diffusers
+
+# Test imports
+python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
+```
+
+### Check GPU and CUDA Status
+```bash
+# Check NVIDIA GPU
+nvidia-smi
+
+# Check CUDA version
+nvcc --version
+
+# Test PyTorch CUDA detection
+python -c "import torch; print(f'CUDA devices: {torch.cuda.device_count()}')"
+```
+
+### Check Disk Space
+**Windows:**
+```cmd
+fsutil volume diskfree c:
+```
+
+**Linux/macOS:**
+```bash
+df -h
+du -sh * | sort -hr
+```
+
 ## System Requirements Issues
 
 ### Insufficient VRAM

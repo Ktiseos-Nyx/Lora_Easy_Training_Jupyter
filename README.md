@@ -6,39 +6,35 @@ A user-friendly LoRA training system powered by Kohya's proven training backend 
 |---|---|---|---|---|
 | ![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/badge/Discord-Join%20Our%20Server-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/HhBSM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a> |
 
-## 🧪 Experimental Branch Notice
+## 🧪 Development Branch Notice
 
-> **⚠️ You are on the `submodule-updates` branch - This is our experimental development branch!**
+> **⚠️ You are on the `submodule-updates` branch - This is our current testing branch!**
 >
-> This branch includes cutting-edge features and model support that may be unstable:
-> - 🔬 **FLUX training** (transformer-based diffusion)
-> - 🧬 **SD3/SD3.5 training** (advanced diffusion architecture)
-> - 🌟 **Lumina2 training** (NextDiT + Gemma2 text encoder)
+> This branch includes experimental features that are available in the Kohya backend but may not be fully tested in our setup:
+> - 🔬 **FLUX training** - Available in Kohya, integration status unknown
+> - 🧬 **SD3/SD3.5 training** - Available in Kohya, integration status unknown  
+> - 🌟 **Lumina2 training** - Available in Kohya, integration status unknown
 > - 🔧 **Latest bug fixes** and performance improvements
 > - ⚡ **Enhanced upload widgets** (fixed cache issues)
 >
-> **Setup for experimental features**:
-> ```bash
-> git checkout submodule-updates
-> # Make installer executable and run
-> chmod +x ./jupyter.sh
-> ./jupyter.sh
-> ```
+> **Note**: These experimental features exist in the underlying Kohya scripts but haven't been thoroughly tested with our widget system. Use at your own risk and expect possible issues.
 
 ## 🌟 Overview & Key Features
 
-- **What is this project?** A user-friendly LoRA training system based on KohyaSS, powered by interactive Jupyter widgets. Instead of typing lengthy Python commands, you get helpful widgets that walk you through each step. Works on your own local computer or rented GPU servers.
-- **Why use it?**
-    - **🎓 Beginner-friendly**: Helpful explanations and step-by-step guidance.
-    - **🧮 Training calculator**: Shows roughly how long training could take.
-    - **🛠️ Easy setup**: Works with VastAI, RunPod, and local computers.
-    - **📊 Dataset tools**: Auto-tag images, upload files, manage captions.
-    - **🚀 Multiple architectures**: SDXL, SD 1.5 (production-ready), plus experimental FLUX, SD3, and Lumina2 support with various optimizers and LoRA types.
+A LoRA training system built on Kohya's proven training backend with interactive Jupyter widget interfaces. Supports local development and cloud deployment on VastAI, RunPod, and similar platforms.
+
+**Key Features:**
+- Widget-based configuration interface
+- Automatic model type detection (SDXL, SD1.5, FLUX, SD3)
+- Integrated dataset preparation and tagging tools
+- Training parameter calculator and optimization
+- Multiple LoRA variants and optimizers
+- Cross-platform compatibility
 
 <details><summary>What You Need</summary>
 
 - **GPU**: Nvidia (For built-in CUDA support) or AMD Cards for ROCm. (Future Support for ARC and otherwise coming)
-- **Python**: Version 3.10+ (3.10.6 recommended for maximum compatibility)
+- **Python**: Version 3.10+ required
 - **Platform**: Windows or Linux based Operating Systems.
 
 **Windows Users:** If you encounter Rust compilation errors during safetensors installation, this is not related to our notebook setup. It's a common Python packaging issue on Windows. Feel free to reach out on our [Discord](https://discord.gg/HhBSM9gBY) for assistance - we're happy to help guide you through the solution!
@@ -58,10 +54,10 @@ You will need Git and Python 3.10+.
 
 ```bash
 python --version
-# Need: Python 3.10+ (3.10.6 recommended for maximum compatibility)
+# Need: Python 3.10+ required
 ```
 
-You can install Python 3.10.6 directly from Python's [main website here](https://www.python.org/downloads/release/python-3106/).
+You can install Python 3.10+ from Python's [main website here](https://www.python.org/downloads/).
 
 **Quick Git Check:**
 
@@ -83,12 +79,10 @@ git --version  # If this fails, install Git first
 git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git
 cd Lora_Easy_Training_Jupyter
 
-# 1a. If you're running the Unified Branch (For Testing) Please continue with the following commands:
-git branch
-git checkout unified
-git fetch origin unified
+# 2. Switch to the testing branch (recommended)
+git checkout submodule-updates
 
-# 2. Run the installer (downloads ~10-15GB)
+# 3. Run the installer (downloads ~10-15GB)
 python ./installer.py
 
 # Alternative for Mac/Linux:
@@ -108,78 +102,13 @@ jupyter notebook
 
 ### Notebook Workflow
 
-Your main workflow:
-- `Dataset_Maker_Widget.ipynb` - Prepare images and captions
-- `Unified_LoRA_Trainer.ipynb` - Train SDXL, SD 1.5, or experimental Flux/SD3 models
-- `Utilities_Notebooks.ipynb` - Calculate optimal training parameters, Resize Lora & More.
+The system uses three specialized notebooks:
 
-<details><summary>📊 Data Ingestion Options</summary>
+- **`Dataset_Maker_Widget.ipynb`** - Prepare images and captions for training
+- **`Unified_LoRA_Trainer.ipynb`** - Configure and execute LoRA training
+- **`Utilities_Notebooks.ipynb`** - Calculate parameters and resize trained models
 
-Options for getting data into the system:
-- **URL/ZIP Download**: Download and extract datasets from URLs (e.g., Hugging Face, Civitai) or local ZIP files.
-- **Direct Image Upload**: Upload individual images directly into your dataset folder.
-- **Gallery-DL Scraper**: Utilize the advanced `gallery-dl` integration to scrape images and their tags from over 300 supported websites.
-
-</details>
-
-<details><summary>How to Get Model/VAE Links</summary>
-
-To use custom models or VAEs, you need to provide a direct download link. Here’s how to find them on popular platforms:
-
-#### From Civitai
-
-**Method 1: Using the Model Version ID**
-
-1.  Navigate to the model or VAE page.
-2.  Look at the URL in your browser's address bar. If it includes `?modelVersionId=XXXXXX`, you can copy the entire URL and paste it directly into the widget.
-3.  If you don't see this ID, try switching to a different version of the model and then back to your desired version. The ID should then appear in the URL.
-
-![How to get a link from Civitai using the version ID](./assets/model_url_civitai_1.png)
-
-**Method 2: Copying the Download Link**
-Use this method if the model has only one version or if a version has multiple files.
-1.  On the model or VAE page, scroll down to the "Files" section.
-2.  Right-click the **Download** button for the file you want.
-3.  Select "Copy Link Address" (or similar text) from the context menu.
-
-![How to get a link from Civitai by copying the download address](./assets/model_url_civitai_2.png)
-
-#### From Hugging Face
-
-**Method 1: Using the Repository URL**
-1.  Go to the main page of the model or VAE repository you want to use.
-2.  Copy the URL directly from your browser's address bar.
-
-![How to get a link from Hugging Face using the repository URL](./assets/model_url_hf_1.png)
-
-**Method 2: Copying the Direct File Link**
-1.  Navigate to the "Files and versions" tab of the repository.
-2.  Find the specific file you want to download.
-3.  Click the **"..."** menu to the right of the file size, then right-click the "Download" link and copy the link address.
-
-![How to get a link from Hugging Face by copying the direct file address](./assets/model_url_hf_2.png)
-</details>
-
-<details><summary>🛠️ Advanced Features</summary>
-
-### Image Utilities
-- **Image Resizing**: Easily resize images in your dataset to a target resolution, with options for quality.
-
-### Tag Curation
-- **FiftyOne Integration**: Visually inspect and edit image tags using the FiftyOne interface. After making changes in FiftyOne, click 'Apply Curation Changes' to save them to your local caption files.
-
-</details>
-
-<details><summary>🏗️ New Unified Architecture</summary>
-
-Our system now features:
-- **Automatic Model Detection**: Unified trainer automatically detects SDXL vs SD 1.5 models
-- **Kohya Backend Integration**: Leverages battle-tested Kohya training strategies
-- **Environment-Agnostic**: Works across conda, venv, and system Python installations
-- **Memory Optimization**: Automatic VRAM detection and profile selection
-- **Cross-Platform**: Proper subprocess handling for Windows/Linux/macOS development
-
-</details>
+For detailed workflow instructions, see our [Quick Start Guide](docs/quickstart.md) and [Notebook Workflow Guide](docs/guides/notebook-workflow.md).
 
 ## 🛠️ Troubleshooting & Support
 

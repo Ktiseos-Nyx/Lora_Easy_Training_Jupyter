@@ -24,7 +24,7 @@ def get_python_command():
                     return cmd
             except (subprocess.CalledProcessError, FileNotFoundError):
                 continue
-    raise RuntimeError("❌ Python 3 not found. Please install Python 3.8+")
+    raise RuntimeError("❌ Python 3.10+ not found. Please install Python 3.10+")
 
 class UnifiedInstaller:
     def __init__(self, verbose=False):

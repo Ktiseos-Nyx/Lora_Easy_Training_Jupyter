@@ -25,16 +25,36 @@ class TrainingWidget:
             training_manager = RefactoredTrainingManager()
 
         self.manager = training_manager
+        # Race condition guard: prevent observer conflicts during programmatic changes
+        self._programmatic_change = False
         self.create_widgets()
 
-    def _parse_learning_rate(self, lr_text):
+    def _parse_learning_rate(self, lr_text, widget=None):
         """Parse learning rate from text input supporting both scientific notation and decimals"""
         try:
             # Handle both scientific notation (5e-4) and decimal (0.0005)
-            return float(lr_text)
-        except ValueError:
-            print(f"⚠️ Invalid learning rate format: {lr_text}. Using default 1e-4")
-            return 1e-4
+            lr_value = float(lr_text)
+            
+            # Validate bounds - no negative learning rates (sorry, no memes!)
+            if lr_value < 0:
+                raise ValueError(f"Learning rate cannot be negative: {lr_value}")
+            if lr_value > 1.0:
+                print(f"⚠️ Warning: Very high learning rate {lr_value}. Consider using < 1.0")
+            
+            return lr_value
+        except ValueError as e:
+            default_value = "1e-4"
+            print(f"⚠️ Invalid learning rate: {lr_text} ({e}). Using default {default_value}")
+            
+            # Update the UI widget to show the corrected value
+            if widget is not None:
+                self._programmatic_change = True
+                try:
+                    widget.value = default_value
+                finally:
+                    self._programmatic_change = False
+            
+            return float(default_value)
 
     def create_widgets(self):
         header_icon = "⭐"
@@ -100,10 +120,10 @@ class TrainingWidget:
         training_config_desc = widgets.HTML("""<h3>▶️ Training Configuration</h3>
         <p>Configure all core training parameters including dataset settings, learning rates, optimizer, and training options. Total steps calculated automatically based on your dataset.</p>""")
         self.resolution = widgets.IntText(value=1024, description='Resolution:', style={'description_width': 'initial'})
-        self.num_repeats = widgets.IntText(value=10, description='Num Repeats:', style={'description_width': 'initial'})
-        self.epochs = widgets.IntText(value=10, description='Epochs:', style={'description_width': 'initial'})
-        self.max_train_steps = widgets.IntText(value=0, description='Max Train Steps (0=disabled):', style={'description_width': 'initial'})
-        self.train_batch_size = widgets.IntText(value=4, description='Train Batch Size:', style={'description_width': 'initial'})
+        self.num_repeats = widgets.IntText(value=10, min=1, description='Num Repeats:', style={'description_width': 'initial'})
+        self.epochs = widgets.IntText(value=10, min=1, description='Epochs:', style={'description_width': 'initial'})
+        self.max_train_steps = widgets.IntText(value=0, min=0, description='Max Train Steps (0=disabled):', style={'description_width': 'initial'})
+        self.train_batch_size = widgets.IntText(value=4, min=1, description='Train Batch Size:', style={'description_width': 'initial'})
         self.seed = widgets.IntText(value=42, description='Training Seed:', style={'description_width': 'initial'})
         self.flip_aug = widgets.Checkbox(value=False, description="Flip Augmentation (data augmentation)", indent=False)
         self.shuffle_caption = widgets.Checkbox(value=True, description="Shuffle Captions (improves variety, incompatible with text encoder caching)", indent=False)
@@ -132,28 +152,45 @@ class TrainingWidget:
 
         # Auto-detect dataset size when dataset_dir changes
         def update_dataset_size(*args):
+            # Race condition guard: skip if we're in the middle of programmatic changes
+            if self._programmatic_change:
+                return
+                
             dataset_path = self.dataset_dir.value.strip()
-            if dataset_path:
-                try:
-                    from core.image_utils import count_images_in_directory
-                    image_count = count_images_in_directory(dataset_path)
-                    self.dataset_size.value = image_count
-                    update_step_calculation()
-                except Exception:
+            
+            # Set flag to prevent observer loops
+            self._programmatic_change = True
+            try:
+                if dataset_path:
+                    try:
+                        from core.image_utils import count_images_in_directory
+                        image_count = count_images_in_directory(dataset_path)
+                        self.dataset_size.value = image_count  # Observer blocked by flag
+                    except Exception as e:
+                        print(f"⚠️ Could not count images in {dataset_path}: {e}")
+                        self.dataset_size.value = 0
+                else:
                     self.dataset_size.value = 0
-            else:
-                self.dataset_size.value = 0
+            finally:
+                # Always clear the flag, even if an error occurred
+                self._programmatic_change = False
+            
+            # Manually trigger calculation once after all changes
             update_step_calculation()
 
         self.dataset_dir.observe(update_dataset_size, names='value')
 
         def update_step_calculation(*args):
+            # Race condition guard: skip if we're in the middle of programmatic changes
+            if self._programmatic_change:
+                return
+                
             images = self.dataset_size.value
             repeats = self.num_repeats.value
             epochs = self.epochs.value
             batch_size = self.train_batch_size.value
 
-            if batch_size > 0 and images > 0:
+            if batch_size > 0 and images > 0 and repeats > 0 and epochs > 0:
                 total_steps = (images * repeats * epochs) // batch_size
 
                 # Neutral color scheme
@@ -187,6 +224,10 @@ class TrainingWidget:
         self.config_warnings = widgets.HTML()
 
         def check_config_conflicts(*args):
+            # Race condition guard: skip if we're in the middle of programmatic changes
+            if self._programmatic_change:
+                return
+                
             warnings = []
 
             # Check text encoder caching vs shuffle caption conflict
@@ -273,12 +314,12 @@ class TrainingWidget:
             description='LoRA Type:',
             style={'description_width': 'initial'}
         )
-        self.network_dim = widgets.IntText(value=16, description='Network Dim:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        self.network_alpha = widgets.IntText(value=8, description='Network Alpha:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.network_dim = widgets.IntText(value=16, min=4, description='Network Dim:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.network_alpha = widgets.IntText(value=8, min=1, description='Network Alpha:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.dim_from_weights = widgets.Checkbox(value=False, description="Auto-determine dims from weights (overrides network_dim)", indent=False)
-        self.network_dropout = widgets.FloatText(value=0.0, description='Network Dropout:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        self.conv_dim = widgets.IntText(value=16, description='🧩 Conv Dim (for textures/details):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
-        self.conv_alpha = widgets.IntText(value=8, description='🧩 Conv Alpha (conv learning rate):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.network_dropout = widgets.FloatSlider(value=0.0, min=0.0, max=1.0, step=0.05, description='Network Dropout:', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.conv_dim = widgets.IntText(value=16, min=4, description='🧩 Conv Dim (for textures/details):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
+        self.conv_alpha = widgets.IntText(value=8, min=1, description='🧩 Conv Alpha (conv learning rate):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         # LyCORIS advanced parameters
         self.factor = widgets.IntText(value=-1, description='🔧 Factor (LoKR decomposition, -1=auto):', style={'description_width': 'initial'}, layout=widgets.Layout(width='300px'))
         self.train_norm = widgets.Checkbox(value=False, description="Train Normalization Layers (LyCORIS)", indent=False)
@@ -480,8 +521,8 @@ class TrainingWidget:
             'train_batch_size': self.train_batch_size.value,
             'seed': self.seed.value,
             'flip_aug': self.flip_aug.value,
-            'unet_lr': self._parse_learning_rate(self.unet_lr.value),
-            'text_encoder_lr': self._parse_learning_rate(self.text_encoder_lr.value),
+            'unet_lr': self._parse_learning_rate(self.unet_lr.value, self.unet_lr),
+            'text_encoder_lr': self._parse_learning_rate(self.text_encoder_lr.value, self.text_encoder_lr),
             'lr_scheduler': self.lr_scheduler.value,
             'lr_scheduler_number': self.lr_scheduler_number.value,
             'lr_warmup_ratio': self.lr_warmup_ratio.value,
