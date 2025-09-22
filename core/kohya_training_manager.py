@@ -997,15 +997,36 @@ class KohyaTrainingManager:
             with open(config_path, 'r') as f:
                 config = toml.load(f)
             
-            # Detect model type from the loaded config
-            model_path = config.get('training_arguments', {}).get('pretrained_model_name_or_path', '')
-            model_type = self.detect_model_type(model_path)
-            
-            # Get the correct training script for the model type
+            # Use the user's selected model type from dropdown (not auto-detection!)
+            raw_model_type = config.get('model_type', 'sd15')
+
+            # Normalize dropdown values to script mapping keys
+            model_type_mapping = {
+                'sd1_5_2_0': 'sd15',  # From widget: SD1.5/2.0 -> sd1_5_2_0 -> sd15
+                'sdxl': 'sdxl',       # Direct match
+                'flux': 'flux',       # Direct match
+                'sd3': 'sd3',         # Direct match
+                'sd15': 'sd15',       # Direct match for legacy configs
+            }
+
+            if raw_model_type not in model_type_mapping:
+                error_msg = f"❌ Unknown model type '{raw_model_type}' selected. Supported types: {list(model_type_mapping.keys())}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            model_type = model_type_mapping[raw_model_type]
+
+            # Get the correct training script for the user's choice
             script_name = self.SCRIPT_MAPPING.get(model_type, 'train_network.py')
-            
-            logger.info(f"🧠 Detected model type: {model_type}")
+
+            logger.info(f"🎯 User selected model type: {model_type}")
             logger.info(f"🎯 Using training script: {script_name}")
+
+            # Optional: Validate that the model file exists (but don't override user choice)
+            model_path = config.get('training_arguments', {}).get('pretrained_model_name_or_path', '')
+            if model_path and not os.path.exists(model_path):
+                logger.warning(f"⚠️ Model file not found: {model_path}")
+                logger.info("💡 Training will continue with user's selected type, but may fail if path is wrong")
 
             # Build training command with correct script
             cmd = [
