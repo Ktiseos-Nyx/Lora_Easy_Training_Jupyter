@@ -497,7 +497,142 @@ class TrainingWidget:
         self.status_bar.value = f"<div style='padding: 10px; border: 1px solid {color}; border-radius: 5px;'><strong>📊 Status:</strong> {message}</div>"
 
     def run_training(self, b):
-        # Actually generate the TOML files when user clicks "Prepare"!
+        # Check for overwrite before proceeding
+        project_name = self.project_name.value.strip()
+        if not project_name:
+            self._update_status("❌ Please enter a project name first!", "error")
+            return
+
+        # Check if output file already exists
+        output_path = os.path.join("output", f"{project_name}.safetensors")
+        if os.path.exists(output_path):
+            # Show overwrite warning
+            self._show_overwrite_warning(output_path)
+            return
+
+        # Proceed with training preparation
+        self._proceed_with_training()
+
+    def _show_overwrite_warning(self, output_path):
+        """Show user-friendly overwrite warning with file information"""
+        try:
+            # Get file information
+            import time
+            file_stats = os.stat(output_path)
+            file_size_mb = file_stats.st_size / (1024 * 1024)
+            file_date = time.strftime('%Y-%m-%d %H:%M', time.localtime(file_stats.st_mtime))
+
+            # Create warning widgets
+            warning_title = widgets.HTML(
+                "<h3 style='color: #ff6b35;'>⚠️ File Already Exists!</h3>"
+            )
+
+            file_info = widgets.HTML(f"""
+                <div style='background: #fff3cd; padding: 15px; border-radius: 8px; margin: 10px 0;'>
+                    <strong>📁 File:</strong> {os.path.basename(output_path)}<br>
+                    <strong>📅 Created:</strong> {file_date}<br>
+                    <strong>📊 Size:</strong> {file_size_mb:.1f} MB<br>
+                    <strong>📍 Location:</strong> {output_path}
+                </div>
+            """)
+
+            warning_message = widgets.HTML("""
+                <p style='color: #856404; font-size: 14px;'>
+                    <strong>This will permanently replace your existing LoRA!</strong><br>
+                    Make sure this is what you want to do. Consider using a different project name if you want to keep both files.
+                </p>
+            """)
+
+            # Confirmation checkbox (ADHD-friendly - requires explicit action)
+            self.overwrite_confirm = widgets.Checkbox(
+                value=False,
+                description="Yes, I want to replace my existing LoRA file",
+                style={'description_width': 'initial'},
+                layout=widgets.Layout(margin='10px 0px')
+            )
+
+            # Suggestion for alternative name
+            alternative_name = f"{self.project_name.value}_v2"
+            suggestion = widgets.HTML(f"""
+                <div style='background: #e7f3ff; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+                    <strong>💡 Suggestion:</strong> Try a different name like <code>{alternative_name}</code>
+                </div>
+            """)
+
+            # Action buttons
+            proceed_button = widgets.Button(
+                description="🚀 Proceed with Overwrite",
+                button_style='danger',
+                disabled=True,  # Initially disabled
+                layout=widgets.Layout(width='200px', margin='5px')
+            )
+
+            cancel_button = widgets.Button(
+                description="🔙 Cancel & Choose Different Name",
+                button_style='warning',
+                layout=widgets.Layout(width='250px', margin='5px')
+            )
+
+            button_row = widgets.HBox([proceed_button, cancel_button])
+
+            # Enable proceed button only when checkbox is checked
+            def on_checkbox_change(change):
+                proceed_button.disabled = not change['new']
+
+            self.overwrite_confirm.observe(on_checkbox_change, names='value')
+
+            # Button click handlers
+            def on_proceed_click(b):
+                self._clear_overwrite_warning()
+                self._proceed_with_training()
+
+            def on_cancel_click(b):
+                self._clear_overwrite_warning()
+                self._update_status("💡 Training cancelled. Please choose a different project name.", "info")
+
+            proceed_button.on_click(on_proceed_click)
+            cancel_button.on_click(on_cancel_click)
+
+            # Create and display warning dialog
+            self.overwrite_warning_box = widgets.VBox([
+                warning_title,
+                file_info,
+                warning_message,
+                self.overwrite_confirm,
+                suggestion,
+                button_row
+            ], layout=widgets.Layout(
+                border='2px solid #ff6b35',
+                padding='20px',
+                border_radius='10px',
+                margin='20px 0px'
+            ))
+
+            # Insert warning before the status bar
+            children_list = list(self.widget_box.children)
+            # Find the position of accordion (should be first major component)
+            insert_position = 1 if len(children_list) > 1 else 0
+            children_list.insert(insert_position, self.overwrite_warning_box)
+            self.widget_box.children = children_list
+
+            self._update_status("⚠️ Please confirm overwrite above to proceed with training.", "warning")
+
+        except Exception as e:
+            print(f"Error showing overwrite warning: {e}")
+            # Fallback to simple confirmation
+            self._proceed_with_training()
+
+    def _clear_overwrite_warning(self):
+        """Remove the overwrite warning from the UI"""
+        if hasattr(self, 'overwrite_warning_box'):
+            children_list = list(self.widget_box.children)
+            if self.overwrite_warning_box in children_list:
+                children_list.remove(self.overwrite_warning_box)
+                self.widget_box.children = children_list
+            delattr(self, 'overwrite_warning_box')
+
+    def _proceed_with_training(self):
+        """Actually generate the TOML files and prepare training"""
         config = self._get_training_config()
         try:
             self.manager.prepare_config_only(config)  # Generate TOML files only
