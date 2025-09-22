@@ -349,13 +349,17 @@ def main(args):
                         logger.info("Trying CUDA provider with minimal options...")
                         
                         # Fallback: try minimal CUDA configuration
-                        minimal_cuda_options = {'device_id': 0}
-                        ort_sess = ort.InferenceSession(
-                            onnx_path, 
-                            providers=[("CUDAExecutionProvider", minimal_cuda_options)],
-                            sess_options=ort.SessionOptions()
-                        )
-                        logger.info("✅ CUDA execution provider with minimal config successful")
+                        try:
+                            minimal_cuda_options = {'device_id': 0}
+                            ort_sess = ort.InferenceSession(
+                                onnx_path, 
+                                providers=[("CUDAExecutionProvider", minimal_cuda_options)],
+                                sess_options=ort.SessionOptions()
+                            )
+                            logger.info("✅ CUDA execution provider with minimal config successful")
+                        except Exception as minimal_cuda_error:
+                            logger.warning(f"Minimal CUDA config also failed: {str(minimal_cuda_error)[:100]}...")
+                            raise Exception("All CUDA configurations failed, falling back to CPU")
                         
                 elif "ROCMExecutionProvider" in available_providers:
                     logger.info("Attempting ROCm execution provider") 

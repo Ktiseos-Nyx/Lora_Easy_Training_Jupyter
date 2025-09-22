@@ -3,10 +3,14 @@
 # Contributors: See README.md Credits section for full acknowledgements
 
 # widgets/utilities_widget.py
+import os
+import time
 import ipywidgets as widgets
 from IPython.display import display
 
 from core.utilities_manager import UtilitiesManager
+import logging
+
 
 
 class UtilitiesWidget:
@@ -16,6 +20,10 @@ class UtilitiesWidget:
             utilities_manager = UtilitiesManager()
 
         self.manager = utilities_manager
+        
+        # Initialize logging
+        self.logger = logging.getLogger("utilities_widget")
+        
         self.create_widgets()
 
     def create_widgets(self):
@@ -28,6 +36,12 @@ class UtilitiesWidget:
         
         # Repository configuration
         self.hf_token = widgets.Password(description="HF Write Token:", placeholder="HuggingFace Write API Token", layout=widgets.Layout(width='99%'))
+        
+        hf_token_help = widgets.HTML("""
+        <div style='background: #fff3cd; padding: 8px; border-radius: 5px; margin: 5px 0;'>
+        🔑 Get your <strong>WRITE</strong> token <a href='https://huggingface.co/settings/tokens' target='_blank'>here</a>
+        </div>
+        """)
         
         repo_config_box = widgets.HBox([
             widgets.VBox([
@@ -111,6 +125,7 @@ class UtilitiesWidget:
         hf_upload_box = widgets.VBox([
             upload_desc,
             self.hf_token,
+            hf_token_help,
             repo_config_box,
             self.hf_remote_folder,
             file_select_box,
@@ -182,8 +197,37 @@ class UtilitiesWidget:
         self.optimize_button = widgets.Button(
             description="🖼️ Optimize Dataset Images",
             button_style='warning',
-            layout=widgets.Layout(width='99%')
+            layout=widgets.Layout(width='50%')
         )
+
+        self.cancel_optimize_button = widgets.Button(
+            description="🚫 Cancel Optimization",
+            button_style='danger',
+            disabled=True,
+            layout=widgets.Layout(width='50%')
+        )
+
+        # Progress tracking for optimization
+        self.optimize_progress = widgets.FloatProgress(
+            value=0.0,
+            min=0.0,
+            max=100.0,
+            description='Progress:',
+            bar_style='info',
+            layout=widgets.Layout(width='99%', visibility='hidden')
+        )
+
+        self.optimize_progress_label = widgets.Label(
+            value="Ready to optimize images",
+            layout=widgets.Layout(visibility='hidden')
+        )
+
+        # Button row and progress
+        optimize_button_row = widgets.HBox([self.optimize_button, self.cancel_optimize_button])
+        optimize_progress_box = widgets.VBox([
+            self.optimize_progress,
+            self.optimize_progress_label
+        ], layout=widgets.Layout(margin='5px 0px'))
 
         self.optimize_status = widgets.HTML("<p><strong>📊 Status:</strong> Ready to optimize</p>")
         self.optimize_output = widgets.Output(layout=widgets.Layout(height='400px', overflow='scroll'))
@@ -194,7 +238,8 @@ class UtilitiesWidget:
             self.optimize_format,
             self.optimize_quality,
             optimization_help,
-            self.optimize_button,
+            optimize_button_row,
+            optimize_progress_box,
             self.optimize_status,
             self.optimize_output
         ])
@@ -219,8 +264,9 @@ class UtilitiesWidget:
         self.hf_refresh_button.on_click(self.refresh_file_list)
         self.hf_file_type.observe(self.on_file_type_change, names='value')
         self.hf_sort_by.observe(self.on_sort_change, names='value')
-        self.resize_button.on_click(self.run_resize_lora)
-        self.optimize_button.on_click(self.run_optimize_dataset)
+        self.resize_button.on_click(self._handle_async_resize)
+        self.cancel_optimize_button.on_click(self.cancel_current_optimization)
+        self.optimize_button.on_click(self._handle_async_optimize)
         
         # Initialize file list
         self.refresh_file_list(None)
@@ -236,7 +282,10 @@ class UtilitiesWidget:
         file_extension = self.hf_file_type.value
         sort_by = self.hf_sort_by.value
         
+        self.logger.info(f"Refreshing file list: directory='{directory}', extension='{file_extension}', sort='{sort_by}'")
+        
         if not directory or not os.path.isdir(directory):
+            self.logger.warning(f"Invalid directory: {directory}")
             self.hf_file_list.options = []
             with self.hf_upload_output:
                 print(f"⚠️ Invalid directory: {directory}")
@@ -244,6 +293,10 @@ class UtilitiesWidget:
         
         files = self.manager.get_files_in_directory(directory, file_extension, sort_by)
         self.hf_file_list.options = files
+        
+        self.logger.info(f"File scan complete: found {len(files)} files")
+        if files:
+            self.logger.debug(f"Files found: {files}")
         
         with self.hf_upload_output:
             if files:
@@ -405,6 +458,205 @@ class UtilitiesWidget:
                 self.optimize_status.value = "<p><strong>❌ Status:</strong> Dataset optimization failed. Check logs.</p>"
 
     # Dataset counting has been moved to the Dataset Widget for better organization
+
+    # ===== ASYNC IMPLEMENTATIONS =====
+
+    def _handle_async_resize(self, b):
+        """Wrapper to handle async LoRA resize function"""
+        task = asyncio.ensure_future(self.run_async_resize_lora(b))
+        self._current_resize_task = task
+        task.add_done_callback(self._resize_task_done)
+
+    def _handle_async_optimize(self, b):
+        """Wrapper to handle async optimization function"""
+        task = asyncio.ensure_future(self.run_async_optimize_dataset(b))
+        self._current_optimization_task = task
+        task.add_done_callback(self._optimization_task_done)
+
+    def _resize_task_done(self, task):
+        """Callback when resize task completes or fails"""
+        try:
+            if task.cancelled():
+                with self.resize_output:
+                    print("🚫 LoRA resize cancelled by user")
+                self.resize_status.value = "<p><strong>🚫 Status:</strong> LoRA resize cancelled</p>"
+            elif task.exception():
+                with self.resize_output:
+                    print(f"❌ LoRA resize failed: {task.exception()}")
+                self.resize_status.value = "<p><strong>❌ Status:</strong> LoRA resize failed with error</p>"
+        except Exception as e:
+            self.logger.error(f"Error in resize task callback: {e}")
+        finally:
+            self._current_resize_task = None
+
+    def _optimization_task_done(self, task):
+        """Callback when optimization task completes or fails"""
+        try:
+            if task.cancelled():
+                with self.optimize_output:
+                    print("🚫 Optimization cancelled by user")
+                self.optimize_status.value = "<p><strong>🚫 Status:</strong> Optimization cancelled</p>"
+            elif task.exception():
+                with self.optimize_output:
+                    print(f"❌ Optimization failed: {task.exception()}")
+                self.optimize_status.value = "<p><strong>❌ Status:</strong> Optimization failed with error</p>"
+        except Exception as e:
+            self.logger.error(f"Error in optimization task callback: {e}")
+        finally:
+            self._current_optimization_task = None
+            self._update_optimization_button_states()
+
+    def cancel_current_optimization(self, b):
+        """Cancel the currently running optimization task"""
+        if hasattr(self, '_current_optimization_task') and self._current_optimization_task and not self._current_optimization_task.done():
+            self._current_optimization_task.cancel()
+            self.logger.info("Optimization cancellation requested")
+        else:
+            with self.optimize_output:
+                print("ℹ️ No active optimization to cancel")
+
+    def _update_optimization_button_states(self):
+        """Update optimization button states based on current conditions"""
+        optimization_in_progress = (hasattr(self, '_current_optimization_task') and
+                                   self._current_optimization_task and
+                                   not self._current_optimization_task.done())
+
+        self.optimize_button.disabled = optimization_in_progress
+        self.cancel_optimize_button.disabled = not optimization_in_progress
+
+    def _hide_optimization_progress_widgets(self):
+        """Hide the optimization progress widgets"""
+        if hasattr(self, 'optimize_progress'):
+            self.optimize_progress.layout.visibility = 'hidden'
+        if hasattr(self, 'optimize_progress_label'):
+            self.optimize_progress_label.layout.visibility = 'hidden'
+
+    async def run_async_resize_lora(self, b):
+        """Async LoRA resizing with progress feedback"""
+        self.resize_output.clear_output()
+        self.resize_status.value = "<p><strong>⚙️ Status:</strong> Resizing LoRA...</p>"
+
+        try:
+            with self.resize_output:
+                print("🔧 Starting LoRA resize operation...")
+
+                # Run resize in thread executor to avoid blocking UI
+                import concurrent.futures
+                import functools
+
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # Wrap the blocking resize operation
+                    resize_func = functools.partial(
+                        self.manager.resize_lora,
+                        self.lora_input_path.value,
+                        self.lora_output_path.value,
+                        self.lora_new_dim.value,
+                        self.lora_new_alpha.value
+                    )
+
+                    # Run in executor to avoid blocking
+                    success = await loop.run_in_executor(executor, resize_func)
+
+                if success:
+                    self.resize_status.value = "<p><strong>✅ Status:</strong> LoRA resize complete</p>"
+                    print("✅ LoRA resize completed successfully!")
+                else:
+                    self.resize_status.value = "<p><strong>❌ Status:</strong> LoRA resize failed. Check logs.</p>"
+
+        except asyncio.CancelledError:
+            print("\n🚫 LoRA resize was cancelled")
+            self.resize_status.value = "<p><strong>🚫 Status:</strong> LoRA resize cancelled by user</p>"
+            raise
+        except Exception as e:
+            print(f"\n❌ LoRA resize failed with error: {e}")
+            self.resize_status.value = "<p><strong>❌ Status:</strong> LoRA resize failed with error</p>"
+            self.logger.error(f"LoRA resize error: {e}")
+
+    async def run_async_optimize_dataset(self, b):
+        """Async dataset image optimization with progress tracking"""
+        self.optimize_output.clear_output()
+
+        # Show progress widgets
+        self.optimize_progress.layout.visibility = 'visible'
+        self.optimize_progress_label.layout.visibility = 'visible'
+        self.optimize_progress.value = 0
+        self.optimize_progress_label.value = "Initializing optimization..."
+
+        # Update button states
+        self._update_optimization_button_states()
+
+        self.optimize_status.value = "<p><strong>⚙️ Status:</strong> Optimizing dataset images...</p>"
+
+        try:
+            with self.optimize_output:
+                dataset_path = self.optimize_dataset_path.value.strip()
+                if not dataset_path:
+                    print("❌ Please specify a dataset path")
+                    self.optimize_status.value = "<p><strong>❌ Status:</strong> Please specify a dataset path</p>"
+                    self._hide_optimization_progress_widgets()
+                    return
+
+                if not os.path.exists(dataset_path):
+                    print(f"❌ Dataset path not found: {dataset_path}")
+                    self.optimize_status.value = "<p><strong>❌ Status:</strong> Dataset path not found</p>"
+                    self._hide_optimization_progress_widgets()
+                    return
+
+                target_format = self.optimize_format.value
+                quality = self.optimize_quality.value
+
+                print(f"🖼️ Optimizing images in: {dataset_path}")
+                print(f"📊 Target format: {target_format.upper()}")
+                print(f"⚙️ Quality: {quality}")
+                print("="*50)
+
+                # Run optimization in thread executor with progress tracking
+                import concurrent.futures
+                import functools
+
+                loop = asyncio.get_event_loop()
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # Create a partial function for the manager's optimization
+                    optimize_func = functools.partial(
+                        self.manager.optimize_dataset_images,
+                        dataset_path=dataset_path,
+                        target_format=target_format,
+                        max_file_size_mb=999,  # High value to disable size-based resizing
+                        quality=quality,
+                        max_dimension=None  # No dimension-based resizing
+                    )
+
+                    # Show initial progress
+                    self.optimize_progress.value = 10
+                    self.optimize_progress_label.value = "Starting optimization process..."
+
+                    # Run in executor to avoid blocking
+                    success = await loop.run_in_executor(executor, optimize_func)
+
+                    # Complete progress
+                    self.optimize_progress.value = 100
+                    self.optimize_progress_label.value = "Optimization complete!"
+
+                if success:
+                    self.optimize_status.value = "<p><strong>✅ Status:</strong> Dataset optimization complete</p>"
+                    print("✅ Dataset optimization completed successfully!")
+                else:
+                    self.optimize_status.value = "<p><strong>❌ Status:</strong> Dataset optimization failed</p>"
+
+        except asyncio.CancelledError:
+            print("\n🚫 Optimization was cancelled")
+            self.optimize_status.value = "<p><strong>🚫 Status:</strong> Optimization cancelled by user</p>"
+            raise
+        except Exception as e:
+            print(f"\n❌ Optimization failed with error: {e}")
+            self.optimize_status.value = "<p><strong>❌ Status:</strong> Optimization failed with error</p>"
+            self.logger.error(f"Optimization error: {e}")
+        finally:
+            # Always hide progress widgets when done
+            await asyncio.sleep(0.5)  # Brief delay to let user see completion
+            self._hide_optimization_progress_widgets()
+            self._update_optimization_button_states()
 
     def display(self):
         display(self.widget_box)

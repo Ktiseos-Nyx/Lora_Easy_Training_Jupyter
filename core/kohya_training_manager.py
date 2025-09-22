@@ -572,13 +572,18 @@ class KohyaTrainingManager:
             "network_arguments": {
                 "network_dim": config.get('network_dim'),           # Widget provides this
                 "network_alpha": config.get('network_alpha'),       # Widget provides this
+                "conv_dim": config.get('conv_dim'),                 # Widget provides this for LyCORIS
+                "conv_alpha": config.get('conv_alpha'),             # Widget provides this for LyCORIS
                 **network_config  # Add network_module and network_args based on LoRA type
             },
             "optimizer_arguments": {
                 "learning_rate": config.get('unet_lr'),             # Widget provides 'unet_lr'
                 "text_encoder_lr": config.get('text_encoder_lr'),   # Widget provides this
                 "lr_scheduler": config.get('lr_scheduler'),         # Widget provides this  
+                "lr_scheduler_num_cycles": config.get('lr_scheduler_number'),  # Widget provides this
+                "lr_warmup_ratio": config.get('lr_warmup_ratio'),   # Widget provides this
                 "optimizer_type": config.get('optimizer'),          # Widget provides 'optimizer'
+                "max_grad_norm": config.get('max_grad_norm'),       # Widget provides this
                 **self._get_optimizer_arguments(config.get('optimizer', ''))  # Add optimizer-specific args
             },
             "training_arguments": {
@@ -586,6 +591,7 @@ class KohyaTrainingManager:
                 "max_train_epochs": config.get('epochs'),                       # Widget provides 'epochs'
                 "train_batch_size": config.get('train_batch_size'),             # Widget provides 'train_batch_size'
                 "save_every_n_epochs": config.get('save_every_n_epochs'),       # Widget provides this
+                "keep_only_last_n_epochs": config.get('keep_only_last_n_epochs'),  # Widget provides this
                 "mixed_precision": config.get('precision'),                     # Widget provides 'precision'
                 "output_dir": self.output_dir,                                   # Absolute path to output directory
                 "output_name": config.get('project_name', 'lora'),              # Widget provides 'project_name'
@@ -594,21 +600,84 @@ class KohyaTrainingManager:
                 "seed": 42,                                                      # Static seed
                 # Performance and memory optimization
                 "gradient_checkpointing": config.get('gradient_checkpointing', True),  # Widget provides this
+                "gradient_accumulation_steps": config.get('gradient_accumulation_steps', 1),  # Widget provides this
                 "cache_latents": config.get('cache_latents', True),             # Widget provides this
                 "cache_latents_to_disk": config.get('cache_latents_to_disk', True),  # Widget provides this
+                "cache_text_encoder_outputs": config.get('cache_text_encoder_outputs', False),  # Widget provides this
                 "vae_batch_size": config.get('vae_batch_size', 1),              # Widget provides this
                 "no_half_vae": config.get('no_half_vae', False),                # Widget provides this
-                # Training optimizations
-                "gradient_accumulation_steps": config.get('gradient_accumulation_steps', 1),  # Widget provides this
-                "max_grad_norm": config.get('max_grad_norm', 1.0),              # Widget provides this
+                # Model variant and training mode settings
+                "v2": config.get('v2', False),                                  # Widget provides this
+                "v_parameterization": config.get('v_parameterization', False), # Widget provides this
+                "zero_terminal_snr": config.get('zero_terminal_snr', False),   # Widget provides this
+                "network_train_unet_only": config.get('network_train_unet_only', False),  # Widget provides this
+                # Cross attention and precision settings
+                "xformers": config.get('cross_attention') == 'xformers',       # Widget provides cross_attention
+                "sdpa": config.get('cross_attention') == 'sdpa',               # Widget provides cross_attention
+                "fp8_base": config.get('fp8_base', False),                     # Widget provides this
+                "full_fp16": config.get('full_fp16', False),                   # Widget provides this
+                # Noise and training stability
+                "noise_offset": config.get('noise_offset', 0.0),              # Widget provides this
+                "min_snr_gamma": config.get('min_snr_gamma') if config.get('min_snr_gamma_enabled') else None,  # Widget provides both
+                "ip_noise_gamma": config.get('ip_noise_gamma') if config.get('ip_noise_gamma_enabled') else None,  # Widget provides both
+                "multires_noise_iterations": 6 if config.get('multinoise') else None,  # Widget provides multinoise
+                "adaptive_noise_scale": config.get('adaptive_noise_scale') if config.get('adaptive_noise_scale', 0) > 0 else None,  # Widget provides this
+                # Caption handling
+                "caption_dropout_rate": config.get('caption_dropout_rate', 0.0),  # Widget provides this
+                "caption_tag_dropout_rate": config.get('caption_tag_dropout_rate', 0.0),  # Widget provides this
+                "caption_dropout_every_n_epochs": config.get('caption_dropout_every_n_epochs'),  # Advanced caption dropout scheduling
+                "keep_tokens": config.get('keep_tokens', 0),                   # Widget provides this
+                "keep_tokens_separator": config.get('keep_tokens_separator'),  # Separator for keep_tokens feature
+                "shuffle_caption": config.get('shuffle_caption', False),      # Randomly shuffle caption order
+                "secondary_separator": config.get('secondary_separator'),     # Additional separator for captions
+                "enable_wildcard": config.get('enable_wildcard', False),      # Support wildcard notation in captions
+                # Data augmentation
+                "random_crop": config.get('random_crop', False),               # Widget provides this
+                "color_aug": config.get('color_aug', False),                  # Color augmentation
+                "flip_aug": config.get('flip_aug', False),                    # Horizontal flip augmentation
             },
         }
 
+        # Ensure numeric values are properly typed for TOML
+        self._fix_numeric_types(toml_config)
+        
         with open(config_path, 'w') as f:
             toml.dump(toml_config, f)
 
         logger.info(f"Created config TOML: {config_path}")
         return config_path
+
+    def _fix_numeric_types(self, config_dict: Dict):
+        """
+        Recursively convert string representations of numbers to proper numeric types for TOML.
+        Prevents 'TypeError: full_like(): argument fill_value must be Number, not str'
+        """
+        numeric_fields = {
+            'min_snr_gamma', 'max_grad_norm', 'noise_offset', 'lr_warmup_ratio',
+            'learning_rate', 'text_encoder_lr', 'unet_lr', 'weight_decay',
+            'caption_dropout_rate', 'caption_tag_dropout_rate', 'keep_tokens',
+            'train_batch_size', 'gradient_accumulation_steps', 'max_train_epochs',
+            'save_every_n_epochs', 'keep_only_last_n_epochs', 'clip_skip',
+            'vae_batch_size', 'network_dim', 'network_alpha', 'conv_dim', 'conv_alpha'
+        }
+        
+        def convert_recursive(obj):
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    if key in numeric_fields and value is not None:
+                        try:
+                            # Convert string numbers to proper numeric types
+                            if isinstance(value, str) and value.replace('.', '').replace('-', '').isdigit():
+                                obj[key] = float(value) if '.' in value else int(value)
+                        except (ValueError, AttributeError):
+                            pass  # Keep original value if conversion fails
+                    else:
+                        convert_recursive(value)
+            elif isinstance(obj, list):
+                for item in obj:
+                    convert_recursive(item)
+        
+        convert_recursive(config_dict)
 
     def create_dataset_toml(self, config: Dict) -> str:
         """
@@ -690,20 +759,46 @@ class KohyaTrainingManager:
             general_section['flip_aug'] = config.get('flip_aug')
         # Always specify caption extension - default to .txt if not provided
         general_section['caption_extension'] = config.get('caption_extension', '.txt')
+        
+        # Bucketing settings - now properly from widget
         if config.get('enable_bucket') is not None:
             general_section['enable_bucket'] = config.get('enable_bucket')
         if config.get('bucket_no_upscale') is not None:
             general_section['bucket_no_upscale'] = config.get('bucket_no_upscale')
-        if config.get('bucket_reso_steps') is not None:
-            general_section['bucket_reso_steps'] = config.get('bucket_reso_steps')
+        
+        # Handle bucket_reso_steps with SDXL optimization
+        bucket_steps = config.get('bucket_reso_steps')
+        if bucket_steps is not None:
+            general_section['bucket_reso_steps'] = bucket_steps
+        elif config.get('sdxl_bucket_optimization'):
+            general_section['bucket_reso_steps'] = 32  # SDXL optimized
+        else:
+            general_section['bucket_reso_steps'] = 64  # Standard
+            
         if config.get('min_bucket_reso') is not None:
             general_section['min_bucket_reso'] = config.get('min_bucket_reso')
         if config.get('max_bucket_reso') is not None:
             general_section['max_bucket_reso'] = config.get('max_bucket_reso')
+            
+        # Caption handling settings from widget
         if config.get('caption_dropout_rate') is not None:
             general_section['caption_dropout_rate'] = config.get('caption_dropout_rate')
         if config.get('caption_tag_dropout_rate') is not None:
             general_section['caption_tag_dropout_rate'] = config.get('caption_tag_dropout_rate')
+        if config.get('caption_dropout_every_n_epochs') is not None:
+            general_section['caption_dropout_every_n_epochs'] = config.get('caption_dropout_every_n_epochs')
+        if config.get('keep_tokens_separator') is not None:
+            general_section['keep_tokens_separator'] = config.get('keep_tokens_separator')
+        if config.get('secondary_separator') is not None:
+            general_section['secondary_separator'] = config.get('secondary_separator')
+        if config.get('enable_wildcard') is not None:
+            general_section['enable_wildcard'] = config.get('enable_wildcard')
+
+        # Data augmentation settings
+        if config.get('color_aug') is not None:
+            general_section['color_aug'] = config.get('color_aug')
+        if config.get('random_crop') is not None:
+            general_section['random_crop'] = config.get('random_crop')
 
         # Build final structure
         dataset_config = {
@@ -902,15 +997,36 @@ class KohyaTrainingManager:
             with open(config_path, 'r') as f:
                 config = toml.load(f)
             
-            # Detect model type from the loaded config
-            model_path = config.get('training_arguments', {}).get('pretrained_model_name_or_path', '')
-            model_type = self.detect_model_type(model_path)
-            
-            # Get the correct training script for the model type
+            # Use the user's selected model type from dropdown (not auto-detection!)
+            raw_model_type = config.get('model_type', 'sd15')
+
+            # Normalize dropdown values to script mapping keys
+            model_type_mapping = {
+                'sd1_5_2_0': 'sd15',  # From widget: SD1.5/2.0 -> sd1_5_2_0 -> sd15
+                'sdxl': 'sdxl',       # Direct match
+                'flux': 'flux',       # Direct match
+                'sd3': 'sd3',         # Direct match
+                'sd15': 'sd15',       # Direct match for legacy configs
+            }
+
+            if raw_model_type not in model_type_mapping:
+                error_msg = f"❌ Unknown model type '{raw_model_type}' selected. Supported types: {list(model_type_mapping.keys())}"
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+
+            model_type = model_type_mapping[raw_model_type]
+
+            # Get the correct training script for the user's choice
             script_name = self.SCRIPT_MAPPING.get(model_type, 'train_network.py')
-            
-            logger.info(f"🧠 Detected model type: {model_type}")
+
+            logger.info(f"🎯 User selected model type: {model_type}")
             logger.info(f"🎯 Using training script: {script_name}")
+
+            # Optional: Validate that the model file exists (but don't override user choice)
+            model_path = config.get('training_arguments', {}).get('pretrained_model_name_or_path', '')
+            if model_path and not os.path.exists(model_path):
+                logger.warning(f"⚠️ Model file not found: {model_path}")
+                logger.info("💡 Training will continue with user's selected type, but may fail if path is wrong")
 
             # Build training command with correct script
             cmd = [
@@ -1435,9 +1551,15 @@ class KohyaTrainingManager:
         
         # Special handling for DoRA - it's an argument, not a separate algorithm
         if mapped_type == 'dora':
+            network_args = ["dora_wd=True"]
+
+            # Add additional DoRA parameters from widget config
+            if config.get('dora_alpha'):
+                network_args.append(f"dora_alpha={config['dora_alpha']}")
+
             return {
                 "network_module": "networks.lora",
-                "network_args": ["dora_wd=True"]
+                "network_args": network_args
             }
         
         if mapped_type is None:  # Standard LoRA
@@ -1445,9 +1567,15 @@ class KohyaTrainingManager:
         
         # Special handling for native sd_scripts modules
         if mapped_type == 'dylora':
+            network_args = []
+
+            # Add unit parameter (default to 4 if not specified)
+            unit = config.get('dylora_unit', 4)
+            network_args.append(f"unit={unit}")
+
             return {
                 "network_module": "networks.dylora",
-                "network_args": ["unit=4"]  # Default unit size for DyLoRA
+                "network_args": network_args
             }
         
         # Get LyCORIS configuration
@@ -1459,7 +1587,33 @@ class KohyaTrainingManager:
             }
             
             # Add network_args if specified
-            network_args = lycoris_config.get('network_args', [])
+            network_args = lycoris_config.get('network_args', []).copy()  # Start with base args (e.g., ['algo=loha'])
+
+            # Add additional parameters from widget config
+            if config.get('conv_dim'):
+                network_args.append(f"conv_dim={config['conv_dim']}")
+
+            if config.get('conv_alpha'):
+                network_args.append(f"conv_alpha={config['conv_alpha']}")
+
+            if config.get('preset'):  # Like "attn-mlp", "full", "attn-only"
+                network_args.append(f"preset={config['preset']}")
+
+            if config.get('rank_dropout'):
+                network_args.append(f"rank_dropout={config['rank_dropout']}")
+
+            if config.get('module_dropout'):
+                network_args.append(f"module_dropout={config['module_dropout']}")
+
+            if config.get('use_tucker') is not None:  # Boolean parameter
+                network_args.append(f"use_tucker={str(config['use_tucker']).lower()}")
+
+            if config.get('decompose_both') is not None:  # Boolean parameter
+                network_args.append(f"decompose_both={str(config['decompose_both']).lower()}")
+
+            if config.get('factor'):  # For LoKr
+                network_args.append(f"factor={config['factor']}")
+
             if network_args:
                 result["network_args"] = network_args
             

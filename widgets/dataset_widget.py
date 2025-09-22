@@ -33,6 +33,8 @@ class DatasetWidget:
 
         self.manager = dataset_manager
         self.file_manager = file_upload_manager
+        # Race condition guard: prevent observer conflicts during programmatic changes
+        self._programmatic_change = False
         self.create_widgets()
 
     def create_widgets(self):
@@ -146,14 +148,48 @@ class DatasetWidget:
             disabled=False
         )
 
-        # Create button row for upload and reset
-        upload_button_row = widgets.HBox([self.upload_images_button, self.upload_zip_button, self.reset_upload_button])
+        self.cancel_upload_button = widgets.Button(
+            description="🚫 Cancel Upload",
+            button_style='danger',
+            disabled=True
+        )
+
+        # Progress tracking widgets
+        self.upload_progress = widgets.FloatProgress(
+            value=0.0,
+            min=0.0,
+            max=100.0,
+            description='Progress:',
+            bar_style='info',
+            style={'bar_color': '#007bff'},
+            layout=widgets.Layout(width='99%', visibility='hidden')
+        )
+
+        self.upload_status_label = widgets.Label(
+            value="Ready to upload",
+            layout=widgets.Layout(visibility='hidden')
+        )
+
+        # Create button row for upload, cancel, and reset
+        upload_button_row = widgets.HBox([
+            self.upload_images_button,
+            self.upload_zip_button,
+            self.cancel_upload_button,
+            self.reset_upload_button
+        ])
+
+        # Progress display
+        progress_box = widgets.VBox([
+            self.upload_progress,
+            self.upload_status_label
+        ], layout=widgets.Layout(margin='10px 0px'))
 
         self.upload_method_box = widgets.VBox([
             upload_method_desc,
             folder_creation_box,
             self.file_upload,
-            upload_button_row
+            upload_button_row,
+            progress_box
         ])
 
         # Gelbooru Scraper Section
@@ -247,7 +283,7 @@ class DatasetWidget:
             if change['new'] == 'url':
                 self.url_method_box.layout.display = 'block'
                 self.upload_method_box.layout.display = 'none'
-                self.gelbooru_method_box.layout.display = 'none'
+                self.gallery_dl_method_box.layout.display = 'none'
             elif change['new'] == 'upload':
                 self.url_method_box.layout.display = 'none'
                 self.upload_method_box.layout.display = 'block'
@@ -273,23 +309,7 @@ class DatasetWidget:
             self.dataset_output
         ])
 
-        # Add FiftyOne integration button
-        self.fiftyone_explorer_button = widgets.Button(
-            description="🔍 Open Visual Explorer",
-            button_style='info',
-            layout=widgets.Layout(width='99%')
-        )
-        self.fiftyone_explorer_button.on_click(self.launch_fiftyone_explorer)
-
-        # Add Apply Curation Changes button
-        self.apply_curation_button = widgets.Button(
-            description="💾 Apply Curation Changes",
-            button_style='success',
-            layout=widgets.Layout(width='99%')
-        )
-        self.apply_curation_button.on_click(self.apply_fiftyone_curation)
-
-        dataset_setup_box.children = list(dataset_setup_box.children) + [self.fiftyone_explorer_button, self.apply_curation_button]
+        # FiftyOne integration buttons REMOVED - feature on pause
 
         # --- File Renaming Section ---
         rename_desc = widgets.HTML("""<h3>📝 File Renaming</h3>
@@ -425,6 +445,41 @@ class DatasetWidget:
         )
 
         self.tagging_button = widgets.Button(description="🏷️ Start Tagging", button_style='primary')
+
+        self.cancel_tagging_button = widgets.Button(
+            description="🚫 Cancel Tagging",
+            button_style='danger',
+            disabled=True
+        )
+
+        # Tagging progress widgets
+        self.tagging_progress = widgets.FloatProgress(
+            value=0.0,
+            min=0.0,
+            max=100.0,
+            description='Progress:',
+            bar_style='info',
+            style={'bar_color': '#007bff'},
+            layout=widgets.Layout(width='99%', visibility='hidden')
+        )
+
+        self.tagging_progress_label = widgets.Label(
+            value="Ready to tag images",
+            layout=widgets.Layout(visibility='hidden')
+        )
+
+        # Button row for tagging and cancel
+        tagging_button_row = widgets.HBox([
+            self.tagging_button,
+            self.cancel_tagging_button
+        ])
+
+        # Progress display
+        tagging_progress_box = widgets.VBox([
+            self.tagging_progress,
+            self.tagging_progress_label
+        ], layout=widgets.Layout(margin='10px 0px'))
+
         self.tagging_status = widgets.HTML("<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007acc;'><strong>Status:</strong> Ready</div>")
         self.tagging_output = widgets.Output(layout=widgets.Layout(height='300px', overflow='scroll', border='1px solid #ddd'))
 
@@ -436,7 +491,8 @@ class DatasetWidget:
             self.tagging_threshold,
             self.blacklist_tags,
             self.caption_extension,
-            self.tagging_button,
+            tagging_button_row,
+            tagging_progress_box,
             self.tagging_status,
             self.tagging_output
         ])
@@ -739,13 +795,15 @@ class DatasetWidget:
         self.create_folder_button.on_click(self.run_create_folder)
         self.upload_images_button.on_click(self._handle_async_upload)
         self.upload_zip_button.on_click(self._handle_async_zip_upload)
+        self.cancel_upload_button.on_click(self.cancel_current_upload)
         
-        logger.info("🔗 BUTTON HANDLERS: Upload button click handlers attached")
+        # Upload button click handlers attached
         # Gallery-dl scraper functionality integrated into URL download
         # self.gelbooru_button.on_click(self.run_gallery_dl_scraper)  # Button removed, functionality integrated
         self.preview_rename_button.on_click(self.run_preview_rename)
         self.rename_files_button.on_click(self.run_rename_files)
-        self.tagging_button.on_click(self.run_tagging)
+        self.tagging_button.on_click(self._handle_async_tagging)
+        self.cancel_tagging_button.on_click(self.cancel_current_tagging)
         self.cleanup_button.on_click(self.run_cleanup)
         self.add_trigger_button.on_click(self.run_add_trigger)
         self.remove_tags_button.on_click(self.run_remove_tags)
@@ -755,121 +813,7 @@ class DatasetWidget:
         self.upload_button.on_click(self.run_upload_to_huggingface)
 
         # --- File Upload Observer ---
-        logger.info(f"🔗 ATTACHING FILE UPLOAD OBSERVER")
-        logger.info(f"🔗 FileUpload widget type: {type(self.file_upload)}")
-        logger.info(f"🔗 FileUpload widget value: {self.file_upload.value}")
-        logger.info(f"🔗 FileUpload widget description: {self.file_upload.description}")
-        
         self.file_upload.observe(self.on_file_upload_change, names='value')
-        
-        logger.info(f"🔗 FILE UPLOAD OBSERVER ATTACHED SUCCESSFULLY")
-        logger.info(f"🔗 Observer method: {self.on_file_upload_change}")
-        
-        # Test if we can manually trigger the observer
-        logger.info(f"🧪 TESTING: Manual observer trigger...")
-        try:
-            test_change = {'new': [], 'old': [], 'type': 'change', 'name': 'value', 'owner': self.file_upload}
-            self.on_file_upload_change(test_change)
-            logger.info(f"🧪 TESTING: Manual trigger successful!")
-        except Exception as e:
-            logger.error(f"🧪 TESTING: Manual trigger failed: {e}")
-            
-        # WORKAROUND: Implement polling-based file detection since observer isn't working
-        logger.info(f"🔄 WORKAROUND: Starting file upload polling system...")
-        self._last_file_count = 0
-        self._last_file_names = set()
-        import threading
-        import time
-        
-        def poll_file_upload():
-            """Poll FileUpload widget for changes since observer isn't working"""
-            poll_count = 0
-            while True:
-                try:
-                    poll_count += 1
-                    current_files = self.file_upload.value
-                    current_count = len(current_files)
-                    current_names = {f['name'] for f in current_files} if current_files else set()
-                    
-                    # Removed heartbeat logging - it proved the thread works but spams logs
-                    # if poll_count % 10 == 0:
-                    #     logger.info(f"🔄 POLLING HEARTBEAT #{poll_count}: {current_count} files, widget_value={current_files}")
-                    
-                    # Check if files have changed
-                    if current_count != self._last_file_count or current_names != self._last_file_names:
-                        logger.info(f"🔄 POLLING DETECTED FILE CHANGE: {self._last_file_count} -> {current_count} files")
-                        logger.info(f"🔄 File names: {list(current_names)}")
-                        
-                        # AUTO-UPLOAD: Bypass broken observer system entirely
-                        if current_count > 0:
-                            logger.info(f"🚀 AUTO-UPLOAD: Starting immediate upload of {current_count} files...")
-                            
-                            # Check if folder exists - ADD DETAILED DEBUGGING
-                            folder_path = self.dataset_directory.value.strip()
-                            logger.info(f"🔍 DEBUG: dataset_directory.value = '{self.dataset_directory.value}'")
-                            logger.info(f"🔍 DEBUG: folder_path after strip = '{folder_path}'") 
-                            logger.info(f"🔍 DEBUG: os.path.exists(folder_path) = {os.path.exists(folder_path) if folder_path else 'N/A - empty path'}")
-                            if folder_path:
-                                logger.info(f"🔍 DEBUG: os.path.abspath(folder_path) = '{os.path.abspath(folder_path)}'")
-                                logger.info(f"🔍 DEBUG: os.path.isdir(folder_path) = {os.path.isdir(folder_path)}")
-                            
-                            if folder_path and os.path.exists(folder_path):
-                                # Determine if ZIP or images
-                                is_zip_selected = any(f['name'].lower().endswith('.zip') for f in current_files)
-                                
-                                if is_zip_selected:
-                                    logger.info(f"🚀 AUTO-UPLOAD: Detected ZIP file, uploading and extracting...")
-                                    # Use FileUploadManager for clean ZIP handling
-                                    zip_file = current_files[0]  # Should only be one ZIP
-                                    success, message = self.file_manager.upload_and_extract_zip(zip_file, folder_path)
-                                    self._update_upload_status(success, message)
-                                else:
-                                    logger.info(f"🚀 AUTO-UPLOAD: Detected image files, uploading...")
-                                    # Use FileUploadManager for clean image handling
-                                    success, message = self.file_manager.upload_images(current_files, folder_path)
-                                    self._update_upload_status(success, message)
-                                    
-                                # Clear the widget immediately after triggering upload
-                                logger.info(f"🧹 AUTO-CLEAR: Clearing file widget after upload trigger")
-                                # Note: We clear in the upload method, not here to avoid race conditions
-                            else:
-                                if not folder_path:
-                                    logger.warning(f"🚀 AUTO-UPLOAD: No folder path set! dataset_directory.value is empty or None")
-                                elif not os.path.exists(folder_path):
-                                    logger.warning(f"🚀 AUTO-UPLOAD: Folder path '{folder_path}' does not exist on filesystem!")
-                                    logger.warning(f"🔍 DEBUG: Current working directory = '{os.getcwd()}'")
-                                    # List what IS in the current directory to help debug
-                                    try:
-                                        current_files_list = os.listdir('.')
-                                        logger.warning(f"🔍 DEBUG: Files in current dir: {current_files_list[:10]}")  # Show first 10
-                                    except Exception as e:
-                                        logger.warning(f"🔍 DEBUG: Could not list current directory: {e}")
-                                else:
-                                    logger.warning(f"🚀 AUTO-UPLOAD: Unknown folder validation issue!")
-                                # Still trigger observer for status updates
-                                change_event = {
-                                    'new': current_files,
-                                    'old': (),
-                                    'type': 'change',
-                                    'name': 'value',
-                                    'owner': self.file_upload
-                                }
-                                self.on_file_upload_change(change_event)
-                        
-                        # Update tracking
-                        self._last_file_count = current_count
-                        self._last_file_names = current_names
-                        
-                except Exception as e:
-                    logger.error(f"🔄 POLLING ERROR: {e}")
-                
-                # Poll every 2 seconds
-                time.sleep(2)
-        
-        # Start polling in background thread
-        polling_thread = threading.Thread(target=poll_file_upload, daemon=True)
-        polling_thread.start()
-        logger.info(f"🔄 WORKAROUND: File upload polling thread started")
 
         # Reset upload button event handler (button created earlier)
         self.reset_upload_button.on_click(self.reset_upload_widget)
@@ -880,14 +824,12 @@ class DatasetWidget:
     def on_file_upload_change(self, change):
         """Handle file upload selection changes"""
         try:
-            logger.info(f"🔍 FILE UPLOAD CHANGE TRIGGERED!")
-            logger.info(f"🔍 Change object type: {type(change)}")
-            logger.info(f"🔍 Change object keys: {list(change.keys()) if hasattr(change, 'keys') else 'No keys'}")
-            
+            # Race condition guard: ignore programmatic changes (like cache resets)
+            if self._programmatic_change:
+                logger.debug("Ignoring programmatic file upload change to prevent race condition")
+                return
+                
             new_files = change.get('new', [])
-            logger.info(f"🔍 Files count: {len(new_files)}")
-            logger.info(f"🔍 Change type: {change.get('type', 'No type')}")
-            logger.debug(f"🔍 Full change object: {change}")
             
             if new_files:  # Files have been selected
                 file_count = len(new_files)
@@ -931,8 +873,7 @@ class DatasetWidget:
                 if not self.dataset_directory.value.strip():
                     self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>Status:</strong> Select images/ZIP or create a folder to start uploading.</div>"
         except Exception as e:
-            logger.error(f"🚨 ERROR in file upload observer: {e}")
-            logger.exception("Full traceback:")
+            logger.error(f"ERROR in file upload observer: {e}")
             # Ensure buttons are disabled if error occurs
             self.upload_images_button.disabled = True
             self.upload_zip_button.disabled = True
@@ -947,12 +888,12 @@ class DatasetWidget:
 
             if not project_name:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a project name.</div>"
-                print("❌ Please enter a project name.")
+                logger.warning("URL download failed: no project name provided")
                 return
 
             if not dataset_url:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter a dataset URL.</div>"
-                print("❌ Please enter a dataset URL.")
+                logger.warning("URL download failed: no dataset URL provided")
                 return
 
             # Sanitize project name
@@ -987,9 +928,6 @@ class DatasetWidget:
 
     def run_create_folder(self, b):
         """Create a new folder for image upload using Kohya's repeat count format"""
-        logger.info("🖱️ BUTTON CLICK: Create Folder button clicked!")
-        logger.info(f"📁 Folder name: '{self.folder_name.value}'")
-        logger.info(f"📁 Repeat count: {self.folder_repeats.value}")
         
         self.dataset_output.clear_output()
         folder_name = self.folder_name.value.strip()
@@ -1014,15 +952,8 @@ class DatasetWidget:
                 print(f"✅ Created Kohya-compatible folder: {folder_path}")
                 print(f"📊 Repeat count: {repeat_count} (auto-detected by training)")
 
-                # Update shared dataset directory - USE ABSOLUTE PATH FOR POLLING THREAD
+                # Update shared dataset directory
                 self.dataset_directory.value = os.path.abspath(folder_path)
-                
-                # DEBUG: Check folder creation success
-                absolute_folder_path = os.path.abspath(folder_path)
-                print(f"🔍 DEBUG FOLDER: Created '{folder_path}' -> absolute: '{absolute_folder_path}'")
-                print(f"🔍 DEBUG FOLDER: os.path.exists('{folder_path}') = {os.path.exists(folder_path)}")
-                print(f"🔍 DEBUG FOLDER: os.path.exists('{absolute_folder_path}') = {os.path.exists(absolute_folder_path)}")
-                print(f"🔍 DEBUG FOLDER: dataset_directory.value now = '{self.dataset_directory.value}'")
 
                 # Check if files are already selected and enable appropriate buttons
                 if self.file_upload.value:
@@ -1043,99 +974,329 @@ class DatasetWidget:
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Folder '{folder_path}' created! Now select images/ZIP to upload.</div>"
 
             except Exception as e:
-                print(f"❌ Failed to create folder: {e}")
+                logger.error(f"Failed to create folder: {e}")
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create folder.</div>"
 
     def _handle_async_upload(self, b):
-        """Wrapper to handle async upload function"""
-        logger.info("🖱️ BUTTON CLICK: Upload Images button clicked!")
-        logger.info(f"🖱️ Button state - disabled: {self.upload_images_button.disabled}")
-        logger.info(f"🖱️ Files in widget: {len(self.file_upload.value)}")
-        asyncio.create_task(self.run_upload_images(b))
+        """Wrapper to handle async upload function with proper error handling"""
+        task = asyncio.ensure_future(self.run_upload_images(b))
+        # Store task reference to allow cancellation
+        self._current_upload_task = task
+        task.add_done_callback(self._upload_task_done)
 
     def _handle_async_zip_upload(self, b):
-        """Wrapper to handle async ZIP upload function"""
-        logger.info("🖱️ BUTTON CLICK: Upload ZIP button clicked!")
-        logger.info(f"🖱️ Button state - disabled: {self.upload_zip_button.disabled}")
-        logger.info(f"🖱️ Files in widget: {len(self.file_upload.value)}")
-        asyncio.create_task(self.run_upload_zip(b))
+        """Wrapper to handle async ZIP upload function with proper error handling"""
+        task = asyncio.ensure_future(self.run_upload_zip(b))
+        # Store task reference to allow cancellation
+        self._current_upload_task = task
+        task.add_done_callback(self._upload_task_done)
+
+    def _upload_task_done(self, task):
+        """Callback when upload task completes or fails"""
+        try:
+            if task.cancelled():
+                with self.dataset_output:
+                    print("🚫 Upload cancelled by user")
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>🚫 Status:</strong> Upload cancelled</div>"
+            elif task.exception():
+                with self.dataset_output:
+                    print(f"❌ Upload failed: {task.exception()}")
+                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Upload failed with error</div>"
+        except Exception as e:
+            logger.error(f"Error in upload task callback: {e}")
+        finally:
+            # Clear task reference
+            self._current_upload_task = None
+            # Re-enable upload buttons
+            self._update_upload_button_states()
+
+    def cancel_current_upload(self, b):
+        """Cancel the currently running upload task"""
+        if hasattr(self, '_current_upload_task') and self._current_upload_task and not self._current_upload_task.done():
+            self._current_upload_task.cancel()
+            logger.info("Upload cancellation requested")
+        else:
+            with self.dataset_output:
+                print("ℹ️ No active upload to cancel")
+
+    def _handle_async_tagging(self, b):
+        """Wrapper to handle async tagging function with proper error handling"""
+        task = asyncio.create_task(self.run_async_tagging(b))
+        # Store task reference to allow cancellation
+        self._current_tagging_task = task
+        task.add_done_callback(self._tagging_task_done)
+
+    def _tagging_task_done(self, task):
+        """Callback when tagging task completes or fails"""
+        try:
+            if task.cancelled():
+                with self.tagging_output:
+                    print("🚫 Tagging cancelled by user")
+                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>🚫 Status:</strong> Tagging cancelled</div>"
+            elif task.exception():
+                with self.tagging_output:
+                    print(f"❌ Tagging failed: {task.exception()}")
+                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Tagging failed with error</div>"
+        except Exception as e:
+            logger.error(f"Error in tagging task callback: {e}")
+        finally:
+            # Clear task reference
+            self._current_tagging_task = None
+            # Re-enable tagging button, disable cancel
+            self._update_tagging_button_states()
+
+    def cancel_current_tagging(self, b):
+        """Cancel the currently running tagging task"""
+        if hasattr(self, '_current_tagging_task') and self._current_tagging_task and not self._current_tagging_task.done():
+            self._current_tagging_task.cancel()
+            logger.info("Tagging cancellation requested")
+        else:
+            with self.tagging_output:
+                print("ℹ️ No active tagging to cancel")
+
+    def _update_tagging_button_states(self):
+        """Update tagging button states based on current conditions"""
+        # Check if tagging is in progress
+        tagging_in_progress = bool(hasattr(self, '_current_tagging_task') and
+                                 self._current_tagging_task and
+                                 not self._current_tagging_task.done())
+
+        # Update button states
+        self.tagging_button.disabled = tagging_in_progress
+        self.cancel_tagging_button.disabled = not tagging_in_progress
+
+    def _hide_tagging_progress_widgets(self):
+        """Hide the tagging progress widgets"""
+        if hasattr(self, 'tagging_progress'):
+            self.tagging_progress.layout.visibility = 'hidden'
+        if hasattr(self, 'tagging_progress_label'):
+            self.tagging_progress_label.layout.visibility = 'hidden'
+
+    def _update_upload_button_states(self):
+        """Update upload button states based on current conditions"""
+        # Check if upload is in progress
+        upload_in_progress = (hasattr(self, '_current_upload_task') and
+                            self._current_upload_task and
+                            not self._current_upload_task.done())
+
+        # Disable upload buttons during upload, enable cancel button
+        if upload_in_progress:
+            self.upload_images_button.disabled = True
+            self.upload_zip_button.disabled = True
+            if hasattr(self, 'cancel_upload_button'):
+                self.cancel_upload_button.disabled = False
+        else:
+            # Re-enable based on file selection and folder existence
+            if hasattr(self, 'file_upload') and self.file_upload.value:
+                folder_path = self.dataset_directory.value.strip()
+                folder_exists = bool(folder_path) and os.path.exists(folder_path)
+                if folder_exists:
+                    is_zip_selected = any(f['name'].lower().endswith('.zip') for f in self.file_upload.value)
+                    self.upload_images_button.disabled = is_zip_selected
+                    self.upload_zip_button.disabled = not is_zip_selected
+                else:
+                    self.upload_images_button.disabled = True
+                    self.upload_zip_button.disabled = True
+            else:
+                self.upload_images_button.disabled = True
+                self.upload_zip_button.disabled = True
+
+            if hasattr(self, 'cancel_upload_button'):
+                self.cancel_upload_button.disabled = True
+
+    def _hide_progress_widgets(self):
+        """Hide the upload progress widgets"""
+        if hasattr(self, 'upload_progress'):
+            self.upload_progress.layout.visibility = 'hidden'
+        if hasattr(self, 'upload_status_label'):
+            self.upload_status_label.layout.visibility = 'hidden'
+
+    async def _async_write_file(self, file_path, content):
+        """Asynchronously write file content to disk"""
+        import aiofiles
+        try:
+            async with aiofiles.open(file_path, 'wb') as f:
+                await f.write(content)
+        except ImportError:
+            # Fallback to synchronous write if aiofiles not available
+            import concurrent.futures
+            import functools
+
+            loop = asyncio.get_event_loop()
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                await loop.run_in_executor(
+                    executor,
+                    functools.partial(self._sync_write_file, file_path, content)
+                )
+
+    def _sync_write_file(self, file_path, content):
+        """Synchronous file write fallback"""
+        with open(file_path, 'wb') as f:
+            f.write(content)
+
+    def _reset_upload_cache(self, b):
+        """
+        Clear the FileUpload widget cache to allow multiple uploads.
+        Fixes the 'upload once' limitation by clearing file_upload.value.
+        Uses race condition guard to prevent observer conflicts.
+        """
+        # Set guard flag to prevent observer race condition
+        self._programmatic_change = True
+        try:
+            self.file_upload.value = ()  # Clear the cached files (won't trigger observer now)
+            self.dataset_status.value = "🔄 Upload cache cleared! Ready for new uploads."
+        finally:
+            # Always clear the guard flag even if something goes wrong
+            self._programmatic_change = False
+        
+        # Clear output area for fresh start
+        self.dataset_output.clear_output()
+        
+        # Provide user feedback
+        with self.dataset_output:
+            print("🔄 Upload widget reset complete!")
+            print("📁 You can now select and upload new files.")
+            print("💡 The previous upload data has been cleared from memory.")
 
     async def run_upload_images(self, b):
-        """Upload multiple images to the created folder with async batch processing"""
+        """Upload multiple images to the created folder with enhanced async processing and progress tracking"""
         self.dataset_output.clear_output()
+
+        logger.debug(f"🚀 DEBUG: run_upload_images called! Button: {b}")
+
+        # Show progress widgets
+        self.upload_progress.layout.visibility = 'visible'
+        self.upload_status_label.layout.visibility = 'visible'
+        self.upload_progress.value = 0
+        self.upload_status_label.value = "Initializing upload..."
+
+        # Update button states
+        self._update_upload_button_states()
 
         if not self.dataset_directory.value:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
-            return
-
-        if not self.file_upload.value:
-            self.dataset_status.value = "❌ Status: Please select images to upload."
+            logger.warning("Image upload failed: no dataset directory set")
+            self._hide_progress_widgets()
             return
 
         upload_folder = self.dataset_directory.value
-        uploaded_files = self.file_upload.value
-        total_files = len(uploaded_files)
-        batch_size = 5  # Process 5 files at a time
 
-        with self.dataset_output:
+        # --- START OF FIX ---
+        # Eagerly and synchronously read all file data into a stable list.
+        # This is the critical step to avoid the race condition where the
+        # underlying memory buffer for `file_upload.value` is cleared.
+        captured_files = []
+        logger.debug(f"🔍 DEBUG: file_upload.value contains {len(self.file_upload.value)} files")
+        for file_info in self.file_upload.value:
+            logger.debug(f"🔍 DEBUG: Processing file: {file_info['name']}")
+            captured_files.append({
+                'name': file_info['name'],
+                'content': file_info['content'].tobytes() # Read into bytes NOW
+            })
+        logger.debug(f"🔍 DEBUG: Successfully captured {len(captured_files)} files")
+
+        # NOW check if we actually captured any files
+        if not captured_files:
+            logger.debug(f"🚨 DEBUG: No files captured! file_upload.value type: {type(self.file_upload.value)}, Value: {self.file_upload.value}")
+            self.dataset_status.value = "❌ Status: Please select images to upload."
+            self._hide_progress_widgets()
+            return
+
+        # DON'T clear the cache yet! Wait until upload is successful!
+        # Widget cache should only be cleared after successful upload, not before
+        # --- END OF FIX ---
+
+        total_files = len(captured_files)
+        batch_size = 3  # Smaller batch size for better progress granularity
+
+        try:
+            import time
             uploaded_count = 0
             total_size = 0
+            start_time = time.time()
 
-            print(f"📁 Uploading {total_files} images to: {upload_folder}")
-            print("="*60)
+            # Process files individually for better progress tracking
+            for i, file_data in enumerate(captured_files):
+                # Check for cancellation
+                if hasattr(self, '_current_upload_task') and self._current_upload_task.cancelled():
+                    break
 
-            # Process files in batches
-            for i in range(0, total_files, batch_size):
-                batch = uploaded_files[i:i + batch_size]
-                batch_start = i + 1
-                batch_end = min(i + batch_size, total_files)
-                
-                # Update status for current batch
-                self.dataset_status.value = f"⚙️ Status: Processing batch {batch_start}-{batch_end} of {total_files} images..."
-                
-                for file_info in batch:
-                    try:
-                        filename = file_info['name']
-                        content_memview = file_info['content']
+                try:
+                    filename = file_data['name']
+                    content = file_data['content']
 
-                        # Convert memory view to bytes
-                        content = content_memview.tobytes()
+                    if not content:
+                        continue
 
-                        if not content:
-                            print(f"⚠️ Warning: {filename} has no content, skipping")
-                            continue
+                    # Update progress
+                    progress_percent = (i / total_files) * 100
+                    self.upload_progress.value = progress_percent
+                    self.upload_status_label.value = f"Uploading {filename} ({i+1}/{total_files})"
 
-                        file_path = os.path.join(upload_folder, filename)
+                    # Update status with current file
+                    elapsed_time = time.time() - start_time
+                    if elapsed_time > 0:
+                        files_per_sec = (i + 1) / elapsed_time
+                        eta_seconds = (total_files - i - 1) / files_per_sec if files_per_sec > 0 else 0
+                        eta_text = f"ETA: {eta_seconds:.0f}s" if eta_seconds > 0 else ""
+                    else:
+                        eta_text = ""
 
-                        # Write file content
-                        with open(file_path, 'wb') as f:
-                            f.write(content)
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007bff;'><strong>⚙️ Status:</strong> Uploading {filename} ({i+1}/{total_files}) {eta_text}</div>"
 
-                        file_size = len(content)
-                        total_size += file_size
-                        uploaded_count += 1
+                    # Async file write
+                    file_path = os.path.join(upload_folder, filename)
+                    await self._async_write_file(file_path, content)
 
-                        print(f"✅ {filename} ({file_size/1024:.1f} KB)")
+                    file_size = len(content)
+                    total_size += file_size
+                    uploaded_count += 1
 
-                    except Exception as e:
-                        print(f"❌ Failed to upload {filename if 'filename' in locals() else 'unknown file'}: {e}")
+                    # Yield control periodically for responsiveness (commented out for testing)
+                    # if i % batch_size == 0:
+                    #     await asyncio.sleep(0.01)  # Small delay for UI responsiveness
+                    await asyncio.sleep(0.001)  # Just a tiny yield
 
-                # Yield control back to the event loop after each batch
-                await asyncio.sleep(0)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    continue
 
-            total_size_mb = total_size / (1024 * 1024)
-            print("\n🎉 Upload complete!")
-            print(f"📊 Uploaded: {uploaded_count}/{total_files} images")
-            print(f"💾 Total size: {total_size_mb:.2f} MB")
-            print(f"📁 Location: {upload_folder}")
+                # Final progress update
+                self.upload_progress.value = 100
+                self.upload_status_label.value = f"Upload complete! ({uploaded_count}/{total_files} files)"
 
-            if uploaded_count > 0:
-                self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB)</div>"
+                total_size_mb = total_size / (1024 * 1024)
+                upload_time = time.time() - start_time
 
-                # DISABLED: Auto-clear causes race condition where widget resets before user can upload
-                # self.file_upload.value = ()  # Users can manually reset if needed
-            else:
-                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
+                print(f"\n🎉 Upload complete!")
+                print(f"📊 Uploaded: {uploaded_count}/{total_files} images")
+                print(f"💾 Total size: {total_size_mb:.2f} MB")
+                print(f"⏱️ Upload time: {upload_time:.1f} seconds")
+                print(f"📁 Location: {upload_folder}")
+
+                if uploaded_count > 0:
+                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB in {upload_time:.1f}s)</div>"
+
+                    # NOW clear the file upload cache after successful upload
+                    self.file_upload.value = ()
+                    logger.debug("🧹 DEBUG: Cleared file upload cache after successful upload")
+                else:
+                    self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
+
+        except asyncio.CancelledError:
+            print("\n🚫 Upload was cancelled")
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>🚫 Status:</strong> Upload cancelled by user</div>"
+            raise  # Re-raise to let the task callback handle it
+        except Exception as e:
+            print(f"\n❌ Upload failed with error: {e}")
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Upload failed with error</div>"
+            logger.error(f"Upload error: {e}")
+        finally:
+            # Always hide progress widgets when done
+            await asyncio.sleep(0.5)  # Brief delay to let user see completion
+            self._hide_progress_widgets()
+            self._update_upload_button_states()
 
     async def run_upload_zip(self, b):
         """Upload and extract a ZIP file to the created folder with async processing"""
@@ -1143,6 +1304,7 @@ class DatasetWidget:
 
         if not self.dataset_directory.value:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
+            logger.warning("ZIP upload failed: no dataset directory set")
             return
 
         if not self.file_upload.value:
@@ -1150,22 +1312,34 @@ class DatasetWidget:
             return
 
         upload_folder = self.dataset_directory.value
-        uploaded_files = self.file_upload.value
-
-        # Find the first ZIP file in the uploaded files
-        zip_file_info = None
-        for file_info in uploaded_files:
+        
+        # --- START OF FIX ---
+        # Find the first ZIP file and eagerly read its content.
+        zip_file_data = None
+        for file_info in self.file_upload.value:
             if file_info['name'].lower().endswith('.zip'):
-                zip_file_info = file_info
+                zip_file_data = {
+                    'name': file_info['name'],
+                    'content': file_info['content'].tobytes() # Read into bytes NOW
+                }
                 break
+        
+        # DEBUGGING: Commenting out premature cache clearing in ZIP function too
+        # This could interfere with regular image uploads if timing is weird
+        # self._programmatic_change = True
+        # try:
+        #     self.file_upload.value = ()
+        # finally:
+        #     self._programmatic_change = False
+        # --- END OF FIX ---
 
-        if not zip_file_info:
+        if not zip_file_data:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No ZIP file selected.</div>"
-            print("❌ No ZIP file selected for upload.")
+            logger.warning("ZIP upload failed: no ZIP file selected in the upload batch")
             return
 
-        zip_filename = zip_file_info['name']
-        zip_content = zip_file_info['content'].tobytes()
+        zip_filename = zip_file_data['name']
+        zip_content = zip_file_data['content']
 
         self.dataset_status.value = f"⚙️ Status: Uploading and extracting {zip_filename}..."
 
@@ -1173,33 +1347,30 @@ class DatasetWidget:
             temp_zip_path = os.path.join(upload_folder, zip_filename)
 
             try:
-                print(f"📦 Saving {zip_filename} to {temp_zip_path}")
+                print(f" Saving {zip_filename} to {temp_zip_path}")
                 with open(temp_zip_path, 'wb') as f:
                     f.write(zip_content)
 
                 print(f"✨ Extracting {zip_filename} to {upload_folder}")
+                # This part is synchronous, but we can still yield after for responsiveness
                 with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
                     zip_ref.extractall(upload_folder)
-                # Yield control during extraction
-                await asyncio.sleep(0)
+                
+                await asyncio.sleep(0) # Yield control
                 print("✅ Extraction complete.")
 
-                # Clean up the temporary zip file
                 os.remove(temp_zip_path)
-                print(f"🗑️ Removed temporary zip file: {temp_zip_path}")
+                print(f"️ Removed temporary zip file: {temp_zip_path}")
 
-                # Count images after extraction
                 try:
                     from core.image_utils import count_images_in_directory
                     image_count = count_images_in_directory(upload_folder)
-                    print(f"📁 Found {image_count} images in {upload_folder}")
+                    print(f" Found {image_count} images in {upload_folder}")
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}. Found {image_count} images.</div>"
                 except Exception as e:
                     print(f"⚠️ Image counting error: {e}")
                     self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}.</div>"
 
-                # DISABLED: Auto-clear causes race condition where widget resets before user can upload
-                # self.file_upload.value = ()  # Users can manually reset if needed
                 self.upload_images_button.disabled = True
                 self.upload_zip_button.disabled = True
 
@@ -1212,9 +1383,12 @@ class DatasetWidget:
 
     def reset_upload_widget(self, b):
         """Reset the file upload widget to clear any cached state"""
-        logger.info("🔄 MANUAL RESET: User clicked reset upload button")
-        # Clear the upload widget value
-        self.file_upload.value = ()
+        # Clear the upload widget value using race condition guard
+        self._programmatic_change = True
+        try:
+            self.file_upload.value = ()
+        finally:
+            self._programmatic_change = False
 
         # Reset button states
         self.upload_images_button.disabled = True
@@ -1230,7 +1404,7 @@ class DatasetWidget:
         else:
             self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔄 Status:</strong> Upload reset. Create a folder and select files to upload.</div>"
 
-        print("🔄 Upload widget reset! Ready for new file selection.")
+        logger.info("Upload widget reset")
 
     def auto_detect_existing_datasets(self):
         """Auto-detect existing dataset directories and set the first one as default"""
@@ -1247,139 +1421,13 @@ class DatasetWidget:
             # Auto-populate if dataset directory is empty
             if not self.dataset_directory.value.strip():
                 self.dataset_directory.value = most_recent
-                print(f"📁 Auto-detected existing dataset: {most_recent}")
+                logger.info(f"Auto-detected existing dataset: {most_recent}")
 
                 # Update status to show detection
                 self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #17a2b8;'><strong>🔍 Status:</strong> Auto-detected dataset folder '{most_recent}'. Select files to upload here.</div>"
 
-    def launch_fiftyone_explorer(self, b):
-        """Launch FiftyOne dataset explorer in sidecar"""
-        dataset_path = self.dataset_directory.value
-        if not dataset_path or not os.path.exists(dataset_path):
-            print("❌ Please set up a dataset first")
-            return
-
-        # Check for sidecar availability first
-        try:
-            from sidecar import Sidecar
-            has_sidecar = True
-        except ImportError:
-            has_sidecar = False
-            print("⚠️ Sidecar not available - FiftyOne will open in browser tab")
-            print("   Install with: pip install sidecar")
-
-        try:
-            import fiftyone as fo
-
-            # Create dataset
-            print("📁 Loading dataset for FiftyOne...")
-            dataset = self.manager.create_fiftyone_dataset(dataset_path)
-            print(f"✅ Dataset loaded: {len(dataset)} images")
-
-            if has_sidecar:
-                # Use sidecar integration
-                print("🔧 Opening FiftyOne in Jupyter sidecar...")
-
-                # Create the sidecar
-                self.fiftyone_sidecar = Sidecar(
-                    title='🔍 Dataset Explorer - FiftyOne',
-                    anchor='split-right'
-                )
-
-                # Launch FiftyOne session in sidecar context
-                with self.fiftyone_sidecar:
-                    session = fo.launch_app(dataset, auto=False, height=800)
-                    self.current_fo_session = session  # Store for curation
-
-                print("✅ FiftyOne launched in sidecar panel!")
-                print("   Use the panel on the right to explore your dataset")
-
-            else:
-                # Fallback to browser-based launch
-                print("🌐 Opening FiftyOne in browser...")
-                session = fo.launch_app(dataset, auto=True)
-                self.current_fo_session = session
-                print("✅ FiftyOne launched in browser tab")
-
-            # Add optional analysis (using real data structure)
-            try:
-                print("📊 Running dataset analysis...")
-
-                # Basic stats
-                print(f"   📁 Total images: {len(dataset)}")
-
-                # Check for captions
-                captioned_samples = 0
-                total_tags = 0
-                trigger_words = set()
-
-                for sample in dataset:
-                    if hasattr(sample, 'tag_count') and sample.tag_count > 0:
-                        captioned_samples += 1
-                        total_tags += sample.tag_count
-                    if hasattr(sample, 'trigger_word') and sample.trigger_word:
-                        trigger_words.add(sample.trigger_word)
-
-                print(f"   📝 Captioned images: {captioned_samples}/{len(dataset)} ({captioned_samples/len(dataset)*100:.1f}%)")
-                print(f"   🏷️ Total tags: {total_tags}")
-                print(f"   🎯 Unique triggers: {len(trigger_words)}")
-
-                # Show trigger words
-                if trigger_words:
-                    print("   🔥 Trigger words found:")
-                    for trigger in sorted(trigger_words):
-                        print(f"      - {trigger}")
-
-                # Show top tags if available
-                if len(dataset) > 0:
-                    first_sample = dataset.first()
-                    if hasattr(first_sample, 'wd14_tags') and first_sample.wd14_tags:
-                        print("   ✅ WD14 tags loaded and available for editing")
-                    else:
-                        print("   ℹ️ No WD14 tags found - may need to run tagging first")
-
-            except Exception as e:
-                print(f"   ⚠️ Analysis failed: {e}")
-
-        except ImportError:
-            print("❌ FiftyOne not available. Install with:")
-            print("   pip install fiftyone")
-        except Exception as e:
-            print(f"❌ Failed to launch FiftyOne: {e}")
-            print(f"   Error details: {str(e)}")
-
-    def apply_fiftyone_curation(self, b):
-        """Apply changes made in FiftyOne back to the local dataset."""
-        dataset_path = self.dataset_directory.value
-        if not dataset_path or not os.path.exists(dataset_path):
-            print("❌ Please set up a dataset first")
-            return
-
-        # Check if we have an active FiftyOne session
-        if not hasattr(self, 'current_fo_session') or self.current_fo_session is None:
-            print("❌ No active FiftyOne session found")
-            print("   Please launch the FiftyOne Explorer first")
-            return
-
-        print("💾 Applying FiftyOne curation changes to local dataset...")
-        try:
-            # Get the current dataset from the session
-            dataset = self.current_fo_session.dataset
-            print(f"📊 Processing {len(dataset)} samples...")
-
-            # This will call the new method in DatasetManager with FiftyOne dataset
-            success = self.manager.apply_curation_to_dataset(dataset_path, fiftyone_dataset=dataset)
-            if success:
-                print("✅ Curation changes applied successfully!")
-                print("🔄 Changes applied:")
-                print("   - Updated captions from FiftyOne edits")
-                print("   - Synced tag modifications")
-                print("   - Applied any sample filtering")
-            else:
-                print("❌ Failed to apply curation changes.")
-        except Exception as e:
-            print(f"❌ Error applying curation: {e}")
-            print("   Make sure FiftyOne Explorer is open and contains your dataset")
+    # FiftyOne methods REMOVED - feature on pause
+    # def launch_fiftyone_explorer() and def apply_fiftyone_curation() removed
 
     def run_gallery_dl_scraper(self, b):
         """Handle image scraping using gallery-dl"""
@@ -1407,12 +1455,12 @@ class DatasetWidget:
             # If custom URL is selected, ensure it's provided
             if site == 'custom' and not custom_url:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please provide a Custom URL when 'Custom URL' site is selected.</div>"
-                print("❌ Please provide a Custom URL when 'Custom URL' site is selected.")
+                logger.warning("Gallery-DL scrape failed: custom URL not provided")
                 return
 
             if not tags and not custom_url:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please enter tags or a Custom URL.</div>"
-                print("❌ Please enter tags or a Custom URL.")
+                logger.warning("Gallery-DL scrape failed: no tags or custom URL provided")
                 return
 
             try:
@@ -1448,16 +1496,198 @@ class DatasetWidget:
                     self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Gallery-DL scrape failed. Check logs.</div>"
 
             except Exception as e:
-                print(f"❌ Failed to run gallery-dl scraper: {e}")
+                logger.error(f"Failed to run gallery-dl scraper: {e}")
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Scraper encountered an error.</div>"
 
+    async def run_async_tagging(self, b):
+        """Async tagging with proper asyncio implementation and progress tracking"""
+        self.tagging_output.clear_output()
+
+        # Show progress widgets
+        self.tagging_progress.layout.visibility = 'visible'
+        self.tagging_progress_label.layout.visibility = 'visible'
+        self.tagging_progress.value = 0
+        self.tagging_progress_label.value = "Initializing tagging..."
+
+        # Update button states
+        self._update_tagging_button_states()
+
+        self.tagging_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Starting {self.tagging_method.value} tagging...</div>"
+
+        if not self.dataset_directory.value:
+            self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
+            logger.warning("Tagging failed: no dataset directory set")
+            self._hide_tagging_progress_widgets()
+            return
+
+        try:
+            # Get image files for progress tracking
+            import glob
+            image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif', '*.bmp', '*.tiff', '*.tif']
+            image_files = []
+            for ext in image_extensions:
+                image_files.extend(glob.glob(os.path.join(self.dataset_directory.value, ext)))
+                image_files.extend(glob.glob(os.path.join(self.dataset_directory.value, ext.upper())))
+
+            total_images = len(image_files)
+            if total_images == 0:
+                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> No images found to tag.</div>"
+                self._hide_tagging_progress_widgets()
+                return
+
+            self.tagging_progress_label.value = f"Preparing to tag {total_images} images..."
+
+            # Use manager's tag_images method with widget output display
+            with self.tagging_output:
+                print(f"🏷️ Starting {self.tagging_method.value} tagging with {self.tagger_model.value.split('/')[-1]}...")
+                print(f"📁 Dataset: {self.dataset_directory.value}")
+                print(f"🖼️ Processing {total_images} images...")
+                print("=" * 60)
+
+                # Note: Subprocess output may appear outside this widget section
+                # This is normal for command-line tools
+                success = self.manager.tag_images(
+                    dataset_dir=self.dataset_directory.value,
+                    tagging_method=self.tagging_method.value,
+                    model_name=self.tagger_model.value,
+                    threshold=self.tagging_threshold.value,
+                    blacklist=self.blacklist_tags.value.strip() if self.blacklist_tags.value.strip() else None,
+                    extension=self.caption_extension.value
+                )
+
+                print("=" * 60)
+                if success:
+                    print("✅ Tagging process completed successfully!")
+                else:
+                    print("❌ Tagging process failed. Check logs for details.")
+
+            if success:
+                self.tagging_progress.value = 100
+                self.tagging_progress_label.value = f"Tagging complete! ({total_images} images)"
+                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Tagging complete.</div>"
+            else:
+                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Tagging failed. Check logs.</div>"
+
+        except asyncio.CancelledError:
+            print("\n🚫 Tagging was cancelled")
+            self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>🚫 Status:</strong> Tagging cancelled by user</div>"
+            raise  # Re-raise to let the task callback handle it
+        except Exception as e:
+            print(f"\n❌ Tagging failed with error: {e}")
+            self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Tagging failed with error</div>"
+            logger.error(f"Tagging error: {e}")
+        finally:
+            # Always hide progress widgets when done
+            await asyncio.sleep(0.5)  # Brief delay to let user see completion
+            self._hide_tagging_progress_widgets()
+            self._update_tagging_button_states()
+
+    async def _async_tag_images_with_progress(self, total_images):
+        """Run the tagging subprocess with progress updates and proper asyncio yielding"""
+        import time
+        import sys
+        start_time = time.time()
+
+        # Build the command for tagging
+        tagger_method = self.tagging_method.value
+        model_name = self.tagger_model.value
+        threshold = self.tagging_threshold.value
+        blacklist = self.blacklist_tags.value
+        extension = self.caption_extension.value
+
+        # Prepare command based on method
+        if tagger_method == 'anime':
+            # Use enhanced WD14 tagger script
+            tagger_script = os.path.join(self.manager.project_root, "custom", "tag_images_by_wd14_tagger.py")
+            if not os.path.exists(tagger_script):
+                tagger_script = os.path.join(self.manager.sd_scripts_dir, "finetune", "tag_images_by_wd14_tagger.py")
+
+            command = [
+                sys.executable, tagger_script,
+                self.dataset_directory.value,
+                "--batch_size", "4",
+                "--model_dir", "tagger_models",
+                "--repo_id", model_name,
+                "--thresh", str(threshold),
+                "--caption_extension", extension
+            ]
+
+            if blacklist:
+                command.extend(["--remove_underscore", "--undesired_tags", blacklist])
+
+        else:  # photo method - BLIP captioning
+            blip_script = os.path.join(self.manager.sd_scripts_dir, "finetune", "make_captions.py")
+            command = [
+                sys.executable, blip_script,
+                "--batch_size", "4",
+                "--caption_extension", extension,
+                self.dataset_directory.value
+            ]
+
+        # Start the subprocess asynchronously
+        logger.debug(f"🏷️ DEBUG: Command: {' '.join(command)}")
+        tagger_dir = os.path.join(self.manager.project_root, "wd14_tagger_model")
+        logger.debug(f"🏷️ DEBUG: Working dir: {tagger_dir}")
+
+        try:
+            # Create subprocess with asyncio
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=tagger_dir
+            )
+
+            logger.debug(f"🏷️ DEBUG: Subprocess started, PID: {process.pid}")
+
+            # Monitor progress by reading output line by line
+            progress_count = 0
+            async for line in process.stdout:
+                # Check for cancellation
+                if hasattr(self, '_current_tagging_task') and self._current_tagging_task.cancelled():
+                    process.terminate()
+                    await process.wait()
+                    break
+
+                line_text = line.decode('utf-8', errors='ignore').strip()
+                if line_text:
+                    print(line_text)
+
+                    # Update progress based on output patterns
+                    if any(keyword in line_text.lower() for keyword in ['processing', 'tagging', 'image']):
+                        progress_count += 1
+                        if total_images > 0:
+                            progress_percent = min((progress_count / total_images) * 100, 95)  # Cap at 95% until complete
+                            self.tagging_progress.value = progress_percent
+
+                            elapsed = time.time() - start_time
+                            if elapsed > 0 and progress_count > 0:
+                                rate = progress_count / elapsed
+                                eta = (total_images - progress_count) / rate if rate > 0 else 0
+                                self.tagging_progress_label.value = f"Tagged {progress_count}/{total_images} images (ETA: {eta:.0f}s)"
+                            else:
+                                self.tagging_progress_label.value = f"Tagged {progress_count}/{total_images} images"
+
+                    # Yield control periodically for UI responsiveness
+                    await asyncio.sleep(0.01)
+
+            # Wait for process completion
+            return_code = await process.wait()
+            return return_code == 0
+
+        except Exception as e:
+            print(f"❌ Error running tagging subprocess: {e}")
+            return False
+
+    # Keep the old synchronous method as fallback
     def run_tagging(self, b):
+        """Fallback synchronous tagging method"""
         self.tagging_output.clear_output()
         self.tagging_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Starting {self.tagging_method.value} tagging...</div>"
         with self.tagging_output:
             if not self.dataset_directory.value:
                 self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Tagging failed: no dataset directory set")
                 return
 
             print(f"🏷️ Starting {self.tagging_method.value} tagging with {self.tagger_model.value.split('/')[-1]}...")
@@ -1487,14 +1717,14 @@ class DatasetWidget:
 
             if not dataset_dir:
                 self.cleanup_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Cleanup failed: no dataset directory set")
                 return
 
             print(f"🧩 Cleaning dataset: {dataset_dir}")
 
             if not os.path.exists(dataset_dir):
                 self.cleanup_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Dataset directory does not exist.</div>"
-                print(f"❌ Directory does not exist: {dataset_dir}")
+                logger.error(f"Directory does not exist: {dataset_dir}")
                 return
 
             # Find files to clean
@@ -1602,12 +1832,12 @@ class DatasetWidget:
         with self.caption_output:
             if not self.dataset_directory.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Add trigger failed: no dataset directory set")
                 return
 
             if not self.trigger_word.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify a trigger word.</div>"
-                print("❌ Please specify a trigger word.")
+                logger.warning("Add trigger failed: no trigger word specified")
                 return
 
             print(f"➕ Adding trigger word '{self.trigger_word.value}' to captions...")
@@ -1625,12 +1855,12 @@ class DatasetWidget:
         with self.caption_output:
             if not self.dataset_directory.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Remove tags failed: no dataset directory set")
                 return
 
             if not self.remove_tags.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify tags to remove.</div>"
-                print("❌ Please specify tags to remove.")
+                logger.warning("Remove tags failed: no tags specified")
                 return
 
             print(f"➖ Removing tags '{self.remove_tags.value}' from captions...")
@@ -1648,12 +1878,12 @@ class DatasetWidget:
         with self.caption_output:
             if not self.dataset_directory.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Search replace failed: no dataset directory set")
                 return
 
             if not self.search_tags.value.strip():
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please specify tags to search for.</div>"
-                print("❌ Please specify tags to search for.")
+                logger.warning("Search replace failed: no search tags specified")
                 return
 
             print("🔍 Search and replace operation:")
@@ -1681,7 +1911,7 @@ class DatasetWidget:
         with self.caption_output:
             if not self.dataset_directory.value:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-                print("❌ Please set up a dataset first in the Dataset Setup section.")
+                logger.warning("Tag organization failed: no dataset directory set")
                 return
 
             operations = []
@@ -1692,7 +1922,7 @@ class DatasetWidget:
 
             if not operations:
                 self.caption_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> No operations selected.</div>"
-                print("⚠️ Please select at least one operation (sort or remove duplicates).")
+                logger.warning("Tag organization failed: no operations selected")
                 return
 
             print("📋 Tag organization:")
@@ -1716,11 +1946,11 @@ class DatasetWidget:
             self.rename_output.clear_output()
 
             if not self.rename_project_name.value.strip():
-                print("⚠️ Please enter a project name.")
+                logger.warning("Preview rename failed: no project name provided")
                 return
 
             if not self.dataset_directory.value.strip():
-                print("⚠️ Please set up a dataset directory first.")
+                logger.warning("Preview rename failed: no dataset directory set")
                 return
 
             project_name = self.rename_project_name.value.strip()
@@ -1766,7 +1996,7 @@ class DatasetWidget:
             self.rename_output.clear_output()
 
             if not hasattr(self, '_current_preview') or not self._current_preview:
-                print("⚠️ Please preview the changes first!")
+                logger.warning("Rename files failed: no preview data available")
                 return
 
             project_name = self.rename_project_name.value.strip()
@@ -1806,18 +2036,17 @@ class DatasetWidget:
             # Validation
             if not self.upload_dataset_path.value:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Dataset path required.</div>"
-                print("❌ Please specify the dataset path to upload.")
+                logger.warning("HuggingFace upload failed: no dataset path specified")
                 return
 
             if not self.upload_dataset_name.value:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Repository name required.</div>"
-                print("❌ Please specify a repository name.")
+                logger.warning("HuggingFace upload failed: no repository name specified")
                 return
 
             if not self.upload_hf_token.value:
                 self.upload_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> HuggingFace token required.</div>"
-                print("❌ Please provide your HuggingFace WRITE token.")
-                print("🔑 Get it here: https://huggingface.co/settings/tokens")
+                logger.warning("HuggingFace upload failed: no token provided")
                 return
 
             print("🤗 Starting HuggingFace dataset upload...")
@@ -1863,11 +2092,11 @@ class DatasetWidget:
         quality = self.conversion_quality.value
 
         if not dataset_path:
-            self.image_utils_output.append_stdout("❌ Please set up a dataset directory first.\n")
+            logger.warning("Format conversion failed: no dataset directory set")
             return
 
         if not os.path.exists(dataset_path):
-            self.image_utils_output.append_stdout(f"❌ Dataset directory not found: {dataset_path}\n")
+            logger.error(f"Format conversion failed: dataset directory not found: {dataset_path}")
             return
 
         self.image_utils_output.append_stdout(f"🔄 Starting format conversion to {target_format.upper()} (quality: {quality})...\n")
@@ -1887,7 +2116,7 @@ class DatasetWidget:
         self.caption_status.value = "<div style='background: #e2e3e5; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>📋 Status:</strong> Displaying tags...</div>"
         with self.caption_output:
             if not self.dataset_directory.value:
-                print("❌ Please specify a dataset directory first.")
+                logger.warning("Review tags failed: no dataset directory specified")
                 self.caption_status.value = "<div style='background: #f8d7da; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No dataset directory specified.</div>"
                 return
 
@@ -1902,9 +2131,12 @@ class DatasetWidget:
         """Update upload status widget with result message."""
         if success:
             self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {message}</div>"
-            # Clear the widget after successful upload
-            self.file_upload.value = ()
-            logger.info("🧹 AUTO-CLEAR: FileUpload widget cleared after successful upload")
+            # Clear the widget after successful upload using race condition guard
+            self._programmatic_change = True
+            try:
+                self.file_upload.value = ()
+            finally:
+                self._programmatic_change = False
         else:
             self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> {message}</div>"
 

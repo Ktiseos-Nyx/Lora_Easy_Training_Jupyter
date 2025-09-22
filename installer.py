@@ -24,7 +24,7 @@ def get_python_command():
                     return cmd
             except (subprocess.CalledProcessError, FileNotFoundError):
                 continue
-    raise RuntimeError("❌ Python 3 not found. Please install Python 3.8+")
+    raise RuntimeError("❌ Python 3.10+ not found. Please install Python 3.10+")
 
 class UnifiedInstaller:
     def __init__(self, verbose=False):
@@ -256,7 +256,44 @@ class UnifiedInstaller:
             install_cmd = self.get_install_command('-r', requirements_file)
             success = self.run_command(install_cmd, "Installing Python packages with pip (fallback)")
         
+        # Post-installation: Force correct CUDA 12 ONNX runtime
+        if success:
+            self.fix_onnx_runtime()
+        
         return success
+
+    def fix_onnx_runtime(self):
+        """Force install correct CUDA 12 ONNX runtime to prevent version conflicts"""
+        self.logger.info("🔧 Ensuring correct CUDA 12 ONNX runtime installation...")
+        print("🔧 Ensuring correct CUDA 12 ONNX runtime installation...")
+        
+        # Uninstall any existing onnxruntime packages to prevent conflicts
+        uninstall_cmd = [self.python_cmd, '-m', 'pip', 'uninstall', '-y', 'onnxruntime', 'onnxruntime-gpu']
+        self.run_command(uninstall_cmd, "Removing existing ONNX runtime packages")
+        
+        # Install correct CUDA 12 version
+        onnx_cmd = [
+            self.python_cmd, '-m', 'pip', 'install', 
+            'onnx==1.16.1',
+            'protobuf<4'
+        ]
+        
+        cuda12_cmd = [
+            self.python_cmd, '-m', 'pip', 'install',
+            '--extra-index-url', 'https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/',
+            'onnxruntime-gpu==1.17.1'
+        ]
+        
+        success = self.run_command(onnx_cmd, "Installing ONNX and protobuf")
+        if success:
+            success = self.run_command(cuda12_cmd, "Installing ONNX Runtime GPU with CUDA 12 support")
+            
+        if success:
+            self.logger.info("✅ ONNX runtime CUDA 12 installation completed successfully")
+            print("✅ ONNX runtime CUDA 12 installation completed successfully")
+        else:
+            self.logger.warning("⚠️ ONNX runtime installation encountered issues - will fallback to CPU")
+            print("⚠️ ONNX runtime installation encountered issues - will fallback to CPU")
 
     def check_system_dependencies(self):
         """Check and attempt to install required system packages like aria2c"""
@@ -418,85 +455,127 @@ class UnifiedInstaller:
         print("🔗 Checking for ONNX CUDA library symlink issues...")
         
         try:
-            # Check if we're in a containerized environment (likely needs fixing)
-            cuda_lib_dir = "/usr/local/cuda/lib64"
-            if not os.path.exists(cuda_lib_dir):
+            # Check multiple possible CUDA library locations
+            possible_cuda_dirs = [
+                "/usr/local/cuda/lib64",
+                "/usr/local/cuda-12/lib64", 
+                "/usr/local/cuda-11/lib64",
+                "/opt/cuda/lib64",
+                "/usr/lib/x86_64-linux-gnu"  # Ubuntu/Debian system location
+            ]
+            
+            cuda_lib_dir = None
+            for dir_path in possible_cuda_dirs:
+                if os.path.exists(dir_path):
+                    cuda_lib_dir = dir_path
+                    break
+                    
+            if not cuda_lib_dir:
                 self.logger.info("CUDA library directory not found. Skipping symlink fix.")
                 print("   - No CUDA installation detected. Skipping.")
                 return True
                 
-            # Find available CUDA libraries
-            import glob
-            cublas_libs = glob.glob(f"{cuda_lib_dir}/libcublasLt.so.*")
-            if not cublas_libs:
-                self.logger.info("No libcublasLt libraries found. Skipping symlink fix.")
-                print("   - No libcublasLt libraries found. Skipping.")
-                return True
+            print(f"   📁 Using CUDA library directory: {cuda_lib_dir}")
                 
-            # Sort to get the highest version (should be most recent)
-            cublas_libs.sort(reverse=True)
-            latest_cublas = cublas_libs[0]
+            # Find available CUDA libraries - check for both libcublas and libcublasLt
+            import glob
             
-            # Extract version for logging
-            version = latest_cublas.split('.so.')[-1] if '.so.' in latest_cublas else 'unknown'
+            # Check for all CUDA library types that ONNX needs
+            cuda_libraries = {
+                'libcublas': glob.glob(f"{cuda_lib_dir}/libcublas.so.*"),
+                'libcublasLt': glob.glob(f"{cuda_lib_dir}/libcublasLt.so.*"), 
+                'libcufft': glob.glob(f"{cuda_lib_dir}/libcufft.so.*"),
+                'libcurand': glob.glob(f"{cuda_lib_dir}/libcurand.so.*"),
+                'libcusparse': glob.glob(f"{cuda_lib_dir}/libcusparse.so.*"),
+                'libcusolver': glob.glob(f"{cuda_lib_dir}/libcusolver.so.*"),
+                # Add critical CUDA runtime library that ONNX specifically needs
+                'libcudart': glob.glob(f"{cuda_lib_dir}/libcudart.so.*"),
+                # Add cuDNN libraries if available
+                'libcudnn': glob.glob(f"{cuda_lib_dir}/libcudnn.so.*")
+            }
             
-            # Common symlink targets that ONNX Runtime looks for
-            symlink_targets = [
-                f"{cuda_lib_dir}/libcublasLt.so.11",
-                f"{cuda_lib_dir}/libcublasLt.so.12", 
-                "/usr/lib/x86_64-linux-gnu/libcublasLt.so.11",
-                "/usr/lib/x86_64-linux-gnu/libcublasLt.so.12"
-            ]
+            # Check if any libraries were found
+            found_libraries = {name: libs for name, libs in cuda_libraries.items() if libs}
+            if not found_libraries:
+                self.logger.info("No CUDA libraries found for ONNX symlink fix. Skipping.")
+                print("   - No CUDA libraries found. Skipping.")
+                return True
             
             created_links = []
             
-            for target in symlink_targets:
-                try:
-                    # Skip if symlink already exists and points correctly
-                    if os.path.islink(target):
-                        if os.readlink(target) == latest_cublas:
-                            print(f"   ✅ Symlink already exists: {target} -> {latest_cublas}")
-                            continue
-                        else:
-                            # Remove bad symlink
-                            os.unlink(target)
-                            
-                    # Skip if regular file exists (don't overwrite)
-                    if os.path.exists(target) and not os.path.islink(target):
-                        print(f"   - Regular file exists, skipping: {target}")
-                        continue
-                        
-                    # Create directory if needed (for /usr/lib paths)
-                    target_dir = os.path.dirname(target)
-                    if not os.path.exists(target_dir):
-                        print(f"   - Directory {target_dir} doesn't exist, skipping symlink")
-                        continue
-                        
-                    # Create symlink
-                    os.symlink(latest_cublas, target)
-                    created_links.append(target)
-                    print(f"   ✅ Created symlink: {target} -> {latest_cublas}")
-                    
-                except PermissionError:
-                    print(f"   ⚠️ Permission denied creating symlink: {target}")
-                    continue
-                except Exception as e:
-                    print(f"   ⚠️ Failed to create symlink {target}: {e}")
-                    continue
+            # ONNX commonly needed version targets - include specific versions ONNX looks for
+            common_versions = ['10', '11', '12', '11.0', '11.2', '11.8', '12.0', '12.1', '12.2']
+            
+            # Process each library type dynamically
+            for lib_name, lib_files in found_libraries.items():
+                lib_files.sort(reverse=True)  # Get latest version
+                latest_lib = lib_files[0]
+                version = latest_lib.split('.so.')[-1] if '.so.' in latest_lib else 'unknown'
+                print(f"   - Found {lib_name} version {version}")
+                
+                # Generate symlink targets for this library
+                targets = []
+                for ver in common_versions:
+                    targets.extend([
+                        f"{cuda_lib_dir}/{lib_name}.so.{ver}",
+                        f"/usr/lib/x86_64-linux-gnu/{lib_name}.so.{ver}"
+                    ])
+                
+                created_links.extend(self._create_cuda_symlinks(latest_lib, targets))
             
             if created_links:
                 self.logger.info(f"Created {len(created_links)} CUDA symlinks for ONNX compatibility")
                 print(f"   🎉 Created {len(created_links)} CUDA symlinks for ONNX compatibility")
+                return True
             else:
-                print(f"   - Found CUDA {version}, no symlinks needed or possible")
+                print(f"   - All symlinks already exist or no symlinks needed")
+                return True
                 
-            return True
-            
         except Exception as e:
             error_msg = f"Error fixing CUDA symlinks: {e}"
             self.logger.error(error_msg)
             print(f"   ❌ {error_msg}")
             return False
+
+    def _create_cuda_symlinks(self, source_lib, target_list):
+        """Helper function to create CUDA library symlinks"""
+        created_links = []
+        
+        for target in target_list:
+            try:
+                # Skip if symlink already exists and points correctly
+                if os.path.islink(target):
+                    if os.readlink(target) == source_lib:
+                        print(f"   ✅ Symlink already exists: {target} -> {source_lib}")
+                        continue
+                    else:
+                        # Remove bad symlink
+                        os.unlink(target)
+                        
+                # Skip if regular file exists (don't overwrite)
+                if os.path.exists(target) and not os.path.islink(target):
+                    print(f"   - Regular file exists, skipping: {target}")
+                    continue
+                    
+                # Create directory if needed (for /usr/lib paths)
+                target_dir = os.path.dirname(target)
+                if not os.path.exists(target_dir):
+                    print(f"   - Directory {target_dir} doesn't exist, skipping symlink")
+                    continue
+                    
+                # Create symlink
+                os.symlink(source_lib, target)
+                created_links.append(target)
+                print(f"   ✅ Created symlink: {target} -> {source_lib}")
+                
+            except PermissionError:
+                print(f"   ⚠️ Permission denied creating symlink: {target}")
+                continue
+            except Exception as e:
+                print(f"   ⚠️ Failed to create symlink {target}: {e}")
+                continue
+        
+        return created_links
 
     def run_installation(self):
         """Run the complete installation process"""
