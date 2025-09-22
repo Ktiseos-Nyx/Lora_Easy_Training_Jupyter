@@ -57,10 +57,7 @@ If you don't have python, you can install Python 3.10+ from Python's [main websi
 git clone https://github.com/Ktiseos-Nyx/Lora_Easy_Training_Jupyter.git
 cd Lora_Easy_Training_Jupyter
 
-# 2. Switch to the testing branch (recommended)
-git checkout submodule-updates
-
-# 3. Run the installer (downloads ~10-15GB)
+# 2. Run the installer (downloads ~10-15GB)
 python ./installer.py
 
 # Alternative for Mac/Linux:
