@@ -1537,8 +1537,15 @@ class DatasetWidget:
 
             self.tagging_progress_label.value = f"Preparing to tag {total_images} images..."
 
-            # Use manager's tag_images method with output to correct widget section
+            # Use manager's tag_images method with widget output display
             with self.tagging_output:
+                print(f"🏷️ Starting {self.tagging_method.value} tagging with {self.tagger_model.value.split('/')[-1]}...")
+                print(f"📁 Dataset: {self.dataset_directory.value}")
+                print(f"🖼️ Processing {total_images} images...")
+                print("=" * 60)
+
+                # Note: Subprocess output may appear outside this widget section
+                # This is normal for command-line tools
                 success = self.manager.tag_images(
                     dataset_dir=self.dataset_directory.value,
                     tagging_method=self.tagging_method.value,
@@ -1547,6 +1554,12 @@ class DatasetWidget:
                     blacklist=self.blacklist_tags.value.strip() if self.blacklist_tags.value.strip() else None,
                     extension=self.caption_extension.value
                 )
+
+                print("=" * 60)
+                if success:
+                    print("✅ Tagging process completed successfully!")
+                else:
+                    print("❌ Tagging process failed. Check logs for details.")
 
             if success:
                 self.tagging_progress.value = 100

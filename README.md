@@ -6,9 +6,21 @@ A LoRA training system built on Derrian Distro & Kohya SS with interactive Jupyt
 |---|---|---|---|---|
 | ![Python](https://img.shields.io/badge/python-3.10+-blue.svg) | ![License](https://img.shields.io/badge/license-MIT-green.svg) | [![Discord](https://img.shields.io/badge/Discord-Join%20Our%20Server-5865F2?style=for-the-badge&logo=discord)](https://discord.gg/HhBSM9gBY) | [![Twitch](https://img.shields.io/badge/Twitch-Follow%20on%20Twitch-9146FF?logo=twitch&style=for-the-badge)](https://twitch.tv/duskfallcrew) |  <a href="https://ko-fi.com/duskfallcrew" target="_blank"><img src="https://img.shields.io/badge/Support%20us%20on-Ko--Fi-FF5E5B?style=for-the-badge&logo=kofi" alt="Support us on Ko-fi"></a> |
 
-## 🧪 Development Branch Notice
+## 🌟 Overview & Key Features
 
-> **⚠️ You are on the `submodule-updates` branch - This is our current testing branch!**
+**Key Features:**
+- Widget-based configuration interface
+- Async based Uploading so your images don't become dreams.
+- Integrated dataset preparation and tagging tools
+- Training parameter calculator and optimization
+- Multiple LoRA variants and optimizers
+- Cross-platform compatibility
+- Huggingface Uploads for datasets AND loras.
+- Coming eventually when my brain lets me: FULL MODEL TRAINING! It's supported with KohyaSS, but our widget interface is a bit primitive and I need to understand more before bringing that in.
+
+### ⚠️ Note
+
+> **We are STILL in heavy development. New features in theory SHOULD WORK, but are hard to catch.**
 >
 > This branch includes experimental features that are available in the Kohya backend but may not be fully tested in our setup:
 > - 🔬 **FLUX training** - Available in Kohya, integration status unknown
@@ -17,17 +29,8 @@ A LoRA training system built on Derrian Distro & Kohya SS with interactive Jupyt
 > - 🔧 **Latest bug fixes** and performance improvements
 > - ⚡ **Enhanced upload widgets** (fixed cache issues)
 > - ⚡ **Language Cleanup** Cleaned up a lot of marketing speak and started the roadmap to check inconsistencies on missing content.
-> **Note**: These experimental features exist in the underlying Kohya scripts but haven't been thoroughly tested with our widget system. Use at your own risk and expect possible issues. If they look like they're exposed in our widget setup, there is no saying if they current work due to our unified setup. We're working on fast trying to figure out how this works and get functionality quickly.
+> **Note**: These experimental features exist in the underlying Kohya scripts but haven't been thoroughly tested with our widget system. Use at your own risk and expect possible issues. If they look like they're exposed in our widget setup, there is no saying if they current work due to our unified setup. We're working on fast trying to figure out how this works and get functionality quickly. If you have any issues please report them to the issues area.
 
-## 🌟 Overview & Key Features
-
-**Key Features:**
-- Widget-based configuration interface
-- Automatic model type detection (SDXL, SD1.5, FLUX, SD3)
-- Integrated dataset preparation and tagging tools
-- Training parameter calculator and optimization
-- Multiple LoRA variants and optimizers
-- Cross-platform compatibility
 
 ## 🚀 Quick Start (Installation & Setup)
 
@@ -87,7 +90,7 @@ For detailed workflow instructions, see our [Quick Start Guide](docs/quickstart.
 
 ## 🛠️ Troubleshooting & Support
 
-For more help and support please check [Troubleshooting](docs/guides/troubleshooting.md) this has more comprehensive information.
+For more help and support please check [Troubleshooting](docs/guides/troubleshooting.md) this has more comprehensive information. If you're a developer, we're working on our testing notebook, there is one in the wings of the /tests folder, but it has older code and may not match what is current running.
 
 ### 📋 **Support Requirements**
 Before asking for help, please review our [Support Guidelines](docs/guides/troubleshooting.md#support-guidelines--boundaries). We're happy to assist, but effective troubleshooting requires your participation - this means running the basic diagnostic commands and providing complete error information. Cherry-picking troubleshooting steps won't lead to solutions!
