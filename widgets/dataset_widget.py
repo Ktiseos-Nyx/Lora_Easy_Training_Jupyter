@@ -802,8 +802,8 @@ class DatasetWidget:
         # self.gelbooru_button.on_click(self.run_gallery_dl_scraper)  # Button removed, functionality integrated
         self.preview_rename_button.on_click(self.run_preview_rename)
         self.rename_files_button.on_click(self.run_rename_files)
-        self.tagging_button.on_click(self._handle_async_tagging)
-        self.cancel_tagging_button.on_click(self.cancel_current_tagging)
+        self.tagging_button.on_click(self.run_tagging)
+        # Removed cancel button - not needed for synchronous tagging
         self.cleanup_button.on_click(self.run_cleanup)
         self.add_trigger_button.on_click(self.run_add_trigger)
         self.remove_tags_button.on_click(self.run_remove_tags)
@@ -834,7 +834,7 @@ class DatasetWidget:
             if new_files:  # Files have been selected
                 file_count = len(new_files)
                 if file_count > 0:
-                    # Check if a folder is created AND exists on disk
+                    # Check if a folder path is specified
                     folder_path = self.dataset_directory.value.strip()
                     folder_exists = bool(folder_path) and os.path.exists(folder_path)
 
@@ -842,6 +842,7 @@ class DatasetWidget:
                     is_zip_selected = any(f['name'].lower().endswith('.zip') for f in new_files)
 
                     if folder_exists:
+                        # Folder exists - ready to upload
                         self.upload_images_button.disabled = is_zip_selected # Disable image upload if zip is selected
                         self.upload_zip_button.disabled = not is_zip_selected # Enable zip upload only if zip is selected
 
@@ -849,8 +850,13 @@ class DatasetWidget:
                             self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP to '{folder_path}'.</div>"
                         else:
                             self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images to '{folder_path}'.</div>"
+                    elif folder_path:
+                        # Folder path specified but doesn't exist - suggest creating it
+                        self.upload_images_button.disabled = True
+                        self.upload_zip_button.disabled = True
+                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>📁 Status:</strong> {file_count} file(s) selected. Folder '{folder_path}' doesn't exist - click 'Create Folder' first.</div>"
                     else:
-                        # If no folder exists but files are selected, auto-suggest creating folder
+                        # No folder path specified - auto-suggest creating folder
                         self.upload_images_button.disabled = True
                         self.upload_zip_button.disabled = True
                         # Try to suggest a folder name based on the files
@@ -1019,51 +1025,6 @@ class DatasetWidget:
             with self.dataset_output:
                 print("ℹ️ No active upload to cancel")
 
-    def _handle_async_tagging(self, b):
-        """Wrapper to handle async tagging function with proper error handling"""
-        task = asyncio.create_task(self.run_async_tagging(b))
-        # Store task reference to allow cancellation
-        self._current_tagging_task = task
-        task.add_done_callback(self._tagging_task_done)
-
-    def _tagging_task_done(self, task):
-        """Callback when tagging task completes or fails"""
-        try:
-            if task.cancelled():
-                with self.tagging_output:
-                    print("🚫 Tagging cancelled by user")
-                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>🚫 Status:</strong> Tagging cancelled</div>"
-            elif task.exception():
-                with self.tagging_output:
-                    print(f"❌ Tagging failed: {task.exception()}")
-                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Tagging failed with error</div>"
-        except Exception as e:
-            logger.error(f"Error in tagging task callback: {e}")
-        finally:
-            # Clear task reference
-            self._current_tagging_task = None
-            # Re-enable tagging button, disable cancel
-            self._update_tagging_button_states()
-
-    def cancel_current_tagging(self, b):
-        """Cancel the currently running tagging task"""
-        if hasattr(self, '_current_tagging_task') and self._current_tagging_task and not self._current_tagging_task.done():
-            self._current_tagging_task.cancel()
-            logger.info("Tagging cancellation requested")
-        else:
-            with self.tagging_output:
-                print("ℹ️ No active tagging to cancel")
-
-    def _update_tagging_button_states(self):
-        """Update tagging button states based on current conditions"""
-        # Check if tagging is in progress
-        tagging_in_progress = bool(hasattr(self, '_current_tagging_task') and
-                                 self._current_tagging_task and
-                                 not self._current_tagging_task.done())
-
-        # Update button states
-        self.tagging_button.disabled = tagging_in_progress
-        self.cancel_tagging_button.disabled = not tagging_in_progress
 
     def _hide_tagging_progress_widgets(self):
         """Hide the tagging progress widgets"""
@@ -1499,187 +1460,8 @@ class DatasetWidget:
                 logger.error(f"Failed to run gallery-dl scraper: {e}")
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Scraper encountered an error.</div>"
 
-    async def run_async_tagging(self, b):
-        """Async tagging with proper asyncio implementation and progress tracking"""
-        self.tagging_output.clear_output()
+    # Removed async tagging methods - using synchronous version only
 
-        # Show progress widgets
-        self.tagging_progress.layout.visibility = 'visible'
-        self.tagging_progress_label.layout.visibility = 'visible'
-        self.tagging_progress.value = 0
-        self.tagging_progress_label.value = "Initializing tagging..."
-
-        # Update button states
-        self._update_tagging_button_states()
-
-        self.tagging_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #6c757d;'><strong>⚙️ Status:</strong> Starting {self.tagging_method.value} tagging...</div>"
-
-        if not self.dataset_directory.value:
-            self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please set up a dataset first.</div>"
-            logger.warning("Tagging failed: no dataset directory set")
-            self._hide_tagging_progress_widgets()
-            return
-
-        try:
-            # Get image files for progress tracking
-            import glob
-            image_extensions = ['*.jpg', '*.jpeg', '*.png', '*.webp', '*.gif', '*.bmp', '*.tiff', '*.tif']
-            image_files = []
-            for ext in image_extensions:
-                image_files.extend(glob.glob(os.path.join(self.dataset_directory.value, ext)))
-                image_files.extend(glob.glob(os.path.join(self.dataset_directory.value, ext.upper())))
-
-            total_images = len(image_files)
-            if total_images == 0:
-                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Status:</strong> No images found to tag.</div>"
-                self._hide_tagging_progress_widgets()
-                return
-
-            self.tagging_progress_label.value = f"Preparing to tag {total_images} images..."
-
-            # Use manager's tag_images method with widget output display
-            with self.tagging_output:
-                print(f"🏷️ Starting {self.tagging_method.value} tagging with {self.tagger_model.value.split('/')[-1]}...")
-                print(f"📁 Dataset: {self.dataset_directory.value}")
-                print(f"🖼️ Processing {total_images} images...")
-                print("=" * 60)
-
-                # Note: Subprocess output may appear outside this widget section
-                # This is normal for command-line tools
-                success = self.manager.tag_images(
-                    dataset_dir=self.dataset_directory.value,
-                    tagging_method=self.tagging_method.value,
-                    model_name=self.tagger_model.value,
-                    threshold=self.tagging_threshold.value,
-                    blacklist=self.blacklist_tags.value.strip() if self.blacklist_tags.value.strip() else None,
-                    extension=self.caption_extension.value
-                )
-
-                print("=" * 60)
-                if success:
-                    print("✅ Tagging process completed successfully!")
-                else:
-                    print("❌ Tagging process failed. Check logs for details.")
-
-            if success:
-                self.tagging_progress.value = 100
-                self.tagging_progress_label.value = f"Tagging complete! ({total_images} images)"
-                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Tagging complete.</div>"
-            else:
-                self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Tagging failed. Check logs.</div>"
-
-        except asyncio.CancelledError:
-            print("\n🚫 Tagging was cancelled")
-            self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>🚫 Status:</strong> Tagging cancelled by user</div>"
-            raise  # Re-raise to let the task callback handle it
-        except Exception as e:
-            print(f"\n❌ Tagging failed with error: {e}")
-            self.tagging_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Tagging failed with error</div>"
-            logger.error(f"Tagging error: {e}")
-        finally:
-            # Always hide progress widgets when done
-            await asyncio.sleep(0.5)  # Brief delay to let user see completion
-            self._hide_tagging_progress_widgets()
-            self._update_tagging_button_states()
-
-    async def _async_tag_images_with_progress(self, total_images):
-        """Run the tagging subprocess with progress updates and proper asyncio yielding"""
-        import time
-        import sys
-        start_time = time.time()
-
-        # Build the command for tagging
-        tagger_method = self.tagging_method.value
-        model_name = self.tagger_model.value
-        threshold = self.tagging_threshold.value
-        blacklist = self.blacklist_tags.value
-        extension = self.caption_extension.value
-
-        # Prepare command based on method
-        if tagger_method == 'anime':
-            # Use enhanced WD14 tagger script
-            tagger_script = os.path.join(self.manager.project_root, "custom", "tag_images_by_wd14_tagger.py")
-            if not os.path.exists(tagger_script):
-                tagger_script = os.path.join(self.manager.sd_scripts_dir, "finetune", "tag_images_by_wd14_tagger.py")
-
-            command = [
-                sys.executable, tagger_script,
-                self.dataset_directory.value,
-                "--batch_size", "4",
-                "--model_dir", "tagger_models",
-                "--repo_id", model_name,
-                "--thresh", str(threshold),
-                "--caption_extension", extension
-            ]
-
-            if blacklist:
-                command.extend(["--remove_underscore", "--undesired_tags", blacklist])
-
-        else:  # photo method - BLIP captioning
-            blip_script = os.path.join(self.manager.sd_scripts_dir, "finetune", "make_captions.py")
-            command = [
-                sys.executable, blip_script,
-                "--batch_size", "4",
-                "--caption_extension", extension,
-                self.dataset_directory.value
-            ]
-
-        # Start the subprocess asynchronously
-        logger.debug(f"🏷️ DEBUG: Command: {' '.join(command)}")
-        tagger_dir = os.path.join(self.manager.project_root, "wd14_tagger_model")
-        logger.debug(f"🏷️ DEBUG: Working dir: {tagger_dir}")
-
-        try:
-            # Create subprocess with asyncio
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                cwd=tagger_dir
-            )
-
-            logger.debug(f"🏷️ DEBUG: Subprocess started, PID: {process.pid}")
-
-            # Monitor progress by reading output line by line
-            progress_count = 0
-            async for line in process.stdout:
-                # Check for cancellation
-                if hasattr(self, '_current_tagging_task') and self._current_tagging_task.cancelled():
-                    process.terminate()
-                    await process.wait()
-                    break
-
-                line_text = line.decode('utf-8', errors='ignore').strip()
-                if line_text:
-                    print(line_text)
-
-                    # Update progress based on output patterns
-                    if any(keyword in line_text.lower() for keyword in ['processing', 'tagging', 'image']):
-                        progress_count += 1
-                        if total_images > 0:
-                            progress_percent = min((progress_count / total_images) * 100, 95)  # Cap at 95% until complete
-                            self.tagging_progress.value = progress_percent
-
-                            elapsed = time.time() - start_time
-                            if elapsed > 0 and progress_count > 0:
-                                rate = progress_count / elapsed
-                                eta = (total_images - progress_count) / rate if rate > 0 else 0
-                                self.tagging_progress_label.value = f"Tagged {progress_count}/{total_images} images (ETA: {eta:.0f}s)"
-                            else:
-                                self.tagging_progress_label.value = f"Tagged {progress_count}/{total_images} images"
-
-                    # Yield control periodically for UI responsiveness
-                    await asyncio.sleep(0.01)
-
-            # Wait for process completion
-            return_code = await process.wait()
-            return return_code == 0
-
-        except Exception as e:
-            print(f"❌ Error running tagging subprocess: {e}")
-            return False
-
-    # Keep the old synchronous method as fallback
     def run_tagging(self, b):
         """Fallback synchronous tagging method"""
         self.tagging_output.clear_output()
