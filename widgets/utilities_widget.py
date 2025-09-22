@@ -9,7 +9,8 @@ import ipywidgets as widgets
 from IPython.display import display
 
 from core.utilities_manager import UtilitiesManager
-from core.logging_config import setup_logging
+from core.logging_config import get_logger
+
 
 
 class UtilitiesWidget:
@@ -21,7 +22,7 @@ class UtilitiesWidget:
         self.manager = utilities_manager
         
         # Initialize logging
-        self.logger = setup_logging("utilities_widget")
+        self.logger = get_logger("utilities_widget")
         
         self.create_widgets()
 
