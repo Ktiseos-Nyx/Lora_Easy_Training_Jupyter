@@ -3,6 +3,7 @@
 # Contributors: See README.md Credits section for full acknowledgements
 
 # core/dataset_manager.py
+import gc
 import os
 import platform
 import subprocess
@@ -476,6 +477,8 @@ class DatasetManager:
             # Clean up downloaded zip file if it was from HF
             if 'downloaded_zip_path' in locals() and os.path.exists(downloaded_zip_path):
                 os.remove(downloaded_zip_path)
+            # Force garbage collection after dataset processing
+            gc.collect()
 
     def tag_images(self, dataset_dir, method, tagger_model, threshold, blacklist_tags="", caption_extension=".txt"):
         """Enhanced image tagging with more options"""
@@ -567,6 +570,8 @@ class DatasetManager:
             # Try running the command
             if self._run_subprocess(command, f"Image tagging (attempt {attempt + 1})"):
                 print(f"✅ Successfully tagged with {model_to_try.split('/')[-1]}")
+                # Force garbage collection after successful tagging
+                gc.collect()
                 return True
             else:
                 print(f"❌ Failed with {model_to_try.split('/')[-1]}")
@@ -574,6 +579,8 @@ class DatasetManager:
                     print("🔄 Trying fallback model...")
 
         print("❌ All tagger models failed")
+        # Force garbage collection after tagging attempts
+        gc.collect()
         return False
 
     def _tag_images_blip(self, dataset_path, caption_extension):

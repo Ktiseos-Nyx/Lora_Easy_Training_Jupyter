@@ -4,6 +4,7 @@
 
 # widgets/dataset_widget.py
 import asyncio
+import gc
 import glob
 import logging
 import os
@@ -842,14 +843,15 @@ class DatasetWidget:
                     is_zip_selected = any(f['name'].lower().endswith('.zip') for f in new_files)
 
                     if folder_exists:
-                        # Folder exists - ready to upload
-                        self.upload_images_button.disabled = is_zip_selected # Disable image upload if zip is selected
-                        self.upload_zip_button.disabled = not is_zip_selected # Enable zip upload only if zip is selected
-
+                        # Folder exists - auto-upload immediately
                         if is_zip_selected:
-                            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP to '{folder_path}'.</div>"
+                            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007bff;'><strong>🚀 Status:</strong> {file_count} ZIP file(s) selected. Auto-uploading to '{folder_path}'...</div>"
+                            # Auto-trigger ZIP upload
+                            self._handle_async_zip_upload(None)
                         else:
-                            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images to '{folder_path}'.</div>"
+                            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007bff;'><strong>🚀 Status:</strong> {file_count} image(s) selected. Auto-uploading to '{folder_path}'...</div>"
+                            # Auto-trigger image upload
+                            self._handle_async_upload(None)
                     elif folder_path:
                         # Folder path specified but doesn't exist - suggest creating it
                         self.upload_images_button.disabled = True
@@ -1258,6 +1260,8 @@ class DatasetWidget:
             await asyncio.sleep(0.5)  # Brief delay to let user see completion
             self._hide_progress_widgets()
             self._update_upload_button_states()
+            # Force garbage collection to free memory
+            gc.collect()
 
     async def run_upload_zip(self, b):
         """Upload and extract a ZIP file to the created folder with async processing"""
@@ -1341,6 +1345,9 @@ class DatasetWidget:
             except Exception as e:
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to upload or extract ZIP.</div>"
                 print(f"❌ An error occurred during ZIP upload/extraction: {e}")
+            finally:
+                # Force garbage collection to free memory
+                gc.collect()
 
     def reset_upload_widget(self, b):
         """Reset the file upload widget to clear any cached state"""

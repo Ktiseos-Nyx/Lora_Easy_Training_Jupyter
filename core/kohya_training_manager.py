@@ -11,6 +11,7 @@ strategy pattern and model utilities. We maintain our widget-friendly interface 
 battle-tested backend implementations.
 """
 
+import gc
 import os
 import subprocess
 import sys
@@ -1085,6 +1086,8 @@ class KohyaTrainingManager:
             finally:
                 os.chdir(original_cwd)
                 self.process = None
+                # Force garbage collection after training
+                gc.collect()
 
         except Exception as e:
             logger.error(f"Training error: {e}")
