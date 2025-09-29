@@ -29,7 +29,6 @@ class TrainingMonitorWidget:
         self.total_steps = 0
         self.training_phase = "Initializing..."
         self._last_checkpoint_time = None
-        self._completion_check_timer = None
         self._is_final_epoch = False
 
         # Inference parameters - DISABLED FOR NOW
@@ -41,6 +40,22 @@ class TrainingMonitorWidget:
         # Use actual paths from training manager
         self.base_model_path = ""  # This will be set from config when training starts
         self.output_dir = self.training_manager.output_dir if hasattr(self.training_manager, 'output_dir') else ""
+
+    def set_training_config(self, training_config: dict):
+        """Explicitly set the training config and initialize the monitor's state."""
+        self.training_config = training_config
+
+        # Extract total epochs and steps from the config
+        # Note: Actual total steps might be calculated differently, but this is a good starting point.
+        self.total_epochs = self.training_config.get('max_train_epochs', 10) # Default to 10 if not found
+        num_steps_per_epoch = self.training_config.get('num_steps_per_epoch', 0)
+        self.total_steps = self.total_epochs * num_steps_per_epoch
+
+        # Reset UI elements to their initial state with correct max values
+        self.update_phase("Configuration loaded. Ready to start training.", "info")
+        self.update_progress(epoch=0, total_epochs=self.total_epochs, step=0, total_steps=self.total_steps)
+        self.log_message(f"Training configured for {self.total_epochs} epochs.")
+
 
     def create_widgets(self):
         """Create the training monitor interface with accordion structure"""
@@ -250,46 +265,85 @@ class TrainingMonitorWidget:
             f"<strong>📊 Phase:</strong> {phase_text}</div>"
         )
 
-    def parse_training_output(self, line):
-        """Parse training output and update progress accordingly"""
+    def parse_training_output(self, line: str):
+        """Parse training output and dispatch to specialized handlers."""
         line = line.strip()
+        if not line:
+            return
 
         with self.training_log:
             print(line)
 
-        # Phase detection
-        if "prepare optimizer, data loader etc." in line.lower():
-            self.update_phase("Setting up optimizer and data loader...", "info")
-        elif "caching latents" in line.lower():
+        # Dispatch to handlers - order can matter.
+        # Step/epoch parsing is most common, try it first.
+        try:
+            if self._parse_epoch_and_step(line):
+                return # Line was handled
+        except Exception as e:
+            logger.warning(f"Error parsing epoch/step from line '{line}': {e}")
+
+        try:
+            if self._parse_phase(line):
+                return # Line was handled
+        except Exception as e:
+            logger.warning(f"Error parsing phase from line '{line}': {e}")
+
+    def _parse_phase(self, line: str) -> bool:
+        """Parse the line for keywords indicating a change in the training phase."""
+        line_lower = line.lower()
+        
+        # More specific keywords first
+        if "caching latents to disk" in line_lower:
             self.update_phase("Caching latents to disk...", "info")
-        elif "enable bucket" in line.lower() or "make buckets" in line.lower():
+            return True
+        elif "caching latents" in line_lower: # General case
+            self.update_phase("Caching latents...", "info")
+            return True
+        elif "prepare optimizer" in line_lower:
+            self.update_phase("Preparing optimizer and data loader...", "info")
+            return True
+        elif "make buckets" in line_lower or "enable bucket" in line_lower:
             self.update_phase("Creating resolution buckets...", "info")
-        elif "start training" in line.lower():
+            return True
+        elif "start training" in line_lower:
             self.update_phase("Training started!", "success")
-        elif "epoch" in line.lower() and ("step" in line.lower() or "epoch is incremented" in line.lower()):
-            # Parse Kohya's dual-epoch format: "current_epoch: 0, epoch: 3"
-            current_epoch_match = re.search(r'current_epoch:\s*(\d+)', line)
-            epoch_match = re.search(r'epoch:\s*(\d+)', line)
-            step_match = re.search(r'step[:\s]+(\d+)', line.lower())
+            return True
+            
+        return False
 
-            # Use the more reliable epoch number (the one starting)
-            if epoch_match:
-                epoch_starting = int(epoch_match.group(1))
+    def _parse_epoch_and_step(self, line: str) -> bool:
+        """Parse the line for epoch and step information using more robust regex."""
+        # Regex to find all key-value pairs of numbers, handling formats like "key: 123" or "key=123"
+        matches = re.findall(r'(\b\w+\b)\s*[:=]\s*(\d+)', line.lower())
+        
+        if not matches:
+            return False
 
-                # Check if we're starting the final epoch
-                if epoch_starting >= self.total_epochs and self.total_epochs > 0:
-                    self.update_phase(f"Starting final epoch ({epoch_starting}/{self.total_epochs})!", "warning")
-                    self._is_final_epoch = True
-                elif self.total_epochs > 0:
-                    self.update_phase(f"Starting epoch {epoch_starting}/{self.total_epochs}", "info")
+        # Convert matches to a dictionary for easy lookup
+        data = {key: int(value) for key, value in matches}
 
-                # Update progress bars with epoch info
-                self.update_progress(epoch=epoch_starting, total_epochs=self.total_epochs)
+        epoch = data.get('epoch')
+        step = data.get('step')
 
-            if step_match:
-                current_step = int(step_match.group(1))
-                # Update step progress
-                self.update_progress(step=current_step, total_steps=self.total_steps)
+        # If we found an epoch number, update our state
+        if epoch is not None:
+            # Check if we're starting the final epoch
+            if epoch >= self.total_epochs and self.total_epochs > 0:
+                self.update_phase(f"Starting final epoch ({epoch}/{self.total_epochs})!", "warning")
+                self._is_final_epoch = True
+            elif self.total_epochs > 0:
+                self.update_phase(f"Starting epoch {epoch}/{self.total_epochs}", "info")
+
+            self.update_progress(epoch=epoch, total_epochs=self.total_epochs)
+            return True # Mark as handled
+
+        # If we only found a step number, update step progress
+        if step is not None:
+            self.update_progress(step=step, total_steps=self.total_steps)
+            return True # Mark as handled
+            
+        return False
+
 
     def clear_log(self):
         """Clear the training log"""

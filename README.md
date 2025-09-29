@@ -60,6 +60,10 @@ cd Lora_Easy_Training_Jupyter
 # 2. Run the installer (downloads ~10-15GB)
 python ./installer.py
 
+# For detailed installation output (recommended for troubleshooting):
+python ./installer.py --verbose
+# or: python ./installer.py -v
+
 # Alternative for Mac/Linux:
 chmod +x ./jupyter.sh && ./jupyter.sh
 ```
