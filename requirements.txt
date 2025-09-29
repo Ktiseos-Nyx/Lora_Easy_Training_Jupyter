@@ -5,3 +5,4 @@
 ipywidgets>=8.0.0
 ipython>=8.0.0
 toml>=0.10.2
+imjoy-elfinder[jupyter]>=0.1.63

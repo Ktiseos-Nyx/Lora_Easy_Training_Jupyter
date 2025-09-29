@@ -3,13 +3,14 @@
 # Contributors: See README.md Credits section for full acknowledgements
 
 # core/utilities_manager.py
+import gc
+import glob
+import math
 import os
 import subprocess
 import sys
-import glob
 import time
 from pathlib import Path
-import math
 
 from huggingface_hub import HfApi, login
 
@@ -183,9 +184,12 @@ class UtilitiesManager:
             
             results["success_count"] = success_count
             return results
-            
+
         except Exception as e:
             return {"success": False, "error": f"Upload failed: {type(e).__name__}: {str(e)}"}
+        finally:
+            # Force garbage collection after upload operations
+            gc.collect()
 
     def upload_to_huggingface(self, hf_token, model_path, repo_name):
         if not hf_token or not hf_token.strip():
@@ -235,6 +239,9 @@ class UtilitiesManager:
             elif "Repository not found" in str(e):
                 print("💡 Repository will be created automatically on first upload")
             return False
+        finally:
+            # Force garbage collection after HuggingFace operations
+            gc.collect()
 
     def resize_lora(self, input_path, output_path, new_dim, new_alpha):
         if not os.path.exists(input_path):
@@ -311,6 +318,9 @@ class UtilitiesManager:
         except Exception as e:
             print(f"An unexpected error occurred: {e}")
             return False
+        finally:
+            # Force garbage collection after LoRA processing
+            gc.collect()
 
     def count_dataset_files(self, dataset_path):
         if not os.path.exists(dataset_path):

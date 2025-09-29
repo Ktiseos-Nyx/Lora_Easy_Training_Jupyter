@@ -11,6 +11,7 @@ strategy pattern and model utilities. We maintain our widget-friendly interface 
 battle-tested backend implementations.
 """
 
+import gc
 import os
 import subprocess
 import sys
@@ -534,6 +535,10 @@ class KohyaTrainingManager:
             }
         }
 
+        # Add model_type to the top level of the config so the training script can be selected correctly.
+        if config.get('model_type'):
+            toml_config['model_type'] = config.get('model_type')
+
         config_path = os.path.join(self.config_dir, f"{config.get('output_name', 'lora')}_config.toml")
         with open(config_path, 'w') as f:
             toml.dump(toml_config, f)
@@ -566,7 +571,7 @@ class KohyaTrainingManager:
         # 🎵 FIXED FIELD MAPPING: Use EXACT widget field names from debug output!
         # Widget debug showed: 'model_path', 'train_batch_size', 'unet_lr', etc.
         # Get network configuration based on LoRA type selection
-        network_config = self._get_network_configuration(config.get('lora_type', ''))
+        network_config = self._get_network_configuration(config.get('lora_type', ''), config)
         
         toml_config = {
             "network_arguments": {
@@ -637,6 +642,10 @@ class KohyaTrainingManager:
                 "flip_aug": config.get('flip_aug', False),                    # Horizontal flip augmentation
             },
         }
+
+        # Add model_type to the top level of the config so the training script can be selected correctly.
+        if config.get('model_type'):
+            toml_config['model_type'] = config.get('model_type')
 
         # Ensure numeric values are properly typed for TOML
         self._fix_numeric_types(toml_config)
@@ -715,24 +724,15 @@ class KohyaTrainingManager:
         if config.get('num_repeats') is not None:
             subsets_section['num_repeats'] = config.get('num_repeats')
         if config.get('dataset_path') is not None:                          # FIXED: Use 'dataset_path' from widget
-            # FIX: Kohya runs from sd_scripts dir, needs ../../../ to reach project root
             dataset_path = config.get('dataset_path')
-            
-            # Smart path handling: only add ../../../ for relative paths from project root
-            if dataset_path.startswith('/'):
-                # Absolute path - use as-is
-                pass
-            elif dataset_path.startswith('../'):
-                # Already relative path - use as-is
-                pass
-            elif dataset_path.startswith('workspace/') or dataset_path.startswith('./'):
-                # Explicit workspace or current dir path - use as-is
-                pass
-            else:
-                # Relative path from project root - needs ../../../ prefix
-                dataset_path = f"../../../{dataset_path}"
-            
-            subsets_section['image_dir'] = dataset_path                     # This is REQUIRED for training!
+
+            # Ensure the dataset path is absolute before calculating the relative path.
+            if not os.path.isabs(dataset_path):
+                dataset_path = os.path.join(self.project_root, dataset_path)
+
+            # Calculate the relative path from the scripts directory to the dataset directory.
+            # This is more robust than hardcoding '../../..'.
+            subsets_section['image_dir'] = os.path.relpath(dataset_path, self.sd_scripts_dir)
         if config.get('class_tokens') is not None:
             subsets_section['class_tokens'] = config.get('class_tokens')
             
@@ -1085,6 +1085,8 @@ class KohyaTrainingManager:
             finally:
                 os.chdir(original_cwd)
                 self.process = None
+                # Force garbage collection after training
+                gc.collect()
 
         except Exception as e:
             logger.error(f"Training error: {e}")
@@ -1517,17 +1519,17 @@ class KohyaTrainingManager:
             return ""
         
         # If already absolute, return as-is
-        if model_path.startswith('/'):
+        if os.path.isabs(model_path):
             return model_path
         
         # If just a filename, assume it's in pretrained_model directory
-        if '/' not in model_path:
-            return f"/workspace/Lora_Easy_Training_Jupyter/pretrained_model/{model_path}"
+        if os.path.sep not in model_path:
+            return os.path.join(self.project_root, "pretrained_model", model_path)
         
         # If relative path, convert to absolute using project root
-        return f"/workspace/Lora_Easy_Training_Jupyter/{model_path}"
+        return os.path.join(self.project_root, model_path)
 
-    def _get_network_configuration(self, lora_type: str) -> Dict[str, Any]:
+    def _get_network_configuration(self, lora_type: str, config: Dict) -> Dict[str, Any]:
         """Get network configuration based on LoRA type selection"""
         if not lora_type:
             return {"network_module": "networks.lora"}  # Default to standard LoRA

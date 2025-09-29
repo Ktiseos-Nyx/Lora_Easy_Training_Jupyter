@@ -194,8 +194,7 @@ class DatasetWidget:
 
         # Gelbooru Scraper Section
         # Gallery-DL Scraper Section
-        gallery_dl_method_desc = widgets.HTML("""<h4>🔍 Gallery-DL Scraper</h4>
-        <div style='background: #e8f4f8; padding: 10px; border-radius: 5px; margin: 10px 0;'>
+        <div style='background: var(--jp-info-color-light); color: var(--jp-info-color-dark); padding: 10px; border-radius: 5px; margin: 10px 0;'>
         <strong>🌐 Supported Sites:</strong> Gelbooru, Danbooru, Pixiv, Twitter, etc. (see <a href="https://github.com/mikf/gallery-dl/blob/master/docs/supportedsites.md" target="_blank">supported sites</a>)<br>
         <strong>💡 Tips:</strong> Use appropriate tags, specify limits, and consider subfolders for organization.
         </div>""")
@@ -985,14 +984,53 @@ class DatasetWidget:
 
     def _handle_async_upload(self, b):
         """Wrapper to handle async upload function with proper error handling"""
-        task = asyncio.ensure_future(self.run_upload_images(b))
+        # Eagerly and synchronously capture all file data *before* creating the async task.
+        # This completely decouples the data from the transient FileUpload widget state.
+        try:
+            captured_files = []
+            for file_info in self.file_upload.value:
+                captured_files.append({
+                    'name': file_info['name'],
+                    'content': file_info['content'].tobytes() # Read into bytes NOW
+                })
+            
+            if not captured_files:
+                self.dataset_status.value = "❌ Status: Please select images to upload."
+                return
+        except Exception as e:
+            logger.error(f"Failed to capture file content before upload: {e}")
+            self.dataset_status.value = f"❌ Status: Error reading file data: {e}"
+            return
+
+        # Now, pass the captured data to the async function.
+        task = asyncio.ensure_future(self.run_upload_images(b, captured_files=captured_files))
         # Store task reference to allow cancellation
         self._current_upload_task = task
         task.add_done_callback(self._upload_task_done)
 
     def _handle_async_zip_upload(self, b):
         """Wrapper to handle async ZIP upload function with proper error handling"""
-        task = asyncio.ensure_future(self.run_upload_zip(b))
+        # Eagerly and synchronously capture the zip file data *before* creating the async task.
+        try:
+            zip_file_data = None
+            for file_info in self.file_upload.value:
+                if file_info['name'].lower().endswith('.zip'):
+                    zip_file_data = {
+                        'name': file_info['name'],
+                        'content': file_info['content'].tobytes() # Read into bytes NOW
+                    }
+                    break # Found the first zip, stop looking
+            
+            if not zip_file_data:
+                self.dataset_status.value = "❌ Status: Please select a ZIP file to upload."
+                return
+        except Exception as e:
+            logger.error(f"Failed to capture ZIP file content before upload: {e}")
+            self.dataset_status.value = f"❌ Status: Error reading ZIP file data: {e}"
+            return
+
+        # Now, pass the captured data to the async function.
+        task = asyncio.ensure_future(self.run_upload_zip(b, zip_file_data=zip_file_data))
         # Store task reference to allow cancellation
         self._current_upload_task = task
         task.add_done_callback(self._upload_task_done)
@@ -1072,28 +1110,7 @@ class DatasetWidget:
         if hasattr(self, 'upload_status_label'):
             self.upload_status_label.layout.visibility = 'hidden'
 
-    async def _async_write_file(self, file_path, content):
-        """Asynchronously write file content to disk"""
-        import aiofiles
-        try:
-            async with aiofiles.open(file_path, 'wb') as f:
-                await f.write(content)
-        except ImportError:
-            # Fallback to synchronous write if aiofiles not available
-            import concurrent.futures
-            import functools
 
-            loop = asyncio.get_event_loop()
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                await loop.run_in_executor(
-                    executor,
-                    functools.partial(self._sync_write_file, file_path, content)
-                )
-
-    def _sync_write_file(self, file_path, content):
-        """Synchronous file write fallback"""
-        with open(file_path, 'wb') as f:
-            f.write(content)
 
     def _reset_upload_cache(self, b):
         """
@@ -1119,228 +1136,96 @@ class DatasetWidget:
             print("📁 You can now select and upload new files.")
             print("💡 The previous upload data has been cleared from memory.")
 
-    async def run_upload_images(self, b):
-        """Upload multiple images to the created folder with enhanced async processing and progress tracking"""
+    async def run_upload_images(self, b, captured_files: list):
+        """Upload multiple images to the created folder using FileUploadManager."""
         self.dataset_output.clear_output()
-
-        logger.debug(f"🚀 DEBUG: run_upload_images called! Button: {b}")
-
-        # Show progress widgets
         self.upload_progress.layout.visibility = 'visible'
         self.upload_status_label.layout.visibility = 'visible'
         self.upload_progress.value = 0
         self.upload_status_label.value = "Initializing upload..."
-
-        # Update button states
         self._update_upload_button_states()
 
-        if not self.dataset_directory.value:
-            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
-            logger.warning("Image upload failed: no dataset directory set")
-            self._hide_progress_widgets()
-            return
-
         upload_folder = self.dataset_directory.value
-
-        # --- START OF FIX ---
-        # Eagerly and synchronously read all file data into a stable list.
-        # This is the critical step to avoid the race condition where the
-        # underlying memory buffer for `file_upload.value` is cleared.
-        captured_files = []
-        logger.debug(f"🔍 DEBUG: file_upload.value contains {len(self.file_upload.value)} files")
-        for file_info in self.file_upload.value:
-            logger.debug(f"🔍 DEBUG: Processing file: {file_info['name']}")
-            captured_files.append({
-                'name': file_info['name'],
-                'content': file_info['content'].tobytes() # Read into bytes NOW
-            })
-        logger.debug(f"🔍 DEBUG: Successfully captured {len(captured_files)} files")
-
-        # NOW check if we actually captured any files
-        if not captured_files:
-            logger.debug(f"🚨 DEBUG: No files captured! file_upload.value type: {type(self.file_upload.value)}, Value: {self.file_upload.value}")
-            self.dataset_status.value = "❌ Status: Please select images to upload."
+        if not upload_folder:
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
             self._hide_progress_widgets()
             return
-
-        # DON'T clear the cache yet! Wait until upload is successful!
-        # Widget cache should only be cleared after successful upload, not before
-        # --- END OF FIX ---
-
-        total_files = len(captured_files)
-        batch_size = 3  # Smaller batch size for better progress granularity
 
         try:
-            import time
-            uploaded_count = 0
-            total_size = 0
-            start_time = time.time()
+            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007bff;'><strong>⚙️ Status:</strong> Uploading {len(captured_files)} images...</div>"
+            
+            loop = asyncio.get_event_loop()
+            # Use run_in_executor to run the synchronous manager method in a thread pool
+            success, message = await loop.run_in_executor(
+                None, # Use default executor
+                self.file_manager.upload_images, 
+                captured_files, 
+                upload_folder
+            )
 
-            # Process files individually for better progress tracking
-            for i, file_data in enumerate(captured_files):
-                # Check for cancellation
-                if hasattr(self, '_current_upload_task') and self._current_upload_task.cancelled():
-                    break
+            self.dataset_status.value = message # Display message from manager
 
+            if success:
+                # Clear the widget on success
+                self._programmatic_change = True
                 try:
-                    filename = file_data['name']
-                    content = file_data['content']
-
-                    if not content:
-                        continue
-
-                    # Update progress
-                    progress_percent = (i / total_files) * 100
-                    self.upload_progress.value = progress_percent
-                    self.upload_status_label.value = f"Uploading {filename} ({i+1}/{total_files})"
-
-                    # Update status with current file
-                    elapsed_time = time.time() - start_time
-                    if elapsed_time > 0:
-                        files_per_sec = (i + 1) / elapsed_time
-                        eta_seconds = (total_files - i - 1) / files_per_sec if files_per_sec > 0 else 0
-                        eta_text = f"ETA: {eta_seconds:.0f}s" if eta_seconds > 0 else ""
-                    else:
-                        eta_text = ""
-
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007bff;'><strong>⚙️ Status:</strong> Uploading {filename} ({i+1}/{total_files}) {eta_text}</div>"
-
-                    # Async file write
-                    file_path = os.path.join(upload_folder, filename)
-                    await self._async_write_file(file_path, content)
-
-                    file_size = len(content)
-                    total_size += file_size
-                    uploaded_count += 1
-
-                    # Yield control periodically for responsiveness (commented out for testing)
-                    # if i % batch_size == 0:
-                    #     await asyncio.sleep(0.01)  # Small delay for UI responsiveness
-                    await asyncio.sleep(0.001)  # Just a tiny yield
-
-                except asyncio.CancelledError:
-                    break
-                except Exception as e:
-                    continue
-
-                # Final progress update
-                self.upload_progress.value = 100
-                self.upload_status_label.value = f"Upload complete! ({uploaded_count}/{total_files} files)"
-
-                total_size_mb = total_size / (1024 * 1024)
-                upload_time = time.time() - start_time
-
-                print(f"\n🎉 Upload complete!")
-                print(f"📊 Uploaded: {uploaded_count}/{total_files} images")
-                print(f"💾 Total size: {total_size_mb:.2f} MB")
-                print(f"⏱️ Upload time: {upload_time:.1f} seconds")
-                print(f"📁 Location: {upload_folder}")
-
-                if uploaded_count > 0:
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded {uploaded_count} images ({total_size_mb:.1f} MB in {upload_time:.1f}s)</div>"
-
-                    # NOW clear the file upload cache after successful upload
                     self.file_upload.value = ()
-                    logger.debug("🧹 DEBUG: Cleared file upload cache after successful upload")
-                else:
-                    self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No images were uploaded successfully.</div>"
+                finally:
+                    self._programmatic_change = False
+                logger.info("Image upload successful, widget cache cleared.")
 
-        except asyncio.CancelledError:
-            print("\n🚫 Upload was cancelled")
-            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>🚫 Status:</strong> Upload cancelled by user</div>"
-            raise  # Re-raise to let the task callback handle it
         except Exception as e:
-            print(f"\n❌ Upload failed with error: {e}")
-            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Upload failed with error</div>"
-            logger.error(f"Upload error: {e}")
+            logger.error(f"Error during image upload via manager: {e}")
+            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> An unexpected error occurred: {e}</div>"
         finally:
-            # Always hide progress widgets when done
-            await asyncio.sleep(0.5)  # Brief delay to let user see completion
             self._hide_progress_widgets()
             self._update_upload_button_states()
 
-    async def run_upload_zip(self, b):
-        """Upload and extract a ZIP file to the created folder with async processing"""
+    async def run_upload_zip(self, b, zip_file_data: dict):
+        """Upload and extract a ZIP file using FileUploadManager."""
         self.dataset_output.clear_output()
-
-        if not self.dataset_directory.value:
-            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
-            logger.warning("ZIP upload failed: no dataset directory set")
-            return
-
-        if not self.file_upload.value:
-            self.dataset_status.value = "❌ Status: Please select a ZIP file to upload."
-            return
+        self.upload_progress.layout.visibility = 'visible'
+        self.upload_status_label.layout.visibility = 'visible'
+        self.upload_progress.value = 0
+        self.upload_status_label.value = "Initializing ZIP upload..."
+        self._update_upload_button_states()
 
         upload_folder = self.dataset_directory.value
-        
-        # --- START OF FIX ---
-        # Find the first ZIP file and eagerly read its content.
-        zip_file_data = None
-        for file_info in self.file_upload.value:
-            if file_info['name'].lower().endswith('.zip'):
-                zip_file_data = {
-                    'name': file_info['name'],
-                    'content': file_info['content'].tobytes() # Read into bytes NOW
-                }
-                break
-        
-        # DEBUGGING: Commenting out premature cache clearing in ZIP function too
-        # This could interfere with regular image uploads if timing is weird
-        # self._programmatic_change = True
-        # try:
-        #     self.file_upload.value = ()
-        # finally:
-        #     self._programmatic_change = False
-        # --- END OF FIX ---
-
-        if not zip_file_data:
-            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> No ZIP file selected.</div>"
-            logger.warning("ZIP upload failed: no ZIP file selected in the upload batch")
+        if not upload_folder:
+            self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Please create a folder first.</div>"
+            self._hide_progress_widgets()
             return
 
-        zip_filename = zip_file_data['name']
-        zip_content = zip_file_data['content']
+        try:
+            zip_filename = zip_file_data['name']
+            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #007bff;'><strong>⚙️ Status:</strong> Uploading and extracting {zip_filename}...</div>"
 
-        self.dataset_status.value = f"⚙️ Status: Uploading and extracting {zip_filename}..."
+            loop = asyncio.get_event_loop()
+            # Use run_in_executor to run the synchronous manager method in a thread pool
+            success, message = await loop.run_in_executor(
+                None, # Use default executor
+                self.file_manager.upload_and_extract_zip, 
+                zip_file_data, 
+                upload_folder
+            )
 
-        with self.dataset_output:
-            temp_zip_path = os.path.join(upload_folder, zip_filename)
+            self.dataset_status.value = message # Display message from manager
 
-            try:
-                print(f" Saving {zip_filename} to {temp_zip_path}")
-                with open(temp_zip_path, 'wb') as f:
-                    f.write(zip_content)
-
-                print(f"✨ Extracting {zip_filename} to {upload_folder}")
-                # This part is synchronous, but we can still yield after for responsiveness
-                with zipfile.ZipFile(temp_zip_path, 'r') as zip_ref:
-                    zip_ref.extractall(upload_folder)
-                
-                await asyncio.sleep(0) # Yield control
-                print("✅ Extraction complete.")
-
-                os.remove(temp_zip_path)
-                print(f"️ Removed temporary zip file: {temp_zip_path}")
-
+            if success:
+                # Clear the widget on success
+                self._programmatic_change = True
                 try:
-                    from core.image_utils import count_images_in_directory
-                    image_count = count_images_in_directory(upload_folder)
-                    print(f" Found {image_count} images in {upload_folder}")
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}. Found {image_count} images.</div>"
-                except Exception as e:
-                    print(f"⚠️ Image counting error: {e}")
-                    self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> Uploaded and extracted {zip_filename}.</div>"
+                    self.file_upload.value = ()
+                finally:
+                    self._programmatic_change = False
+                logger.info("ZIP upload successful, widget cache cleared.")
 
-                self.upload_images_button.disabled = True
-                self.upload_zip_button.disabled = True
-
-            except zipfile.BadZipFile:
-                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Invalid ZIP file.</div>"
-                print(f"❌ Error: {zip_filename} is not a valid ZIP file.")
-            except Exception as e:
-                self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to upload or extract ZIP.</div>"
-                print(f"❌ An error occurred during ZIP upload/extraction: {e}")
+        except Exception as e:
+            logger.error(f"Error during ZIP upload via manager: {e}")
+            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> An unexpected error occurred: {e}</div>"
+        finally:
+            self._hide_progress_widgets()
+            self._update_upload_button_states()
 
     def reset_upload_widget(self, b):
         """Reset the file upload widget to clear any cached state"""
@@ -1909,18 +1794,7 @@ class DatasetWidget:
             else:
                 self.caption_status.value = "<div style='background: #f8d7da; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to display tags.</div>"
 
-    def _update_upload_status(self, success: bool, message: str):
-        """Update upload status widget with result message."""
-        if success:
-            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {message}</div>"
-            # Clear the widget after successful upload using race condition guard
-            self._programmatic_change = True
-            try:
-                self.file_upload.value = ()
-            finally:
-                self._programmatic_change = False
-        else:
-            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> {message}</div>"
+
 
     def display(self):
         display(self.widget_box)
