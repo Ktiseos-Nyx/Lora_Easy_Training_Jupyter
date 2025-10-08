@@ -143,8 +143,9 @@ class DatasetWidget:
         )
 
         self.reset_upload_button = widgets.Button(
-            description="🔄 Reset Upload",
+            description="🔄 Force Reset Upload",
             button_style='warning',
+            tooltip="If uploads fail or the widget seems stuck, click this to reset it.",
             disabled=False
         )
 
@@ -832,6 +833,16 @@ class DatasetWidget:
             
             if new_files:  # Files have been selected
                 file_count = len(new_files)
+                
+                # --- Proactive Warning Logic ---
+                warning_message = ""
+                if file_count > 100:
+                    warning_message = f"<div style='background: #fff3cd; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>⚠️ Warning:</strong> You have selected {file_count} files. Uploading many files at once can be unreliable on remote connections. Consider uploading in smaller batches of 50-100.</div>"
+
+                large_files = [f for f in new_files if f['size'] > 50 * 1024 * 1024] # 50MB
+                if large_files:
+                    warning_message += f"<div style='background: #fff3cd; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107; margin-top: 5px;'><strong>⚠️ Warning:</strong> You have selected files larger than 50MB. This may fail. Please upload smaller files.</div>"
+
                 if file_count > 0:
                     # Check if a folder path is specified
                     folder_path = self.dataset_directory.value.strip()
@@ -846,14 +857,17 @@ class DatasetWidget:
                         self.upload_zip_button.disabled = not is_zip_selected # Enable zip upload only if zip is selected
 
                         if is_zip_selected:
-                            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP to '{folder_path}'.</div>"
+                            status_message = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload and extract ZIP to '{folder_path}'.</div>"
                         else:
-                            self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images to '{folder_path}'.</div>"
+                            status_message = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #28a745;'><strong>✅ Status:</strong> {file_count} file(s) selected. Ready to upload images to '{folder_path}'.</div>"
+                        self.dataset_status.value = warning_message + status_message
+
                     elif folder_path:
                         # Folder path specified but doesn't exist - suggest creating it
                         self.upload_images_button.disabled = True
                         self.upload_zip_button.disabled = True
-                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>📁 Status:</strong> {file_count} file(s) selected. Folder '{folder_path}' doesn't exist - click 'Create Folder' first.</div>"
+                        status_message = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>📁 Status:</strong> {file_count} file(s) selected. Folder '{folder_path}' doesn't exist - click 'Create Folder' first.</div>"
+                        self.dataset_status.value = warning_message + status_message
                     else:
                         # No folder path specified - auto-suggest creating folder
                         self.upload_images_button.disabled = True
@@ -867,7 +881,8 @@ class DatasetWidget:
                         if not self.folder_name.value.strip():
                             self.folder_name.value = suggested_name
 
-                        self.dataset_status.value = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>📁 Status:</strong> {file_count} file(s) selected. Click 'Create Folder' first, then upload.</div>"
+                        status_message = f"<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #ffc107;'><strong>📁 Status:</strong> {file_count} file(s) selected. Click 'Create Folder' first, then upload.</div>"
+                        self.dataset_status.value = warning_message + status_message
                 else:
                     self.upload_images_button.disabled = True
                     self.upload_zip_button.disabled = True
@@ -982,10 +997,19 @@ class DatasetWidget:
                 logger.error(f"Failed to create folder: {e}")
                 self.dataset_status.value = "<div style='background: #f8f9fa; padding: 8px; border-radius: 5px; border-left: 4px solid #dc3545;'><strong>❌ Status:</strong> Failed to create folder.</div>"
 
+    def _set_upload_ui_state(self, is_uploading: bool):
+        """Centralizes enabling/disabling of upload UI components."""
+        self.upload_images_button.disabled = is_uploading
+        self.upload_zip_button.disabled = is_uploading
+        self.create_folder_button.disabled = is_uploading
+        self.cancel_upload_button.disabled = not is_uploading
+        # The reset button should always be available as an escape hatch
+        # self.reset_upload_button.disabled = is_uploading
+
     def _handle_async_upload(self, b):
         """Wrapper to handle async upload function with proper error handling"""
-        # Eagerly and synchronously capture all file data *before* creating the async task.
-        # This completely decouples the data from the transient FileUpload widget state.
+        self._set_upload_ui_state(is_uploading=True)
+
         try:
             captured_files = []
             for file_info in self.file_upload.value:
@@ -996,10 +1020,12 @@ class DatasetWidget:
             
             if not captured_files:
                 self.dataset_status.value = "❌ Status: Please select images to upload."
+                self._update_upload_button_states() # Re-evaluate button states
                 return
         except Exception as e:
-            logger.error(f"Failed to capture file content before upload: {e}")
-            self.dataset_status.value = f"❌ Status: Error reading file data: {e}"
+            logger.error(f"FATAL: Failed to read file data from widget. State is likely corrupt. Error: {e}")
+            self.dataset_status.value = "❌ Critical Error: Could not read files from the widget. Please click 'Force Reset Upload' and hard-refresh your browser tab (Cmd+Shift+R)."
+            self._update_upload_button_states() # Re-evaluate button states
             return
 
         # Now, pass the captured data to the async function.
@@ -1010,7 +1036,8 @@ class DatasetWidget:
 
     def _handle_async_zip_upload(self, b):
         """Wrapper to handle async ZIP upload function with proper error handling"""
-        # Eagerly and synchronously capture the zip file data *before* creating the async task.
+        self._set_upload_ui_state(is_uploading=True)
+
         try:
             zip_file_data = None
             for file_info in self.file_upload.value:
@@ -1023,10 +1050,12 @@ class DatasetWidget:
             
             if not zip_file_data:
                 self.dataset_status.value = "❌ Status: Please select a ZIP file to upload."
+                self._update_upload_button_states() # Re-evaluate button states
                 return
         except Exception as e:
-            logger.error(f"Failed to capture ZIP file content before upload: {e}")
-            self.dataset_status.value = f"❌ Status: Error reading ZIP file data: {e}"
+            logger.error(f"FATAL: Failed to read file data from widget. State is likely corrupt. Error: {e}")
+            self.dataset_status.value = "❌ Critical Error: Could not read files from the widget. Please click 'Force Reset Upload' and hard-refresh your browser tab (Cmd+Shift+R)."
+            self._update_upload_button_states() # Re-evaluate button states
             return
 
         # Now, pass the captured data to the async function.
@@ -1051,6 +1080,12 @@ class DatasetWidget:
         finally:
             # Clear task reference
             self._current_upload_task = None
+            # Aggressively reset the widget to prevent stale state
+            self._programmatic_change = True
+            try:
+                self.file_upload.value = ()
+            finally:
+                self._programmatic_change = False
             # Re-enable upload buttons
             self._update_upload_button_states()
 
