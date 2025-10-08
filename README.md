@@ -1,7 +1,7 @@
 # ⚠️ This Project Has Moved ⚠️
 > This repository is an old fork and is no longer maintained. Active development has moved to a new, independent repository with an expanded feature set and a focus on a broader AI training ecosystem.
 >
-> ## **[Please visit the new repository here](https://github.com/your-username/your-new-repo-name)**
+> ## **[Please visit the new repository here](https://github.com/Ktiseos-Nyx/Ktiseos-Nyx-Trainer)**
 >
 > *(This repository will be archived and made read-only.)*
 >
