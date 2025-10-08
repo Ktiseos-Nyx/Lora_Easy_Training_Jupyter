@@ -1,3 +1,14 @@
+# ⚠️ This Project Has Moved ⚠️
+> This repository is an old fork and is no longer maintained. Active development has moved to a new, independent repository with an expanded feature set and a focus on a broader AI training ecosystem.
+>
+> ## **[Please visit the new repository here](https://github.com/your-username/your-new-repo-name)**
+>
+> *(This repository will be archived and made read-only.)*
+>
+> ---
+>
+> (Original README content below)
+
 # LoRA Easy Training - Jupyter Widget Edition 🚀
 
 A LoRA training system built on Derrian Distro & Kohya SS with interactive Jupyter widget interfaces. Supports local and cloud deployment on VastAI, RunPod, and similar platforms.
@@ -29,7 +40,7 @@ A LoRA training system built on Derrian Distro & Kohya SS with interactive Jupyt
 > - 🔧 **Latest bug fixes** and performance improvements
 > - ⚡ **Enhanced upload widgets** (fixed cache issues)
 > - ⚡ **Language Cleanup** Cleaned up a lot of marketing speak and started the roadmap to check inconsistencies on missing content.
-> **Note**: These experimental features exist in the underlying Kohya scripts but haven't been thoroughly tested with our widget system. Use at your own risk and expect possible issues. If they look like they're exposed in our widget setup, there is no saying if they current work due to our unified setup. We're working on fast trying to figure out how this works and get functionality quickly. If you have any issues please report them to the issues area.
+> **Note**: These experimental features exist in the underlying Kohya scripts but haven't been thoroughly tested with our widget system. Use at your own risk and expect possible issues. If they look like they're exposed in our widget setup, there is no saying if they current work due to our unified setup. We're working on fast trying to get functionality quickly. If you have any issues please report them to the issues area.
 
 
 ## 🚀 Quick Start (Installation & Setup)
